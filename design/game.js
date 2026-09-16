@@ -378,12 +378,21 @@
   let gameOver = false;
   let awaitingMove = false;
 
+  // Yard tokens are interchangeable — bringing any one of them out has the
+  // exact same effect — so at most one shows up as a movable option instead
+  // of glowing all four and merging into one blob.
   function movableTokens(player, roll) {
-    return player.tokens.filter(t => {
-      if (t.state === 'finished') return false;
-      if (t.state === 'yard') return roll === 6;
-      return t.pos + roll <= 56;
+    const result = [];
+    let yardOptionAdded = false;
+    player.tokens.forEach(t => {
+      if (t.state === 'finished') return;
+      if (t.state === 'yard') {
+        if (roll === 6 && !yardOptionAdded) { result.push(t); yardOptionAdded = true; }
+        return;
+      }
+      if (t.pos + roll <= 56) result.push(t);
     });
+    return result;
   }
 
   function updateDiceUI() {
