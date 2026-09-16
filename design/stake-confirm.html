@@ -13,26 +13,26 @@
   <div style="padding:24px;">
     <div style="text-align:center; margin-bottom:18px;">
       <div class="tile-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--red-soft);">💎</div>
-      <h1 style="font-size:22px;">Join ₹50 Table?</h1>
+      <h1 id="table-title" style="font-size:22px;">Join ₹50 Table?</h1>
       <p style="font-size:13px; color:var(--text-dim); font-weight:600; margin-top:4px;">4 players · winner takes the pot</p>
     </div>
 
     <div class="card">
       <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
         <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Your Stake</span>
-        <span style="font-size:14px; font-weight:800;">₹50</span>
+        <span id="stat-stake" style="font-size:14px; font-weight:800;">₹50</span>
       </div>
       <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
-        <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Total Pot (4 × ₹50)</span>
-        <span style="font-size:14px; font-weight:800;">₹200</span>
+        <span id="pot-label" style="font-size:13px; color:var(--text-dim); font-weight:700;">Total Pot (4 × ₹50)</span>
+        <span id="stat-pot" style="font-size:14px; font-weight:800;">₹200</span>
       </div>
       <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
         <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Platform Fee (10%)</span>
-        <span style="font-size:14px; font-weight:800; color:var(--text-dim);">-₹20</span>
+        <span id="stat-fee" style="font-size:14px; font-weight:800; color:var(--text-dim);">-₹20</span>
       </div>
       <div style="display:flex; justify-content:space-between; padding:14px 0 6px;">
         <span style="font-size:14px; font-weight:800;">🏆 Winner Gets</span>
-        <span style="font-size:20px; font-weight:800; color:#178a4c;">₹180</span>
+        <span id="stat-payout" style="font-size:20px; font-weight:800; color:#178a4c;">₹180</span>
       </div>
     </div>
 
@@ -43,16 +43,33 @@
       </div>
       <div style="text-align:right;">
         <div style="font-size:12px; color:var(--text-dim); font-weight:700;">After Stake</div>
-        <div style="font-size:18px; font-weight:800;">₹190.00</div>
+        <div id="stat-after" style="font-size:18px; font-weight:800;">₹190.00</div>
       </div>
     </div>
 
     <div style="margin-top:20px; display:flex; flex-direction:column; gap:10px;">
-      <a href="waiting-room.html"><button class="btn btn-primary">Confirm &amp; Lock ₹50</button></a>
+      <a id="confirm-link" href="waiting-room.html?stake=50"><button class="btn btn-primary" id="confirm-btn">Confirm &amp; Lock ₹50</button></a>
       <a href="lobby.html"><button class="btn btn-ghost">Cancel</button></a>
       <p class="hint">Your stake is locked the moment you join and returned in full if the table never fills.</p>
     </div>
   </div>
 </div>
+<script>
+  const WALLET_BALANCE = 240;
+  const stake = Math.max(0, Number(new URLSearchParams(location.search).get('stake')) || 50);
+  const pot = stake * 4;
+  const fee = Math.round(pot * 0.1);
+  const payout = pot - fee;
+
+  document.getElementById('table-title').textContent = `Join ₹${stake} Table?`;
+  document.getElementById('stat-stake').textContent = `₹${stake}`;
+  document.getElementById('pot-label').textContent = `Total Pot (4 × ₹${stake})`;
+  document.getElementById('stat-pot').textContent = `₹${pot}`;
+  document.getElementById('stat-fee').textContent = `-₹${fee}`;
+  document.getElementById('stat-payout').textContent = `₹${payout}`;
+  document.getElementById('stat-after').textContent = `₹${(WALLET_BALANCE - stake).toFixed(2)}`;
+  document.getElementById('confirm-btn').textContent = `Confirm & Lock ₹${stake}`;
+  document.getElementById('confirm-link').href = `waiting-room.html?stake=${stake}`;
+</script>
 </body>
 </html>

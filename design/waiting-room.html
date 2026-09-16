@@ -13,7 +13,7 @@
   <div class="topbar">
     <a href="lobby.html" class="nav-item" style="flex-direction:row; gap:6px; color:var(--text-dim);">← Leave</a>
     <h1 style="font-size:17px;">Waiting Room</h1>
-    <span class="badge badge-cash">₹50 Table</span>
+    <span class="badge badge-cash" id="table-badge">₹50 Table</span>
   </div>
 
   <div style="padding: 10px 20px;">
@@ -25,14 +25,14 @@
       <button class="btn btn-secondary btn-sm">📋 Copy</button>
     </div>
 
-    <div class="card" style="margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, var(--green-soft), var(--paper));">
+    <div class="card" id="prize-card" style="margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, var(--green-soft), var(--paper));">
       <div>
         <div style="font-size:12px; color:var(--text-dim); font-weight:700;">🏆 Prize Pool (after 10% fee)</div>
-        <div style="font-size:24px; font-weight:800; color:#178a4c;">₹180</div>
+        <div id="prize-amount" style="font-size:24px; font-weight:800; color:#178a4c;">₹180</div>
       </div>
       <div style="text-align:right;">
         <div style="font-size:12px; color:var(--text-dim); font-weight:700;">Your Stake</div>
-        <div style="font-size:19px; font-weight:800;">₹50</div>
+        <div id="stake-amount" style="font-size:19px; font-weight:800;">₹50</div>
       </div>
     </div>
 
@@ -71,15 +71,37 @@
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <span style="font-size:14px; font-weight:700;">Room Type</span>
-        <span style="color:var(--text-dim); font-size:14px; font-weight:700;">Private · Cash</span>
+        <span id="room-type" style="color:var(--text-dim); font-size:14px; font-weight:700;">Private · Cash</span>
       </div>
     </div>
 
     <div style="margin-top:22px; display:flex; flex-direction:column; gap:10px;">
-      <a href="board.html"><button class="btn btn-primary">Start Game</button></a>
-      <p class="hint">Need at least 2 players to start. Stakes are locked once the game begins.</p>
+      <a id="start-link" href="board.html?stake=50"><button class="btn btn-primary">Start Game</button></a>
+      <p id="start-hint" class="hint">Need at least 2 players to start. Stakes are locked once the game begins.</p>
     </div>
   </div>
 </div>
+<script>
+  const stakeParam = new URLSearchParams(location.search).get('stake');
+  const stake = stakeParam === null ? 50 : Math.max(0, Number(stakeParam) || 0);
+  const isFree = stake <= 0;
+  const pot = stake * 4;
+  const fee = Math.round(pot * 0.1);
+  const payout = pot - fee;
+
+  document.getElementById('start-link').href = `board.html?stake=${stake}`;
+
+  if (isFree) {
+    document.getElementById('table-badge').textContent = 'Free Match';
+    document.getElementById('table-badge').className = 'badge badge-ready';
+    document.getElementById('prize-card').style.display = 'none';
+    document.getElementById('room-type').textContent = 'Private · Free';
+    document.getElementById('start-hint').textContent = 'Need at least 2 players to start. No stakes in a free match.';
+  } else {
+    document.getElementById('table-badge').textContent = `₹${stake} Table`;
+    document.getElementById('prize-amount').textContent = `₹${payout}`;
+    document.getElementById('stake-amount').textContent = `₹${stake}`;
+  }
+</script>
 </body>
 </html>

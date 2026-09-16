@@ -266,6 +266,10 @@
   const PLATFORM_FEE = Math.round(POT * 0.1);
   const PAYOUT = POT - PLATFORM_FEE;
 
+  const WALLET_BALANCE = 240; // matches the balance shown on lobby.html / wallet.html
+  const walletChip = document.getElementById('wallet-chip');
+  if (walletChip) walletChip.textContent = `💰 ₹${(WALLET_BALANCE - STAKE).toFixed(2).replace(/\.00$/, '')}`;
+
   // Turn order follows the ring direction (ascending entryIndex, wrapping):
   // red -> green -> yellow -> blue -> red. Starting at green (Aria) here just
   // keeps her as the opening player, same as the original mockup.
