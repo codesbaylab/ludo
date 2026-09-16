@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Online — Waiting Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <a href="lobby.html" class="nav-item" style="flex-direction:row; gap:6px; color:var(--text-dim);">← Leave</a>
+    <h1 style="font-size:17px;">Waiting Room</h1>
+    <span class="badge badge-cash">₹50 Table</span>
+  </div>
+
+  <div style="padding: 10px 20px;">
+    <div class="room-code-box">
+      <div>
+        <div style="font-size:11px; color:#a3521f; font-weight:800; text-transform:uppercase;">Room Code</div>
+        <div class="code">7K2P9Q</div>
+      </div>
+      <button class="btn btn-secondary btn-sm">📋 Copy</button>
+    </div>
+
+    <div class="card" style="margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, var(--green-soft), var(--paper));">
+      <div>
+        <div style="font-size:12px; color:var(--text-dim); font-weight:700;">🏆 Prize Pool (after 10% fee)</div>
+        <div style="font-size:24px; font-weight:800; color:#178a4c;">₹180</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:12px; color:var(--text-dim); font-weight:700;">Your Stake</div>
+        <div style="font-size:19px; font-weight:800;">₹50</div>
+      </div>
+    </div>
+
+    <div class="section-title">Players (2/4)</div>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div class="player-chip ready">
+        <div class="avatar" style="width:36px; height:36px; font-size:13px; background:linear-gradient(135deg, var(--red), #c93a3a);">R</div>
+        <div class="name">Ragnar (You)</div>
+        <span class="badge badge-host">Host</span>
+        <span class="badge badge-ready" style="margin-left:6px;">Ready</span>
+      </div>
+      <div class="player-chip">
+        <div class="avatar" style="width:36px; height:36px; font-size:13px; background:linear-gradient(135deg, var(--green), #1f9c56);">A</div>
+        <div class="name">Aria</div>
+        <span class="badge badge-waiting">Not Ready</span>
+      </div>
+      <div class="player-chip empty">
+        <div class="avatar" style="width:36px; height:36px; font-size:13px; background:var(--paper-2); color:var(--text-faint); box-shadow:none; border:2px dashed var(--border);">?</div>
+        <div class="name" style="color:var(--text-faint);">Waiting for player…</div>
+      </div>
+      <div class="player-chip empty">
+        <div class="avatar" style="width:36px; height:36px; font-size:13px; background:var(--paper-2); color:var(--text-faint); box-shadow:none; border:2px dashed var(--border);">?</div>
+        <div class="name" style="color:var(--text-faint);">Waiting for player…</div>
+      </div>
+    </div>
+
+    <div class="section-title">Settings</div>
+    <div class="card" style="display:flex; flex-direction:column; gap:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:14px; font-weight:700;">Max Players</span>
+        <span style="color:var(--text-dim); font-size:14px; font-weight:700;">4</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:14px; font-weight:700;">Turn Timer</span>
+        <span style="color:var(--text-dim); font-size:14px; font-weight:700;">25s</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:14px; font-weight:700;">Room Type</span>
+        <span style="color:var(--text-dim); font-size:14px; font-weight:700;">Private · Cash</span>
+      </div>
+    </div>
+
+    <div style="margin-top:22px; display:flex; flex-direction:column; gap:10px;">
+      <a href="board.html"><button class="btn btn-primary">Start Game</button></a>
+      <p class="hint">Need at least 2 players to start. Stakes are locked once the game begins.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

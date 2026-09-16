@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Online — Sign in</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app" style="justify-content:center;">
+  <div style="padding:24px;">
+    <div class="brand" style="justify-content:center; margin-bottom:14px; flex-direction:column; gap:14px;">
+      <div style="display:flex; align-items:flex-end; gap:8px;">
+        <div class="token token-red" style="width:18px; height:18px; box-shadow:0 3px 6px rgba(0,0,0,.25);"></div>
+        <div class="token token-green" style="width:18px; height:18px; box-shadow:0 3px 6px rgba(0,0,0,.25);"></div>
+        <div class="dice" style="width:46px; height:46px; font-size:22px;">🎲</div>
+        <div class="token token-yellow" style="width:18px; height:18px; box-shadow:0 3px 6px rgba(0,0,0,.25);"></div>
+        <div class="token token-blue" style="width:18px; height:18px; box-shadow:0 3px 6px rgba(0,0,0,.25);"></div>
+      </div>
+      <h1 style="font-size:26px; text-align:center;">Ludo Online</h1>
+      <p style="font-size:13px; color:var(--text-dim); font-weight:600; margin-top:-8px;">Roll, race, and win real prizes</p>
+    </div>
+
+    <div class="card">
+      <div class="tabs">
+        <div class="tab active" id="tab-login">Log In</div>
+        <div class="tab" id="tab-signup">Sign Up</div>
+      </div>
+
+      <form id="form-login">
+        <div class="field">
+          <label>Email</label>
+          <input class="input" type="email" placeholder="you@example.com" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input class="input" type="password" placeholder="••••••••" />
+        </div>
+        <a href="lobby.html"><button type="button" class="btn btn-primary">Log In</button></a>
+      </form>
+
+      <form id="form-signup" style="display:none;">
+        <div class="field">
+          <label>Display name</label>
+          <input class="input" type="text" placeholder="e.g. Ragnar" />
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input class="input" type="email" placeholder="you@example.com" />
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input class="input" type="password" placeholder="At least 8 characters" />
+        </div>
+        <a href="lobby.html"><button type="button" class="btn btn-primary">Create Account</button></a>
+      </form>
+
+      <div class="divider">OR</div>
+      <a href="lobby.html"><button type="button" class="btn btn-secondary">✉️ Continue with magic link</button></a>
+      <p class="hint">By continuing you agree to the Terms &amp; Privacy Policy.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const tabLogin = document.getElementById('tab-login');
+  const tabSignup = document.getElementById('tab-signup');
+  const formLogin = document.getElementById('form-login');
+  const formSignup = document.getElementById('form-signup');
+  tabLogin.addEventListener('click', () => {
+    tabLogin.classList.add('active'); tabSignup.classList.remove('active');
+    formLogin.style.display = 'block'; formSignup.style.display = 'none';
+  });
+  tabSignup.addEventListener('click', () => {
+    tabSignup.classList.add('active'); tabLogin.classList.remove('active');
+    formSignup.style.display = 'block'; formLogin.style.display = 'none';
+  });
+</script>
+</body>
+</html>

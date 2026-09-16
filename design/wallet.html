@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Online — Wallet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <a href="lobby.html" class="nav-item" style="flex-direction:row; gap:6px; color:var(--text-dim);">← Back</a>
+    <h1 style="font-size:18px;">Wallet</h1>
+    <div style="width:30px;"></div>
+  </div>
+
+  <div style="padding: 10px 20px;">
+    <div class="card" style="background:linear-gradient(150deg, #2ecc71, #178a4c); color:#fff; text-align:center; padding:28px 20px;">
+      <div style="font-size:12px; font-weight:700; opacity:.85; text-transform:uppercase; letter-spacing:.5px;">Available Balance</div>
+      <div style="font-size:38px; font-weight:800; margin:8px 0 4px;">₹240.00</div>
+      <div style="font-size:12px; opacity:.85; font-weight:600;">🔒 ₹0 locked in active games</div>
+    </div>
+
+    <div style="display:flex; gap:10px; margin-top:14px;">
+      <button class="btn btn-primary" id="btn-deposit">⬇️ Deposit</button>
+      <button class="btn btn-secondary" id="btn-withdraw">⬆️ Withdraw</button>
+    </div>
+
+    <!-- Deposit panel -->
+    <div class="card" id="panel-deposit" style="margin-top:16px; display:none;">
+      <div class="section-title" style="margin-top:0;">Deposit Money</div>
+      <div class="field">
+        <label>Amount (₹)</label>
+        <input class="input" type="number" placeholder="e.g. 100" value="100" />
+      </div>
+      <div style="display:flex; gap:8px; margin-bottom:16px;">
+        <span class="badge badge-waiting" style="cursor:pointer;">₹50</span>
+        <span class="badge badge-waiting" style="cursor:pointer;">₹100</span>
+        <span class="badge badge-waiting" style="cursor:pointer;">₹500</span>
+        <span class="badge badge-waiting" style="cursor:pointer;">₹1000</span>
+      </div>
+      <div class="field">
+        <label>Payment Method</label>
+        <input class="input" value="UPI — test@mockpay" readonly style="color:var(--text-dim);" />
+      </div>
+      <button class="btn btn-primary">Confirm Deposit</button>
+      <p class="hint">Mock gateway — instantly confirmed in this demo.</p>
+    </div>
+
+    <!-- Withdraw panel -->
+    <div class="card" id="panel-withdraw" style="margin-top:16px; display:none;">
+      <div class="section-title" style="margin-top:0;">Withdraw Money</div>
+      <div class="field">
+        <label>Amount (₹)</label>
+        <input class="input" type="number" placeholder="e.g. 100" value="100" />
+      </div>
+      <div class="card" style="background:var(--yellow-soft); border:none; padding:12px 14px; margin-bottom:14px;">
+        <div style="font-size:12px; font-weight:700; color:#a36a00;">⚠️ Verify your identity to withdraw above ₹500</div>
+      </div>
+      <div class="field">
+        <label>Withdraw To</label>
+        <input class="input" value="UPI — test@mockpay" readonly style="color:var(--text-dim);" />
+      </div>
+      <button class="btn btn-primary">Request Withdrawal</button>
+      <p class="hint">Withdrawals are usually processed within 24 hours.</p>
+    </div>
+
+    <div class="section-title">Transaction History</div>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div class="player-chip">
+        <div class="avatar" style="width:34px; height:34px; font-size:15px; background:linear-gradient(135deg, var(--green), #1f9c56);">↓</div>
+        <div>
+          <div class="name">Deposit</div>
+          <div class="status">Today, 2:14 PM · UPI</div>
+        </div>
+        <span class="badge badge-ready">+₹200</span>
+      </div>
+      <div class="player-chip">
+        <div class="avatar" style="width:34px; height:34px; font-size:15px; background:linear-gradient(135deg, var(--accent), var(--accent-2));">🏆</div>
+        <div>
+          <div class="name">Match Winnings</div>
+          <div class="status">Today, 1:02 PM · ₹50 table</div>
+        </div>
+        <span class="badge badge-ready">+₹36</span>
+      </div>
+      <div class="player-chip">
+        <div class="avatar" style="width:34px; height:34px; font-size:15px; background:linear-gradient(135deg, var(--red), #c93a3a);">🎲</div>
+        <div>
+          <div class="name">Table Stake</div>
+          <div class="status">Yesterday, 6:40 PM · ₹10 table</div>
+        </div>
+        <span class="badge badge-waiting">-₹10</span>
+      </div>
+      <div class="player-chip">
+        <div class="avatar" style="width:34px; height:34px; font-size:15px; background:linear-gradient(135deg, var(--blue), #2c7fd6);">↑</div>
+        <div>
+          <div class="name">Withdrawal</div>
+          <div class="status">2 days ago · Pending</div>
+        </div>
+        <span class="badge badge-waiting">-₹300</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <a href="lobby.html" class="nav-item"><div class="ic">🏠</div>Home</a>
+    <div class="nav-item active"><div class="ic">💰</div>Wallet</div>
+    <a href="history.html" class="nav-item"><div class="ic">📜</div>History</a>
+    <a href="profile.html" class="nav-item"><div class="ic">👤</div>Profile</a>
+  </div>
+</div>
+
+<script>
+  const depositBtn = document.getElementById('btn-deposit');
+  const withdrawBtn = document.getElementById('btn-withdraw');
+  const depositPanel = document.getElementById('panel-deposit');
+  const withdrawPanel = document.getElementById('panel-withdraw');
+  depositBtn.addEventListener('click', () => {
+    depositPanel.style.display = depositPanel.style.display === 'none' ? 'block' : 'none';
+    withdrawPanel.style.display = 'none';
+  });
+  withdrawBtn.addEventListener('click', () => {
+    withdrawPanel.style.display = withdrawPanel.style.display === 'none' ? 'block' : 'none';
+    depositPanel.style.display = 'none';
+  });
+</script>
+</body>
+</html>

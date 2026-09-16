@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Online — Game Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app wide">
+  <div class="board-page">
+    <div class="board-header">
+      <a href="lobby.html" class="back-link">← Exit</a>
+      <div class="turn-banner"><span class="dot dot-green"></span> Aria's Turn</div>
+      <a href="wallet.html" class="wallet-chip">💰 ₹190</a>
+    </div>
+
+    <div class="board-layout">
+      <div class="board-wrap">
+        <div class="board-grid" id="board-grid"></div>
+      </div>
+
+      <div class="dice-card">
+        <div>
+          <button class="dice-face" id="dice-face" aria-label="Roll dice">
+            <div class="dice-cube" id="dice-cube">
+              <div class="dice-face-3d face-front" data-pips="1"></div>
+              <div class="dice-face-3d face-back" data-pips="6"></div>
+              <div class="dice-face-3d face-right" data-pips="2"></div>
+              <div class="dice-face-3d face-left" data-pips="5"></div>
+              <div class="dice-face-3d face-top" data-pips="3"></div>
+              <div class="dice-face-3d face-bottom" data-pips="4"></div>
+            </div>
+          </button>
+          <div class="dice-shadow" id="dice-shadow"></div>
+        </div>
+        <div class="dice-info">
+          <div class="dice-status" id="dice-status">Tap the dice to roll</div>
+          <div class="badge badge-waiting" id="dice-badge" style="display:inline-block; padding:7px 14px; font-size:11px;">🎲 Your turn to roll</div>
+          <div class="dice-timer" id="dice-timer"></div>
+        </div>
+      </div>
+
+      <div class="players-panel" id="players-panel"></div>
+
+      <div class="log-panel" id="log-panel">
+        <button class="log-toggle" id="log-toggle">
+          <span>📜 Game Log</span>
+          <span class="chev">▾</span>
+        </button>
+        <div class="log-body"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="game-over-overlay" id="game-over-overlay">
+  <div class="game-over-card card">
+    <div class="tile-icon" id="winner-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px;">🏆</div>
+    <h1 id="winner-title" style="font-size:22px; text-align:center;">Winner!</h1>
+    <p style="font-size:13px; color:var(--text-dim); font-weight:600; text-align:center; margin-top:4px;">All 4 tokens home</p>
+
+    <div id="payout-block" style="margin-top:16px;">
+      <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
+        <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Total Pot</span>
+        <span id="payout-pot" style="font-size:14px; font-weight:800;"></span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
+        <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Platform Fee</span>
+        <span id="payout-fee" style="font-size:14px; font-weight:800; color:var(--text-dim);"></span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:14px 0 6px;">
+        <span style="font-size:14px; font-weight:800;">🏆 Winner Gets</span>
+        <span id="payout-amount" style="font-size:20px; font-weight:800; color:#178a4c;"></span>
+      </div>
+    </div>
+    <p id="free-note" style="display:none; text-align:center; font-size:14px; font-weight:700; color:var(--text-dim); margin-top:12px;">🎉 Free match — no stakes were on the table.</p>
+
+    <div style="margin-top:20px;">
+      <a href="lobby.html"><button class="btn btn-primary">Back to Lobby</button></a>
+    </div>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
