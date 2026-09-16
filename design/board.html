@@ -7,6 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="https://unpkg.com/colyseus.js@0.15.20/dist/colyseus.js"></script>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#ff8a3d">
 <link rel="icon" href="icons/icon-192.png">
@@ -60,6 +63,14 @@
         <div class="log-body"></div>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="game-over-overlay open" id="connecting-overlay">
+  <div class="game-over-card card" style="text-align:center;">
+    <div class="tile-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px;">🎲</div>
+    <h1 style="font-size:20px;">Connecting…</h1>
+    <p id="connecting-status" style="font-size:13px; color:var(--text-dim); font-weight:600; margin-top:6px;">Reaching the game server</p>
   </div>
 </div>
 

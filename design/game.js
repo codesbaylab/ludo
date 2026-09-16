@@ -227,8 +227,6 @@
     [8,1],
   ];
 
-  const SAFE_CELLS = new Set(Object.keys(entryCells).concat(Object.keys(starCells)));
-
   const COLORS = {
     red:    { entryIndex: 1,  yard: [1,1],   homeColumn: [[8,2],[8,3],[8,4],[8,5],[8,6]] },
     green:  { entryIndex: 14, yard: [1,10],  homeColumn: [[2,8],[3,8],[4,8],[5,8],[6,8]] },
@@ -256,52 +254,16 @@
     return null; // finished (56) — no board coordinate
   }
 
-  // The match's stake, passed in as ?stake=<rupees> (e.g. from a lobby table
-  // link). No param falls back to the ₹50 table this mockup started with;
-  // ?stake=0 (or a free-table link) plays for nothing.
-  const stakeParam = new URLSearchParams(location.search).get('stake');
-  const STAKE = stakeParam === null ? 50 : Math.max(0, Number(stakeParam) || 0);
-  const IS_FREE = STAKE <= 0;
-  const POT = STAKE * 4;
-  const PLATFORM_FEE = Math.round(POT * 0.1);
-  const PAYOUT = POT - PLATFORM_FEE;
+  // --- DOM refs shared by rendering + networking below -------------------
 
-  const WALLET_BALANCE = 240; // matches the balance shown on lobby.html / wallet.html
   const walletChip = document.getElementById('wallet-chip');
-  if (walletChip) walletChip.textContent = `💰 ₹${(WALLET_BALANCE - STAKE).toFixed(2).replace(/\.00$/, '')}`;
-
-  // Turn order follows the ring direction (ascending entryIndex, wrapping):
-  // red -> green -> yellow -> blue -> red. Starting at green (Aria) here just
-  // keeps her as the opening player, same as the original mockup.
-  const players = [
-    { name: 'Aria', color: 'green' },
-    { name: 'Kofi', color: 'yellow' },
-    { name: 'Mei', color: 'blue' },
-    { name: 'Ragnar (You)', color: 'red' },
-  ];
-  players.forEach(p => {
-    p.homeCount = 0;
-    p.tokens = Array.from({ length: 4 }, (_, i) => ({
-      color: p.color, index: i, state: 'yard', pos: -1, el: null,
-    }));
-  });
-
-  // Build a DOM token for every token and drop it in its yard slot.
-  players.forEach(p => {
-    p.tokens.forEach(token => {
-      const el = document.createElement('div');
-      el.className = 'token token-' + p.color;
-      el.dataset.color = p.color;
-      el.dataset.index = String(token.index);
-      el.addEventListener('click', () => onTokenClick(token));
-      token.el = el;
-      yardEls[p.color].appendChild(el);
-    });
-  });
-
   const panel = document.getElementById('players-panel');
   const turnBanner = document.querySelector('.turn-banner');
   const logBody = document.querySelector('.log-panel .log-body');
+  const diceTimerEl = document.getElementById('dice-timer');
+  const gameOverOverlay = document.getElementById('game-over-overlay');
+  const connectingOverlay = document.getElementById('connecting-overlay');
+  const connectingStatus = document.getElementById('connecting-status');
 
   function log(msg) {
     const div = document.createElement('div');
@@ -309,394 +271,315 @@
     logBody.insertBefore(div, logBody.firstChild);
   }
 
-  function renderPlayersPanel() {
-    panel.innerHTML = '';
-    players.forEach((p, i) => {
-      const row = document.createElement('div');
-      row.className = 'player-row' + (i === currentPlayerIdx ? ' current' : '');
-      const dots = Array.from({ length: 4 }, (_, d) => `<span class="${d < p.homeCount ? 'home' : ''}"></span>`).join('');
-      row.innerHTML = `
-        <div class="avatar-ring" style="background:var(--${p.color});">${p.name[0]}</div>
-        <div class="pname">${p.name}</div>
-        <div class="token-dots" style="color:var(--${p.color});">${dots}</div>
-      `;
-      panel.appendChild(row);
-    });
+  function colorDot(color) {
+    return { red: '🔴', green: '🟢', yellow: '🟡', blue: '🔵' }[color];
   }
 
-  function renderTurnBanner() {
-    const p = players[currentPlayerIdx];
-    turnBanner.innerHTML = `<span class="dot dot-${p.color}"></span> ${p.name}'s Turn`;
-  }
+  // One DOM token per color per slot (16 total), built once — the server's
+  // PlayerState always has exactly 4 token slots per color regardless of who
+  // (if anyone) is connected to that seat.
+  const tokenEls = {};
+  ['red', 'green', 'yellow', 'blue'].forEach(color => {
+    for (let i = 0; i < 4; i++) {
+      const el = document.createElement('div');
+      el.className = 'token token-' + color;
+      el.addEventListener('click', () => onTokenClick(color, i));
+      tokenEls[color + '-' + i] = el;
+      yardEls[color].appendChild(el);
+    }
+  });
+  function tokenEl(color, i) { return tokenEls[color + '-' + i]; }
 
-  // Re-parent every token div to wherever its current state says it belongs.
-  // Active (on-board) tokens live in the floating token-layer, positioned by
-  // percentage so CSS can smoothly transition them between cells.
-  function renderTokens() {
+  // --- Rendering, driven entirely by the latest server-state snapshot ----
+  // (a plain object from room.state.toJSON(), never mutated locally — the
+  // server is the only source of truth for game state now.)
+
+  function renderTokens(snapshot) {
     const byCell = {};
     const finishedByColor = {};
-    players.forEach(p => p.tokens.forEach(t => {
+    snapshot.players.forEach(p => p.tokens.forEach((t, i) => {
       if (t.state === 'active') {
-        const [r, c] = coordFor(t.color, t.pos);
+        const [r, c] = coordFor(p.color, t.pos);
         const key = r + ',' + c;
-        (byCell[key] = byCell[key] || []).push(t);
+        (byCell[key] = byCell[key] || []).push({ color: p.color, i });
       } else if (t.state === 'finished') {
-        (finishedByColor[t.color] = finishedByColor[t.color] || []).push(t);
+        (finishedByColor[p.color] = finishedByColor[p.color] || []).push(i);
       }
     }));
 
-    players.forEach(p => p.tokens.forEach(t => {
-      const el = t.el;
+    snapshot.players.forEach((p, pi) => p.tokens.forEach((t, i) => {
+      const el = tokenEl(p.color, i);
+      el.classList.toggle('movable', !!t.movable && pi === myPlayerIdx);
       if (t.state === 'yard') {
-        el.classList.remove('token-on-board', 'token-finished', 'movable');
-        if (el.parentElement !== yardEls[t.color]) yardEls[t.color].appendChild(el);
+        el.classList.remove('token-on-board', 'token-finished');
+        if (el.parentElement !== yardEls[p.color]) yardEls[p.color].appendChild(el);
         el.style.left = ''; el.style.top = '';
       } else if (t.state === 'finished') {
-        el.classList.remove('token-on-board', 'movable');
+        el.classList.remove('token-on-board');
         el.classList.add('token-finished');
         if (el.parentElement !== centerEl) centerEl.appendChild(el);
-        const wedge = WEDGE[t.color];
-        const group = finishedByColor[t.color];
-        const i = group.indexOf(t);
-        const spread = group.length > 1 ? (i - (group.length - 1) / 2) * 16 : 0;
+        const wedge = WEDGE[p.color];
+        const group = finishedByColor[p.color];
+        const gi = group.indexOf(i);
+        const spread = group.length > 1 ? (gi - (group.length - 1) / 2) * 16 : 0;
         el.style.left = (wedge.axis === 'x' ? wedge.left + spread : wedge.left) + '%';
         el.style.top = (wedge.axis === 'y' ? wedge.top + spread : wedge.top) + '%';
       } else {
         el.classList.remove('token-finished');
         el.classList.add('token-on-board');
         if (el.parentElement !== tokenLayer) tokenLayer.appendChild(el);
-        const [r, c] = coordFor(t.color, t.pos);
+        const [r, c] = coordFor(p.color, t.pos);
         const key = r + ',' + c;
         const stack = byCell[key];
-        const i = stack.indexOf(t);
-        const offset = stack.length > 1 ? (i - (stack.length - 1) / 2) * 3.2 : 0;
+        const si = stack.findIndex(s => s.color === p.color && s.i === i);
+        const offset = stack.length > 1 ? (si - (stack.length - 1) / 2) * 3.2 : 0;
         el.style.left = ((c - 0.5) / size * 100 + offset) + '%';
         el.style.top = ((r - 0.5) / size * 100 + offset) + '%';
       }
     }));
   }
 
-  let currentPlayerIdx = 0;
-  let consecutiveSixes = 0;
-  let canRoll = true;
-  let gameOver = false;
-  let awaitingMove = false;
-
-  // Yard tokens are interchangeable — bringing any one of them out has the
-  // exact same effect — so at most one shows up as a movable option instead
-  // of glowing all four and merging into one blob.
-  function movableTokens(player, roll) {
-    const result = [];
-    let yardOptionAdded = false;
-    player.tokens.forEach(t => {
-      if (t.state === 'finished') return;
-      if (t.state === 'yard') {
-        if (roll === 6 && !yardOptionAdded) { result.push(t); yardOptionAdded = true; }
-        return;
-      }
-      if (t.pos + roll <= 56) result.push(t);
-    });
-    return result;
-  }
-
-  function updateDiceUI() {
-    diceFace.classList.toggle('disabled', !canRoll || gameOver);
-  }
-
-  // Auto-rolls / auto-picks for whoever's turn it is if they leave the game
-  // untouched — keeps a hotseat game with 4 humans moving instead of
-  // stalling forever. Both the roll and the token-choice share one timer.
-  const DICE_TIMER_SECONDS = 15;
-  const SELECT_TIMER_SECONDS = 15;
-  const diceTimerEl = document.getElementById('dice-timer');
-  let timerInterval = null;
-  let timerRemaining = 0;
-
-  function startCountdown(seconds, label, onExpire) {
-    clearDiceTimer();
-    if (gameOver) return;
-    timerRemaining = seconds;
-    diceTimerEl.style.display = 'block';
-    diceTimerEl.classList.remove('urgent');
-    diceTimerEl.textContent = `⏱ ${label} ${timerRemaining}s`;
-    timerInterval = setInterval(() => {
-      timerRemaining -= 1;
-      if (timerRemaining <= 0) {
-        clearDiceTimer();
-        onExpire();
-        return;
-      }
-      diceTimerEl.classList.toggle('urgent', timerRemaining <= 5);
-      diceTimerEl.textContent = `⏱ ${label} ${timerRemaining}s`;
-    }, 1000);
-  }
-
-  function startDiceTimer() {
-    if (!canRoll) return;
-    startCountdown(DICE_TIMER_SECONDS, 'Auto-roll in', () => {
-      if (canRoll && !gameOver && !rollingAnim) startRoll();
+  function renderPlayersPanel(snapshot) {
+    panel.innerHTML = '';
+    snapshot.players.forEach((p, i) => {
+      const row = document.createElement('div');
+      row.className = 'player-row' + (i === snapshot.currentPlayerIdx ? ' current' : '');
+      const name = p.connected ? (p.name || 'Player') : 'Waiting…';
+      const dots = Array.from({ length: 4 }, (_, d) => `<span class="${d < p.homeCount ? 'home' : ''}"></span>`).join('');
+      row.innerHTML = `
+        <div class="avatar-ring" style="background:var(--${p.color});">${(name[0] || '?').toUpperCase()}</div>
+        <div class="pname">${name}${i === myPlayerIdx ? ' (You)' : ''}</div>
+        <div class="token-dots" style="color:var(--${p.color});">${dots}</div>
+      `;
+      panel.appendChild(row);
     });
   }
 
-  function startSelectTimer(options) {
-    startCountdown(SELECT_TIMER_SECONDS, 'Auto-pick in', () => {
-      if (awaitingMove && !gameOver) autoPickToken(options);
-    });
+  function renderTurnBanner(snapshot) {
+    const p = snapshot.players[snapshot.currentPlayerIdx];
+    turnBanner.innerHTML = `<span class="dot dot-${p.color}"></span> ${p.connected ? p.name : 'Waiting'}'s Turn`;
   }
 
-  function clearDiceTimer() {
-    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-    diceTimerEl.style.display = 'none';
-  }
+  function updateDiceUI(snapshot) {
+    const myTurn = myPlayerIdx === snapshot.currentPlayerIdx;
+    const allConnected = snapshot.players.every(p => p.connected);
+    const canRollNow = myTurn && allConnected && !snapshot.awaitingMove && !snapshot.gameOver;
+    diceFace.classList.toggle('disabled', !canRollNow);
 
-  diceFace.addEventListener('click', () => {
-    if (rollingAnim || !canRoll || gameOver) return;
-    startRoll();
-  });
-
-  let rollingAnim = false;
-  function startRoll() {
-    clearDiceTimer();
-    rollingAnim = true;
-    canRoll = false;
-    updateDiceUI();
-    diceStatus.textContent = 'Rolling…';
-    diceFace.classList.add('rolling');
-    diceShadow.classList.add('rolling');
-    playDiceSound();
-
-    const result = 1 + Math.floor(Math.random() * 6);
-    const target = faceOrientation[result];
-    currentX = spinTo(target.x, currentX, 2, 3);
-    currentY = spinTo(target.y, currentY, 3, 5);
-    diceCube.style.transform = `rotateX(${currentX}deg) rotateY(${currentY}deg)`;
-
-    setTimeout(() => {
-      diceFace.classList.remove('rolling');
-      diceShadow.classList.remove('rolling');
-      rollingAnim = false;
-      onRollResolved(result);
-    }, 1550);
-  }
-
-  function onRollResolved(result) {
-    const player = players[currentPlayerIdx];
-    diceStatus.textContent = `${player.name} rolled a ${result}`;
-    log(`🎲 ${player.name} rolled a ${result}`);
-
-    consecutiveSixes = result === 6 ? consecutiveSixes + 1 : 0;
-    if (consecutiveSixes === 3) {
-      log(`⚠️ ${player.name} rolled three 6s in a row — turn forfeited!`);
-      consecutiveSixes = 0;
-      diceBadge.textContent = '🚫 Forfeited';
-      passTurn();
-      return;
-    }
-
-    const options = movableTokens(player, result);
-    if (options.length === 0) {
-      diceBadge.textContent = '🚫 No valid moves';
-      log(`No valid moves for ${player.name}.`);
-      if (result === 6) { canRoll = true; updateDiceUI(); diceBadge.textContent = '🎲 Roll again!'; startDiceTimer(); return; }
-      passTurn();
-      return;
-    }
-
-    // Only one legal move (often because just one token is out of the
-    // yard) — play it automatically instead of making them click it.
-    if (options.length === 1) {
-      diceBadge.textContent = '🤖 Only one move — playing it…';
-      setTimeout(() => playMove(player, options[0], result), 500);
-      return;
-    }
-
-    pendingRoll = result;
-    awaitingMove = true;
-    diceBadge.textContent = '👉 Choose a token to move';
-    options.forEach(t => t.el.classList.add('movable'));
-    startSelectTimer(options);
-  }
-
-  let pendingRoll = null;
-
-  function onTokenClick(token) {
-    if (!awaitingMove || gameOver) return;
-    const player = players[currentPlayerIdx];
-    if (token.color !== player.color) return;
-    if (!token.el.classList.contains('movable')) return;
-    pickToken(player, token);
-  }
-
-  // Picks a sensible token automatically once the selection timer runs out:
-  // prefer a capture, then whichever token is furthest along its path.
-  function autoPickToken(options) {
-    const player = players[currentPlayerIdx];
-    const roll = pendingRoll;
-    let best = options[0];
-    let bestScore = -1;
-    options.forEach(t => {
-      const newPos = t.state === 'yard' ? 0 : t.pos + roll;
-      const score = (wouldCapture(player, t, newPos) ? 1000 : 0) + newPos;
-      if (score > bestScore) { bestScore = score; best = t; }
-    });
-    diceBadge.textContent = '🤖 Auto-picking a token…';
-    pickToken(player, best);
-  }
-
-  function wouldCapture(player, token, newPos) {
-    if (newPos > 50) return false;
-    const [r, c] = coordFor(token.color, newPos);
-    if (SAFE_CELLS.has(r + ',' + c)) return false;
-    return players.some(op => op.color !== player.color && op.tokens.some(t => {
-      if (t.state !== 'active' || t.pos > 50) return false;
-      const [tr, tc] = coordFor(t.color, t.pos);
-      return tr === r && tc === c;
-    }));
-  }
-
-  function pickToken(player, token) {
-    const roll = pendingRoll;
-    awaitingMove = false;
-    pendingRoll = null;
-    clearDiceTimer();
-    player.tokens.forEach(t => t.el.classList.remove('movable'));
-    diceBadge.textContent = '🚶 Moving…';
-    playMove(player, token, roll);
-  }
-
-  function playMove(player, token, roll) {
-    if (token.state === 'yard') {
-      token.state = 'active';
-      token.pos = 0;
-      hopStep(token, () => finishMove(player, token, roll));
-    } else {
-      animateSteps(token, roll, () => finishMove(player, token, roll));
-    }
-  }
-
-  // Walks the token one cell at a time (a real single hop per step), so a
-  // roll of 5 visibly hops across 5 cells instead of teleporting.
-  function animateSteps(token, stepsLeft, done) {
-    token.pos += 1;
-    if (token.pos === 56) token.state = 'finished';
-    hopStep(token, () => {
-      stepsLeft -= 1;
-      if (stepsLeft > 0 && token.state === 'active') animateSteps(token, stepsLeft, done);
-      else done();
-    });
-  }
-
-  function hopStep(token, cb) {
-    renderTokens();
-    const el = token.el;
-    el.classList.remove('hop');
-    void el.offsetWidth; // restart the animation even if the class was already there
-    el.classList.add('hop');
-    playHopSound();
-    setTimeout(() => { el.classList.remove('hop'); cb(); }, 170);
-  }
-
-  function finishMove(player, token, roll) {
-    if (token.state === 'yard') {
-      log(`${colorDot(player.color)} ${player.name} brought a token out.`);
-    } else if (token.state === 'finished') {
-      player.homeCount++;
-      log(`🏠 ${colorDot(player.color)} ${player.name}'s token reached home!`);
-    }
-
-    let captured = false;
-    if (token.pos <= 50 && token.state === 'active') {
-      const [r, c] = coordFor(token.color, token.pos);
-      const key = r + ',' + c;
-      if (!SAFE_CELLS.has(key)) {
-        const victims = players.filter(op => op.color !== player.color);
-        victims.forEach(op => {
-          const hit = op.tokens.filter(t => t.state === 'active' && t.pos <= 50 && sameCell(t, token));
-          if (hit.length === 1) {
-            captured = true;
-            log(`${colorDot(player.color)} ${player.name} captured ${colorDot(op.color)} ${op.name}'s token!`);
-            playCaptureSound();
-            hit[0].el.classList.add('captured');
-            setTimeout(() => {
-              hit[0].el.classList.remove('captured');
-              hit[0].state = 'yard';
-              hit[0].pos = -1;
-              renderTokens();
-            }, 300);
-          }
-        });
-      }
-    }
-
-    renderTokens();
-    renderPlayersPanel();
-
-    if (player.homeCount === 4) {
-      gameOver = true;
-      diceStatus.textContent = `🏆 ${player.name} wins!`;
+    if (snapshot.gameOver) {
+      const winner = snapshot.players.find(p => p.color === snapshot.winnerColor);
+      diceStatus.textContent = `🏆 ${winner ? winner.name : 'Someone'} wins!`;
       diceBadge.textContent = '🏆 Game over';
-      log(`🏆 ${player.name} wins the game!`);
-      updateDiceUI();
-      showGameOver(player);
-      return;
-    }
-
-    const extraTurn = roll === 6 || captured || token.state === 'finished';
-    if (extraTurn) {
-      canRoll = true;
-      diceStatus.textContent = 'Roll again!';
-      diceBadge.textContent = '🎲 Roll again!';
-      updateDiceUI();
-      startDiceTimer();
+    } else if (!allConnected) {
+      diceStatus.textContent = 'Waiting for players…';
+      diceBadge.textContent = `👥 ${snapshot.players.filter(p => p.connected).length}/4 joined`;
     } else {
-      passTurn();
+      diceStatus.textContent = snapshot.statusMessage || 'Tap the dice to roll';
+      diceBadge.textContent = snapshot.awaitingMove
+        ? (myTurn ? '👉 Choose a token to move' : `⏳ ${snapshot.players[snapshot.currentPlayerIdx].name} is choosing…`)
+        : myTurn ? '🎲 Your turn to roll' : `⏳ ${snapshot.players[snapshot.currentPlayerIdx].name}'s turn`;
+    }
+    updateCosmeticTimer(snapshot, myTurn, allConnected);
+  }
+
+  // Purely decorative — the real 15s auto-roll/auto-pick timeout is
+  // enforced server-side (see server/src/rooms/LudoRoom.ts); this just
+  // mirrors that default locally so players still see a countdown, without
+  // the client being trusted to actually act on it.
+  const COSMETIC_TIMER_SECONDS = 15;
+  let cosmeticInterval = null;
+  let cosmeticRemaining = 0;
+  let cosmeticKey = null;
+
+  function updateCosmeticTimer(snapshot, myTurn, allConnected) {
+    const key = allConnected && !snapshot.gameOver
+      ? `${snapshot.currentPlayerIdx}:${snapshot.awaitingMove}`
+      : null;
+
+    if (key !== cosmeticKey) {
+      cosmeticKey = key;
+      if (cosmeticInterval) { clearInterval(cosmeticInterval); cosmeticInterval = null; }
+      if (key && myTurn) {
+        cosmeticRemaining = COSMETIC_TIMER_SECONDS;
+        diceTimerEl.style.display = 'block';
+        diceTimerEl.classList.remove('urgent');
+        const label = snapshot.awaitingMove ? 'Auto-pick in' : 'Auto-roll in';
+        diceTimerEl.textContent = `⏱ ${label} ${cosmeticRemaining}s`;
+        cosmeticInterval = setInterval(() => {
+          cosmeticRemaining -= 1;
+          if (cosmeticRemaining <= 0) { clearInterval(cosmeticInterval); cosmeticInterval = null; diceTimerEl.style.display = 'none'; return; }
+          diceTimerEl.classList.toggle('urgent', cosmeticRemaining <= 5);
+          diceTimerEl.textContent = `⏱ ${label} ${cosmeticRemaining}s`;
+        }, 1000);
+      } else {
+        diceTimerEl.style.display = 'none';
+      }
     }
   }
 
-  function sameCell(a, b) {
-    const ca = coordFor(a.color, a.pos), cb = coordFor(b.color, b.pos);
-    return ca && cb && ca[0] === cb[0] && ca[1] === cb[1];
-  }
-
-  function colorDot(color) {
-    return { red: '🔴', green: '🟢', yellow: '🟡', blue: '🔵' }[color];
-  }
-
-  const gameOverOverlay = document.getElementById('game-over-overlay');
-  function showGameOver(player) {
-    document.getElementById('winner-icon').style.background = `var(--${player.color}-soft)`;
-    document.getElementById('winner-title').textContent = `${colorDot(player.color)} ${player.name} Wins!`;
-    document.getElementById('payout-block').style.display = IS_FREE ? 'none' : '';
-    document.getElementById('free-note').style.display = IS_FREE ? '' : 'none';
-    if (!IS_FREE) {
-      document.getElementById('payout-pot').textContent = `₹${POT}`;
-      document.getElementById('payout-fee').textContent = `-₹${PLATFORM_FEE}`;
-      document.getElementById('payout-amount').textContent = `₹${PAYOUT}`;
+  function showGameOver(snapshot) {
+    const winner = snapshot.players.find(p => p.color === snapshot.winnerColor);
+    if (!winner) return;
+    const stake = snapshot.stake || 0;
+    const isFree = stake <= 0;
+    const pot = stake * 4;
+    const fee = Math.round(pot * 0.1);
+    const payout = pot - fee;
+    document.getElementById('winner-icon').style.background = `var(--${winner.color}-soft)`;
+    document.getElementById('winner-title').textContent = `${colorDot(winner.color)} ${winner.name} Wins!`;
+    document.getElementById('payout-block').style.display = isFree ? 'none' : '';
+    document.getElementById('free-note').style.display = isFree ? '' : 'none';
+    if (!isFree) {
+      document.getElementById('payout-pot').textContent = `₹${pot}`;
+      document.getElementById('payout-fee').textContent = `-₹${fee}`;
+      document.getElementById('payout-amount').textContent = `₹${payout}`;
     }
     gameOverOverlay.classList.add('open');
   }
 
-  function passTurn() {
-    consecutiveSixes = 0;
-    currentPlayerIdx = (currentPlayerIdx + 1) % players.length;
-    canRoll = true;
-    awaitingMove = false;
-    pendingRoll = null;
-    renderPlayersPanel();
-    renderTurnBanner();
-    diceStatus.textContent = 'Tap the dice to roll';
-    diceBadge.textContent = `🎲 ${players[currentPlayerIdx].name}'s turn`;
-    updateDiceUI();
-    startDiceTimer();
+  function revealDice(value) {
+    diceFace.classList.add('rolling');
+    diceShadow.classList.add('rolling');
+    playDiceSound();
+    const target = faceOrientation[value];
+    currentX = spinTo(target.x, currentX, 2, 3);
+    currentY = spinTo(target.y, currentY, 3, 5);
+    diceCube.style.transform = `rotateX(${currentX}deg) rotateY(${currentY}deg)`;
+    setTimeout(() => {
+      diceFace.classList.remove('rolling');
+      diceShadow.classList.remove('rolling');
+    }, 1550);
   }
 
-  renderTokens();
-  renderPlayersPanel();
-  renderTurnBanner();
-  updateDiceUI();
-  startDiceTimer();
+  function hop(el) {
+    el.classList.remove('hop');
+    void el.offsetWidth; // restart the animation even if the class was already there
+    el.classList.add('hop');
+    playHopSound();
+    setTimeout(() => el.classList.remove('hop'), 170);
+  }
+
+  function flashCapture(el) {
+    el.classList.add('captured');
+    playCaptureSound();
+    setTimeout(() => el.classList.remove('captured'), 300);
+  }
+
+  function statusToLogLine(msg) {
+    if (/wins!$/.test(msg)) return `🏆 ${msg}`;
+    if (msg.includes('captured')) return msg;
+    if (msg.includes('rolled')) return `🎲 ${msg}`;
+    if (msg.includes('reached home')) return `🏠 ${msg}`;
+    return msg;
+  }
+
+  // --- Colyseus connection -------------------------------------------
+
+  const SERVER_URL = new URLSearchParams(location.search).get('server') || 'ws://localhost:2567';
+  const stakeParam = new URLSearchParams(location.search).get('stake');
+  const joinStake = stakeParam === null ? 50 : Math.max(0, Number(stakeParam) || 0);
+
+  let room = null;
+  let myPlayerIdx = -1;
+  let prevSnapshot = null;
+
+  async function connect() {
+    const { data: { session } } = await ludoSupabase.auth.getSession();
+    if (!session) { location.href = 'login.html'; return; }
+
+    const [{ data: profile }, { data: wallet }] = await Promise.all([
+      ludoSupabase.from('profiles').select('display_name').eq('id', session.user.id).single(),
+      ludoSupabase.from('wallets').select('balance').eq('user_id', session.user.id).single(),
+    ]);
+    if (walletChip && wallet) walletChip.textContent = `💰 ₹${Number(wallet.balance).toFixed(2)}`;
+
+    connectingStatus.textContent = 'Joining a table…';
+    const client = new Colyseus.Client(SERVER_URL);
+    try {
+      room = await client.joinOrCreate('ludo', {
+        name: profile?.display_name || session.user.email || 'Player',
+        userId: session.user.id,
+        stake: joinStake,
+      });
+    } catch (err) {
+      console.error('[ludo] failed to join room:', err);
+      connectingStatus.textContent = 'Could not reach the game server. Is it running?';
+      return;
+    }
+
+    room.onStateChange(state => handleStateChange(state.toJSON()));
+    room.onLeave(() => {
+      connectingStatus.textContent = 'Disconnected from the game server.';
+      connectingOverlay.classList.add('open');
+    });
+  }
+
+  function handleStateChange(snapshot) {
+    myPlayerIdx = snapshot.players.findIndex(p => p.sessionId === room.sessionId);
+    const allConnected = snapshot.players.every(p => p.connected);
+
+    connectingOverlay.classList.toggle('open', !allConnected);
+    if (!allConnected) connectingStatus.textContent = `Waiting for players… (${snapshot.players.filter(p => p.connected).length}/4)`;
+
+    if (!prevSnapshot) {
+      renderTokens(snapshot);
+      renderPlayersPanel(snapshot);
+      renderTurnBanner(snapshot);
+      updateDiceUI(snapshot);
+      prevSnapshot = snapshot;
+      return;
+    }
+
+    if (snapshot.diceValue !== prevSnapshot.diceValue && snapshot.diceValue > 0) {
+      revealDice(snapshot.diceValue);
+    }
+
+    // Diff every token against the previous snapshot to trigger the right
+    // cosmetic effect — the server already decided WHAT happened, the
+    // client only has to notice and animate it.
+    snapshot.players.forEach((p, pi) => {
+      const prevPlayer = prevSnapshot.players[pi];
+      if (!prevPlayer) return;
+      p.tokens.forEach((t, ti) => {
+        const prevT = prevPlayer.tokens[ti];
+        if (!prevT) return;
+        const el = tokenEl(p.color, ti);
+        if (prevT.state === 'active' && t.state === 'yard') {
+          flashCapture(el);
+        } else if (prevT.pos !== t.pos || prevT.state !== t.state) {
+          hop(el);
+        }
+      });
+    });
+
+    renderTokens(snapshot);
+    renderPlayersPanel(snapshot);
+    renderTurnBanner(snapshot);
+    updateDiceUI(snapshot);
+
+    if (snapshot.statusMessage && snapshot.statusMessage !== prevSnapshot.statusMessage) {
+      log(statusToLogLine(snapshot.statusMessage));
+    }
+    if (snapshot.gameOver && !prevSnapshot.gameOver) showGameOver(snapshot);
+
+    prevSnapshot = snapshot;
+  }
+
+  diceFace.addEventListener('click', () => {
+    if (!room || diceFace.classList.contains('disabled')) return;
+    room.send('roll');
+  });
+
+  function onTokenClick(color, index) {
+    if (!room) return;
+    const el = tokenEl(color, index);
+    if (!el.classList.contains('movable')) return;
+    room.send('selectToken', { tokenIndex: index });
+  }
 
   document.getElementById('log-toggle').addEventListener('click', () => {
     document.getElementById('log-panel').classList.toggle('open');
   });
+
+  connect();
 })();

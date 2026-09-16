@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#ff8a3d">
 <link rel="icon" href="icons/icon-192.png">
@@ -23,14 +25,14 @@
       <h1 style="font-size:20px;">Ludo Online</h1>
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
-      <a href="wallet.html" class="wallet-chip">💰 ₹240</a>
-      <div class="avatar">R</div>
+      <a href="wallet.html" class="wallet-chip" id="wallet-chip">💰 …</a>
+      <div class="avatar" id="user-avatar" title="Sign out" style="cursor:pointer;">?</div>
     </div>
   </div>
 
   <div style="padding: 8px 20px;">
     <p style="color:var(--text-dim); font-size:14px; font-weight:600;">Welcome back,</p>
-    <h2 style="font-size:23px; margin-top:2px;">Ragnar 👋</h2>
+    <h2 style="font-size:23px; margin-top:2px;" id="welcome-name">…</h2>
 
     <div class="stat-row" style="margin-top:18px;">
       <div class="stat"><div class="num">27</div><div class="lbl">Games Played</div></div>
@@ -124,5 +126,33 @@
     <a href="profile.html" class="nav-item"><div class="ic">👤</div>Profile</a>
   </div>
 </div>
+<script>
+  (async () => {
+    const { data: { session } } = await ludoSupabase.auth.getSession();
+    if (!session) { location.href = 'login.html'; return; }
+
+    const { data: profile } = await ludoSupabase
+      .from('profiles')
+      .select('display_name')
+      .eq('id', session.user.id)
+      .single();
+    const { data: wallet } = await ludoSupabase
+      .from('wallets')
+      .select('balance')
+      .eq('user_id', session.user.id)
+      .single();
+
+    const name = profile?.display_name || session.user.email || 'Player';
+    document.getElementById('welcome-name').textContent = `${name} 👋`;
+    document.getElementById('user-avatar').textContent = name[0].toUpperCase();
+    document.getElementById('wallet-chip').textContent = `💰 ₹${Number(wallet?.balance ?? 0).toFixed(2)}`;
+  })();
+
+  document.getElementById('user-avatar').addEventListener('click', async () => {
+    if (!confirm('Sign out?')) return;
+    await ludoSupabase.auth.signOut();
+    location.href = 'login.html';
+  });
+</script>
 </body>
 </html>
