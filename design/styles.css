@@ -267,10 +267,17 @@ a:has(> .btn) { display: block; }
   position:absolute; width:20%; height:20%; transform:translate(-50%,-50%);
   transition: left .16s ease-out, top .16s ease-out;
 }
-.token.movable { cursor:pointer; box-shadow: 0 0 0 3px #fff, 0 0 0 6px gold, 0 3px 8px rgba(0,0,0,.35); animation: token-pulse 1s ease-in-out infinite; z-index:3; }
+/* drop-shadow (not box-shadow) so the glow hugs the token's actual round
+   shape — box-shadow spread on a %-based border-radius circle renders as a
+   square on some mobile browsers instead of a ring. */
+.token.movable { cursor:pointer; animation: token-pulse 1.1s ease-in-out infinite; z-index:3; }
 @keyframes token-pulse {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.25); }
+  0%, 100% {
+    filter: drop-shadow(0 0 2px #fff) drop-shadow(0 0 5px gold) drop-shadow(0 2px 3px rgba(0,0,0,.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 9px gold) drop-shadow(0 2px 3px rgba(0,0,0,.3));
+  }
 }
 .token-on-board.hop { transform: translate(-50%,-50%) scale(1.4) translateY(-18%); }
 .token.captured { animation: token-vanish .32s ease forwards; }
