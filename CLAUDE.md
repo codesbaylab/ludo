@@ -45,9 +45,14 @@ multiplayer + Supabase for auth/wallet-ledger/match-history; real payments expli
   starts at a fake ₹240), `matches`, `match_players` — all with RLS enabled (clients can only
   read their own profile/wallet and read match history; writes are server-side/service-role only).
   No advisories/lints outstanding as of setup.
-- **Not yet started**: the Colyseus realtime match server (porting `RING`/`COLORS`/`coordFor`/
-  `movableTokens`/capture logic from `design/game.js` into an authoritative `LudoRoom`), and
-  swapping the client's local state mutation for a Colyseus connection.
+- **Colyseus server scaffolded** in `server/` (Node/TypeScript): an authoritative `LudoRoom`
+  ported from `design/game.js`'s rules (`server/src/rules.ts` + `server/src/rooms/LudoRoom.ts`),
+  verified end-to-end with a 4-client in-process simulation (`npm run test:sim` in `server/`).
+  Writes match results/wallet changes to Supabase on game-over via the service role key — skipped
+  cleanly if that key isn't set, or if a player has no auth `userId` yet (client auth doesn't
+  exist yet). See `server/README.md` for setup/known gaps.
+- **Not yet started**: swapping `design/game.js`'s local state mutation for a real Colyseus
+  connection (Phase C), and Supabase Auth wiring in the client (replaces `login.html`).
 
 ## Running it
 
