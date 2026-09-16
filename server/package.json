@@ -1,0 +1,27 @@
+{
+  "name": "ludo-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Authoritative realtime Ludo match server (Colyseus) + Supabase result persistence",
+  "main": "build/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node build/index.js",
+    "test:sim": "tsx src/test/simulateMatch.ts"
+  },
+  "dependencies": {
+    "@colyseus/schema": "^2.0.35",
+    "@colyseus/ws-transport": "^0.15.3",
+    "@supabase/supabase-js": "^2.45.4",
+    "colyseus": "^0.15.57",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.10",
+    "colyseus.js": "^0.15.20",
+    "tsx": "^4.16.2",
+    "typescript": "^5.5.4"
+  }
+}

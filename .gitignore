@@ -1,1 +1,6 @@
 *.code-workspace
+
+# server/ (Node/TypeScript)
+server/node_modules/
+server/build/
+server/.env
