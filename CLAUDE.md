@@ -98,6 +98,16 @@ Purely a renderer + network client now — **all game rules moved server-side** 
 - **Known simplification**: a multi-square move now animates as one smooth CSS slide + a single
   bounce at the end (the server sends only the final position in one patch), not the old
   per-cell hop-hop-hop the local-authority version had. Still looks fine, just not identical.
+- `renderAll(snapshot)` wraps the per-snapshot render calls in try/catch — a bad snapshot logs and
+  moves on instead of freezing the board. `handleStateChange` always advances `prevSnapshot` even
+  if rendering threw, specifically because of a real bug this caught: `FINISHED_POS` used to be
+  57 server-side (`server/src/rules.ts`) while `coordFor` here only has coordinates up to pos 55
+  ring/home-column, treating 56 as its own "finished" — so the server would broadcast an 'active'
+  token at pos 56, `coordFor` returned `null`, and destructuring it threw. Without the safety net
+  that skipped updating `prevSnapshot`, which fed the same broken snapshot into every subsequent
+  diff, permanently freezing that token's movable glow/click handling for the rest of the match.
+  Fixed at the source (`FINISHED_POS` corrected to 56), but the try/catch stays as a general
+  guard against the next client/server position mismatch, whatever it turns out to be.
 - Known gotcha: don't put `filter: drop-shadow(...)` on `.dice-cube` itself — it has
   `transform-style: preserve-3d` and combining the two flattens/hides the cube in Chromium.
   The drop-shadow lives on the outer `.dice-face` button instead.
