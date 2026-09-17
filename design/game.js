@@ -487,6 +487,47 @@
   let myPlayerIdx = -1;
   let prevSnapshot = null;
 
+  // Colyseus close code sent when the client called room.leave() on purpose
+  // (see colyseus.js's ServerError.CloseCode.CONSENTED) — anything else means
+  // the connection dropped unexpectedly and is worth trying to reconnect.
+  const CONSENTED_CLOSE_CODE = 4000;
+  const RECONNECT_ATTEMPTS = 20;
+  const RECONNECT_DELAY_MS = 3000;
+
+  let client = null;
+  let reconnecting = false;
+
+  function attachRoomHandlers(r) {
+    room = r;
+    room.onStateChange(state => handleStateChange(state.toJSON()));
+    room.onLeave(code => {
+      if (code === CONSENTED_CLOSE_CODE || reconnecting) return;
+      attemptReconnect();
+    });
+  }
+
+  async function attemptReconnect() {
+    reconnecting = true;
+    connectingOverlay.classList.add('open');
+    connectingStatus.textContent = 'Reconnecting…';
+    const token = room.reconnectionToken;
+
+    for (let attempt = 1; attempt <= RECONNECT_ATTEMPTS; attempt++) {
+      try {
+        const newRoom = await client.reconnect(token);
+        reconnecting = false;
+        attachRoomHandlers(newRoom);
+        return;
+      } catch (err) {
+        console.error(`[ludo] reconnect attempt ${attempt} failed:`, err);
+        await new Promise(resolve => setTimeout(resolve, RECONNECT_DELAY_MS));
+      }
+    }
+
+    reconnecting = false;
+    connectingStatus.textContent = 'Could not reconnect to the game server.';
+  }
+
   async function connect() {
     const { data: { session } } = await ludoSupabase.auth.getSession();
     if (!session) { location.href = 'login.html'; return; }
@@ -497,26 +538,50 @@
     ]);
     if (walletChip && wallet) walletChip.textContent = `💰 ₹${Number(wallet.balance).toFixed(2)}`;
 
-    connectingStatus.textContent = 'Joining a table…';
-    const client = new Colyseus.Client(SERVER_URL);
-    try {
-      room = await client.joinOrCreate('ludo', {
-        name: profile?.display_name || session.user.email || 'Player',
-        userId: session.user.id,
-        stake: joinStake,
-        playerCount: joinPlayerCount,
-      });
-    } catch (err) {
-      console.error('[ludo] failed to join room:', err);
-      connectingStatus.textContent = 'Could not reach the game server. Is it running?';
-      return;
+    client = new Colyseus.Client(SERVER_URL);
+    let joined;
+
+    // waiting-room.html hands off its live connection here instead of us
+    // taking a fresh joinOrCreate seat (which would double up on the same
+    // room). The handoff token is a one-shot: clear it whether or not the
+    // resume actually succeeds, so a plain reload/direct board.html visit
+    // afterward falls back to a normal join.
+    const handoffToken = sessionStorage.getItem('ludoReconnectToken');
+    if (handoffToken) {
+      sessionStorage.removeItem('ludoReconnectToken');
+      connectingStatus.textContent = 'Resuming your seat…';
+      // No hard ordering guarantee between waiting-room.html's leave() and
+      // this page's boot, so the server may not have processed the leave
+      // (and opened its reconnection window) yet — a bare single attempt
+      // measurably races and fails. A few quick retries absorb that without
+      // meaningfully delaying the common case where it's already ready.
+      for (let attempt = 1; attempt <= 5 && !joined; attempt++) {
+        try {
+          joined = await client.reconnect(handoffToken);
+        } catch (err) {
+          if (attempt === 5) console.error('[ludo] handoff reconnect failed, falling back to a fresh join:', err);
+          else await new Promise(resolve => setTimeout(resolve, 400));
+        }
+      }
     }
 
-    room.onStateChange(state => handleStateChange(state.toJSON()));
-    room.onLeave(() => {
-      connectingStatus.textContent = 'Disconnected from the game server.';
-      connectingOverlay.classList.add('open');
-    });
+    if (!joined) {
+      connectingStatus.textContent = 'Joining a table…';
+      try {
+        joined = await client.joinOrCreate('ludo', {
+          name: profile?.display_name || session.user.email || 'Player',
+          userId: session.user.id,
+          stake: joinStake,
+          playerCount: joinPlayerCount,
+        });
+      } catch (err) {
+        console.error('[ludo] failed to join room:', err);
+        connectingStatus.textContent = 'Could not reach the game server. Is it running?';
+        return;
+      }
+    }
+
+    attachRoomHandlers(joined);
   }
 
   function handleStateChange(snapshot) {

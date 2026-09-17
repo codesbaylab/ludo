@@ -15,11 +15,17 @@ by a Supabase project for auth/wallet-ledger/match-history.
 - `design/lobby.html` — requires a session (redirects to `login.html` otherwise); shows the real
   signed-in display name + wallet balance. Games-played/wins/win-rate stats are still fake —
   wiring real match history into the lobby/profile/history pages hasn't been done yet.
-- `design/waiting-room.html`, `stake-confirm.html` — still static/query-param-driven mockup (not
-  backed by the real Colyseus room's player list yet), except `stake-confirm.html`'s 2/4-player
-  table-size picker, which is real and forwards the choice via `?players=` through to `board.html`.
-  Every lobby entry point (Cash Tables, Quick Match, Create Room, Join Room) routes through this
-  picker now — none of them skip straight to `waiting-room.html` anymore.
+- `design/stake-confirm.html` — real 2/4-player table-size picker, forwards the choice via
+  `?players=` through to `waiting-room.html`. Every lobby entry point (Cash Tables, Quick Match,
+  Create Room, Join Room) routes through it — none of them skip straight to `waiting-room.html`.
+- `design/waiting-room.html` — joins the real Colyseus room immediately (real Supabase Auth
+  session required, same as `board.html`) and renders the live player list off `room.state`
+  (names, colors, connected/waiting status) — no longer a static mockup. Once every seat is
+  connected it hands its live connection off to `board.html` via `room.reconnectionToken`
+  (stashed in `sessionStorage`) instead of a fresh `joinOrCreate`, which would otherwise double
+  up on the same room; `board.html` resumes with `client.reconnect()` and retries a few times
+  since there's no hard ordering guarantee that the server's finished processing the handoff
+  leave before the resume attempt lands (a bare single attempt measurably races and fails).
 - `design/board.html` — the actual game; loads `game.js`, `supabase-client.js`, and the
   `colyseus.js` client SDK from CDN.
 - `design/manifest.json` + `design/icons/` — PWA manifest and app icons (installable to a phone
@@ -45,6 +51,11 @@ Purely a renderer + network client now — **all game rules moved server-side** 
   client -> server API surface now.
 - A cosmetic 15s countdown that mirrors the server's real auto-roll/auto-pick timeout (see
   `LudoRoom`) — purely decorative, the client is never trusted to enforce it.
+- Auto-reconnect on a dropped connection: `room.onLeave` distinguishes an intentional
+  `room.leave()` (Colyseus close code 4000/CONSENTED — no retry) from anything else, and retries
+  `client.reconnect(room.reconnectionToken)` every 3s for up to 20 attempts, matching the
+  server's reconnection grace window (see `LudoRoom` below) instead of just showing a dead-end
+  "Disconnected" message.
 - **Known simplification**: a multi-square move now animates as one smooth CSS slide + a single
   bounce at the end (the server sends only the final position in one patch), not the old
   per-cell hop-hop-hop the local-authority version had. Still looks fine, just not identical.
@@ -67,10 +78,18 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   signup (client has no insert policy on either — this is the only way those rows get created).
   No advisories/lints outstanding.
 - **Colyseus server** (`server/`): an authoritative `LudoRoom` — see `server/README.md` for
-  setup, `npm run test:sim` for the 4-client full-game regression check, and known gaps
-  (no reconnection handling, wallet updates aren't atomic yet). Hosting: self-hosted via
-  Docker on Render's free tier (`server/Dockerfile`, `render.yaml`) — chosen over Colyseus
+  setup and `npm run test:sim` for the 4-client full-game regression check. Hosting: self-hosted
+  via Docker on Render's free tier (`server/Dockerfile`, `render.yaml`) — chosen over Colyseus
   Cloud, which has no free tier.
+- **Reconnection**: `onLeave` gives a disconnected player a 60s grace window
+  (`this.allowReconnection(client, reconnectGraceSeconds)`, overridable via the `reconnectGraceSeconds`
+  create option for tests) before giving up — the game clock pauses for everyone while a seat is
+  empty, and resumes turns/timers once all seats are reconnected. `sessionUserIds` is intentionally
+  never deleted on leave, since `client.sessionId` is preserved across a successful reconnect.
+- **Atomic wallet updates**: `persistResult` calls the `increment_wallet_balance(p_user_id,
+  p_delta)` Postgres RPC (migration `add_atomic_increment_wallet_balance_rpc`, `SECURITY DEFINER`,
+  execute revoked from anon/authenticated — only `service_role` can call it) instead of a
+  read-then-write, so concurrent matches finishing for the same user can no longer race.
 - **Table size**: rooms support 2 or 4 players (`playerCount` create option, default 4) — 2p uses
   colors yellow/red (opposite corners on the ring). `index.ts` registers `filterBy(['playerCount',
   'stake'])` so matchmaking never mixes players who asked for different table sizes or stakes into
@@ -82,9 +101,8 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
 - **Live server**: deployed on Render's free tier at `wss://ludo-x96u.onrender.com` (spins down
   after ~15 min idle; first connection after that has a ~30-60s cold start). `design/game.js`
   now defaults to this URL; `?server=` still overrides it for local dev.
-- **Not yet done**: `waiting-room.html`/`stake-confirm.html` still don't reflect the real Colyseus
-  room's player list (they're the pre-multiplayer mockup); no reconnection/spectator handling;
-  wallet updates on match end aren't atomic.
+- **Not yet done**: no spectator handling; real match-history stats aren't wired into
+  `lobby.html`/`profile.html`/`history.html` (still fake games-played/wins/win-rate numbers).
 
 ## Running it
 
