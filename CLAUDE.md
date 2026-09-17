@@ -168,6 +168,18 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   else's — another player leaving now shows as a status message + player-row "(disconnected)"/
   turn-banner "(away)" tag, not a frozen board. `sessionUserIds` is intentionally never deleted on
   leave, since `client.sessionId` is preserved across a successful reconnect.
+- **Turn-pass delay**: a roll that ends the turn without a move (no valid moves, or three 6s in a
+  row) no longer calls `passTurn()` synchronously in the same tick as `resolveRoll()` — it schedules
+  it via `schedulePassTurn()` after `turnPassDelayMs` (1200ms in prod, overridable for tests). Root
+  cause: Colyseus batches every schema mutation made within one JS tick into a single outgoing
+  patch, so the old synchronous `passTurn()` overwrote `statusMessage` ("No valid moves for X.")
+  with "Y's turn." and flipped `currentPlayerIdx` before either value was ever broadcast — a player
+  (most visibly one who got auto-rolled by the idle timeout, but a manual roll with no valid move
+  hit the same path) saw the turn jump straight to the other player with no visible "you rolled a
+  4, no valid moves" beat, i.e. looked like the dice never rolled at all. `LudoState.turnPassPending`
+  (true for that window) is synced so `design/game.js` can disable the dice button and hide the
+  cosmetic countdown during it instead of leaving them looking live. Reproduced and verified via a
+  real timed 2-client test (idle player, timer-driven auto-roll) before shipping.
 - **Atomic wallet updates**: `persistResult` calls the `increment_wallet_balance(p_user_id,
   p_delta)` Postgres RPC (migration `add_atomic_increment_wallet_balance_rpc`, `SECURITY DEFINER`,
   execute revoked from anon/authenticated — only `service_role` can call it) instead of a

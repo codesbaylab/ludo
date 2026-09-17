@@ -30,6 +30,7 @@ async function main() {
       name: `Bot${i}`,
       rollTimeoutMs: 25,
       selectTimeoutMs: 25,
+      turnPassDelayMs: 25,
     });
     rooms.push(room);
     console.log(`[sim] bot ${i} joined as sessionId=${room.sessionId}`);

@@ -33,4 +33,9 @@ export class LudoState extends Schema {
   // going for whoever's left — see LudoRoom's forfeit-win rules — so this
   // should just be a status notification, not a full-board block).
   @type('boolean') started: boolean = false;
+  // True for a short window after a roll that ends the turn without a move
+  // (no valid moves, or three 6s in a row) — long enough for clients to
+  // actually see that roll's result before currentPlayerIdx advances. See
+  // LudoRoom's turnPassDelayMs for why this exists.
+  @type('boolean') turnPassPending: boolean = false;
 }
