@@ -10,11 +10,25 @@ by a Supabase project for auth/wallet-ledger/match-history.
 - `design/game.js` — client rendering + the Colyseus connection (see "Client" below). No longer
   contains game rules — those live server-side now.
 - `design/supabase-client.js` — shared Supabase client (publishable key, safe to expose; RLS is
-  what actually protects data). Loaded by `login.html`, `lobby.html`, `board.html`.
+  what actually protects data), plus shared helpers used by every page that shows real match/stat
+  data: `ludoTimeAgo` (relative time strings), `ludoFetchStats` (games/wins/win-rate from
+  `match_players`), `ludoFetchMatches` (a user's finished matches, newest first — opponent names
+  are deliberately left out since `profiles`' RLS only allows reading your own row, so other
+  players' `display_name` isn't resolvable client-side as things stand), and
+  `ludoFetchPlayerCounts` (reconstructs each match's payout, since player count per match isn't
+  stored directly). Loaded by every page under auth: `lobby.html`, `profile.html`, `history.html`,
+  `wallet.html`, `waiting-room.html`, `board.html`.
 - `design/login.html` — real Supabase Auth (email/password signup+login, magic link).
-- `design/lobby.html` — requires a session (redirects to `login.html` otherwise); shows the real
-  signed-in display name + wallet balance. Games-played/wins/win-rate stats are still fake —
-  wiring real match history into the lobby/profile/history pages hasn't been done yet.
+- `design/lobby.html`, `profile.html`, `history.html`, `wallet.html` — all require a real session
+  (redirect to `login.html` otherwise — `profile.html`/`history.html`/`wallet.html` had NO auth
+  guard at all before this was fixed) and show real data: signed-in name/email, real wallet
+  balance, real games-played/wins/win-rate, real per-match results (via the `supabase-client.js`
+  helpers above), and a real derived transaction list on `wallet.html` (match stakes/winnings —
+  there's no deposit/withdrawal ledger table, so those stay as the explicitly-labeled "Mock
+  gateway" demo UI). `profile.html`'s Log Out now actually calls `auth.signOut()` (it previously
+  just navigated away, leaving the session live). The fake "✓ Verified"/"Identity Verification
+  (KYC)" badges on `profile.html` were removed rather than left fabricated — no such feature
+  exists anywhere in the schema or backend.
 - `design/stake-confirm.html` — real 2/4-player table-size picker, forwards the choice via
   `?players=` through to `waiting-room.html`. Every lobby entry point (Cash Tables, Quick Match,
   Create Room, Join Room) routes through it — none of them skip straight to `waiting-room.html`.
@@ -101,8 +115,8 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
 - **Live server**: deployed on Render's free tier at `wss://ludo-x96u.onrender.com` (spins down
   after ~15 min idle; first connection after that has a ~30-60s cold start). `design/game.js`
   now defaults to this URL; `?server=` still overrides it for local dev.
-- **Not yet done**: no spectator handling; real match-history stats aren't wired into
-  `lobby.html`/`profile.html`/`history.html` (still fake games-played/wins/win-rate numbers).
+- **Not yet done**: no spectator handling; no real deposit/withdrawal (payment gateway)
+  integration — `wallet.html`'s deposit/withdraw UI is still an explicitly-labeled mock.
 
 ## Running it
 
