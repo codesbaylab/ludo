@@ -21,10 +21,18 @@
     <div style="text-align:center; margin-bottom:18px;">
       <div class="tile-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--red-soft);">💎</div>
       <h1 id="table-title" style="font-size:22px;">Join ₹50 Table?</h1>
-      <p style="font-size:13px; color:var(--text-dim); font-weight:600; margin-top:4px;">4 players · winner takes the pot</p>
+      <p id="table-subtitle" style="font-size:13px; color:var(--text-dim); font-weight:600; margin-top:4px;">4 players · winner takes the pot</p>
     </div>
 
     <div class="card">
+      <div style="padding:10px 0 14px; border-bottom:1px solid var(--border);">
+        <span style="font-size:13px; color:var(--text-dim); font-weight:700; display:block; margin-bottom:8px;">Table Size</span>
+        <div id="player-count-picker" style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-secondary btn-sm player-count-btn" data-count="2" style="flex:1;">2 Players</button>
+          <button type="button" class="btn btn-secondary btn-sm player-count-btn" data-count="3" style="flex:1;">3 Players</button>
+          <button type="button" class="btn btn-secondary btn-sm player-count-btn" data-count="4" style="flex:1;">4 Players</button>
+        </div>
+      </div>
       <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
         <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Your Stake</span>
         <span id="stat-stake" style="font-size:14px; font-weight:800;">₹50</span>
@@ -64,19 +72,42 @@
 <script>
   const WALLET_BALANCE = 240;
   const stake = Math.max(0, Number(new URLSearchParams(location.search).get('stake')) || 50);
-  const pot = stake * 4;
-  const fee = Math.round(pot * 0.1);
-  const payout = pot - fee;
+  const initialPlayers = [2, 3, 4].includes(Number(new URLSearchParams(location.search).get('players')))
+    ? Number(new URLSearchParams(location.search).get('players'))
+    : 4;
+  let playerCount = initialPlayers;
 
-  document.getElementById('table-title').textContent = `Join ₹${stake} Table?`;
-  document.getElementById('stat-stake').textContent = `₹${stake}`;
-  document.getElementById('pot-label').textContent = `Total Pot (4 × ₹${stake})`;
-  document.getElementById('stat-pot').textContent = `₹${pot}`;
-  document.getElementById('stat-fee').textContent = `-₹${fee}`;
-  document.getElementById('stat-payout').textContent = `₹${payout}`;
-  document.getElementById('stat-after').textContent = `₹${(WALLET_BALANCE - stake).toFixed(2)}`;
-  document.getElementById('confirm-btn').textContent = `Confirm & Lock ₹${stake}`;
-  document.getElementById('confirm-link').href = `waiting-room.html?stake=${stake}`;
+  function render() {
+    const pot = stake * playerCount;
+    const fee = Math.round(pot * 0.1);
+    const payout = pot - fee;
+
+    document.getElementById('table-title').textContent = `Join ₹${stake} Table?`;
+    document.getElementById('table-subtitle').textContent = `${playerCount} players · winner takes the pot`;
+    document.getElementById('stat-stake').textContent = `₹${stake}`;
+    document.getElementById('pot-label').textContent = `Total Pot (${playerCount} × ₹${stake})`;
+    document.getElementById('stat-pot').textContent = `₹${pot}`;
+    document.getElementById('stat-fee').textContent = `-₹${fee}`;
+    document.getElementById('stat-payout').textContent = `₹${payout}`;
+    document.getElementById('stat-after').textContent = `₹${(WALLET_BALANCE - stake).toFixed(2)}`;
+    document.getElementById('confirm-btn').textContent = `Confirm & Lock ₹${stake}`;
+    document.getElementById('confirm-link').href = `waiting-room.html?stake=${stake}&players=${playerCount}`;
+
+    document.querySelectorAll('.player-count-btn').forEach((btn) => {
+      const selected = Number(btn.dataset.count) === playerCount;
+      btn.classList.toggle('btn-primary', selected);
+      btn.classList.toggle('btn-secondary', !selected);
+    });
+  }
+
+  document.querySelectorAll('.player-count-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      playerCount = Number(btn.dataset.count);
+      render();
+    });
+  });
+
+  render();
 </script>
 </body>
 </html>
