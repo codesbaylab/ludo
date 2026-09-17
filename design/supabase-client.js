@@ -70,4 +70,11 @@
     data.forEach(row => { counts[row.match_id] = (counts[row.match_id] || 0) + 1; });
     return counts;
   };
+
+  // Is this user an admin? Used by login.html to route to admin.html instead
+  // of lobby.html, and by admin.html itself to bounce non-admins away.
+  window.ludoIsAdmin = async function (userId) {
+    const { data } = await window.ludoSupabase.from('profiles').select('is_admin').eq('id', userId).single();
+    return !!data?.is_admin;
+  };
 })();

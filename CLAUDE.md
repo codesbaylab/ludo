@@ -16,9 +16,16 @@ by a Supabase project for auth/wallet-ledger/match-history.
   are deliberately left out since `profiles`' RLS only allows reading your own row, so other
   players' `display_name` isn't resolvable client-side as things stand), and
   `ludoFetchPlayerCounts` (reconstructs each match's payout, since player count per match isn't
-  stored directly). Loaded by every page under auth: `lobby.html`, `profile.html`, `history.html`,
-  `wallet.html`, `waiting-room.html`, `board.html`.
-- `design/login.html` — real Supabase Auth (email/password signup+login, magic link).
+  stored directly), and `ludoIsAdmin` (checks `profiles.is_admin`). Loaded by every page under
+  auth: `lobby.html`, `profile.html`, `history.html`, `wallet.html`, `waiting-room.html`,
+  `board.html`, `admin.html`.
+- `design/login.html` — real Supabase Auth (email/password signup+login, magic link); routes to
+  `admin.html` instead of `lobby.html` after signing in if `ludoIsAdmin` is true.
+- `design/admin.html` — same login form, no separate admin login page. Auth-guarded (redirects
+  non-admins to `lobby.html`, not just non-signed-in visitors to `login.html`) dashboard: platform
+  stats (`get_platform_stats()` RPC), every user with their real wallet balance and games/wins
+  (plus an inline balance-adjustment form calling `admin_adjust_wallet_balance()`), and every
+  match with its resolved winner name. See "Admin" under Backend for the RLS/RPC design.
 - `design/lobby.html`, `profile.html`, `history.html`, `wallet.html` — all require a real session
   (redirect to `login.html` otherwise — `profile.html`/`history.html`/`wallet.html` had NO auth
   guard at all before this was fixed) and show real data: signed-in name/email, real wallet
@@ -85,12 +92,27 @@ Purely a renderer + network client now — **all game rules moved server-side** 
 Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
 
 - **Supabase project**: `ludo-backend` (project id `suojgcpxdelpvbfjcrfn`, region ap-south-1, org
-  "Yosh Call App"). Schema: `profiles`, `wallets` (internal ledger, starts at a fake ₹240),
-  `matches`, `match_players` — RLS on every table (clients can only read their own profile/wallet
-  + read match history; all writes are server-side via the service role key). A
-  `handle_new_user()` trigger on `auth.users` auto-creates the `profiles`/`wallets` row on
-  signup (client has no insert policy on either — this is the only way those rows get created).
-  No advisories/lints outstanding.
+  "Yosh Call App"). Schema: `profiles` (includes `is_admin bool`), `wallets` (internal ledger,
+  starts at a fake ₹240), `matches`, `match_players` — RLS on every table (clients can only read
+  their own profile/wallet + read match history, unless `is_admin`; all writes are server-side via
+  the service role key, except the two admin RPCs below). A `handle_new_user()` trigger on
+  `auth.users` auto-creates the `profiles`/`wallets` row on signup (client has no insert policy on
+  either — this is the only way those rows get created). No advisories/lints outstanding.
+- **Admin**: `profiles.is_admin` gates access — a `before update` trigger
+  (`prevent_is_admin_self_update`) silently reverts any attempt to change it from a non-
+  `service_role` connection, so it can only be toggled via the dashboard/service role, never by a
+  client. `is_admin(uid)` is a `SECURITY DEFINER` helper (needed so the `profiles`/`wallets` RLS
+  policies checking "is the caller an admin" don't query `profiles` from within a `profiles`
+  policy — that recurses infinitely; caught by testing, not theoretical). Two admin-gated RPCs:
+  `admin_adjust_wallet_balance(user_id, delta)` (atomic, same single-`UPDATE` pattern as
+  `increment_wallet_balance`) and `get_platform_stats()` (total users/matches/fee revenue in one
+  query). All four new functions have `EXECUTE` revoked from `anon`/`public`, granted only to
+  `authenticated` — the linter still flags them as "callable by authenticated users" but that's
+  intentional, since the admin (an authenticated user) is who's supposed to call them; the
+  in-function `is_admin(auth.uid())` check is the real gate, not the grant. `design/admin.html` is
+  the only client of these. To make someone an admin: `update public.profiles set is_admin = true
+  where id = '<their auth.users id>';` via the Supabase SQL editor or MCP tools — there's no UI
+  for it by design.
 - **Colyseus server** (`server/`): an authoritative `LudoRoom` — see `server/README.md` for
   setup and `npm run test:sim` for the 4-client full-game regression check. Hosting: self-hosted
   via Docker on Render's free tier (`server/Dockerfile`, `render.yaml`) — chosen over Colyseus
