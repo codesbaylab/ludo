@@ -139,6 +139,9 @@ Purely a renderer + network client now — **all game rules moved server-side** 
   worse than the pre-chaining bug above. Verified with a standalone test of the exact
   queuing/timing/error-isolation pattern (a bad snapshot mid-stream doesn't block snapshots after
   it, and a roll's render is provably ordered after its reveal, not concurrent with it).
+- `hop()` tracks its cleanup `setTimeout` per element in a `WeakMap` — with per-cell stepping
+  those now fire back to back (`STEP_MS` apart, barely wider than the 170ms cleanup), so an
+  untracked stale timer clipped mid-walk bounces short.
 - `revealDice` cancels and clears any pending roll-cleanup `setTimeout` before starting a new roll
   (plus the same reflow-restart trick `hop()` uses). Rolling a 6 grants an extra roll, so
   back-to-back rolls are common — without this, a second roll landing inside the first roll's
@@ -211,6 +214,29 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   (true for that window) is synced so `design/game.js` can disable the dice button and hide the
   cosmetic countdown during it instead of leaving them looking live. Reproduced and verified via a
   real timed 2-client test (idle player, timer-driven auto-roll) before shipping.
+- **Every move sets a status message**: `applyMove` used to set `statusMessage` only for a yard
+  entry, a capture, or a token reaching home — a plain ring move set none at all. For a
+  turn-ending move `passTurn()` overwrote it anyway so nothing showed, but on an **extra turn**
+  (rolling a 6, capturing, or finishing a token) `passTurn()` never runs, so whatever was there
+  before stayed frozen on screen: players were left staring at "X, choose a token to move." with
+  nothing selectable while the game was actually waiting on them to roll again (reported from a
+  real screenshot, reproduced in a 2-client test). It also meant plain moves never reached the
+  game log, which only logs on a message change. Now every branch builds a `moveMessage`
+  (including a plain `X moved N.`) and extra turns get `… Roll again!` appended. The
+  non-extra-turn branch goes through `schedulePassTurn()` rather than `passTurn()` for the same
+  Colyseus same-tick-batching reason as the turn-pass delay above — otherwise the move message
+  would be overwritten before it was ever broadcast. That delay is mostly absorbed by the
+  client's own dice-reveal/step animation for the same patch, so it doesn't add dead time.
+- **`turnSeq` / `turnTimeoutMs`**: `LudoState.turnSeq` bumps (via `startTurnCountdown`) every time
+  `armRollTimer`/`armSelectTimer` starts a fresh window, and `turnTimeoutMs` carries the real
+  timeout. `design/game.js`'s cosmetic countdown keys off `turnSeq` instead of
+  `currentPlayerIdx:awaitingMove` — neither of those changes on an extra turn, so the countdown
+  used to stay stuck mid-tick from the previous window (or stay hidden, if that one had already
+  expired) while the server had quietly armed a whole new 15s. The client also counts down from
+  when the snapshot *arrived* (`renderingArrivedAt`), not from when it renders: rendering now
+  deliberately lags arrival by the dice reveal plus the per-cell step animation (~2.6s worst
+  case) while the server's timer runs the whole time, so counting from render time showed a full
+  15s that then got auto-rolled out from under the player with seconds still on the clock.
 - **Atomic wallet updates**: `persistResult` calls the `increment_wallet_balance(p_user_id,
   p_delta)` Postgres RPC (migration `add_atomic_increment_wallet_balance_rpc`, `SECURITY DEFINER`,
   execute revoked from anon/authenticated — only `service_role` can call it) instead of a
