@@ -27,4 +27,10 @@ export class LudoState extends Schema {
   @type('string') winnerColor: string = '';
   @type('number') stake: number = 0;
   @type('string') statusMessage: string = 'Waiting for players…';
+  // False until every seat has connected at least once. Lets the client
+  // distinguish "still filling the table" (block the board, show the
+  // waiting message) from "someone left/dropped mid-game" (the game keeps
+  // going for whoever's left — see LudoRoom's forfeit-win rules — so this
+  // should just be a status notification, not a full-board block).
+  @type('boolean') started: boolean = false;
 }

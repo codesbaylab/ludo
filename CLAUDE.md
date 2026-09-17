@@ -145,11 +145,23 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   setup and `npm run test:sim` for the 4-client full-game regression check. Hosting: self-hosted
   via Docker on Render's free tier (`server/Dockerfile`, `render.yaml`) — chosen over Colyseus
   Cloud, which has no free tier.
-- **Reconnection**: `onLeave` gives a disconnected player a 60s grace window
+- **Reconnection & leaving mid-game**: `onLeave` gives a disconnected player a 60s grace window
   (`this.allowReconnection(client, reconnectGraceSeconds)`, overridable via the `reconnectGraceSeconds`
-  create option for tests) before giving up — the game clock pauses for everyone while a seat is
-  empty, and resumes turns/timers once all seats are reconnected. `sessionUserIds` is intentionally
-  never deleted on leave, since `client.sessionId` is preserved across a successful reconnect.
+  create option for tests) before giving up. The game does **not** pause for everyone else while
+  that plays out — `LudoState.started` (true once every seat has connected at least once) gates
+  this: pre-`started`, a leave is just an incomplete lobby; once `started`, the existing roll/select
+  timers (which never checked connection status) keep cycling through whoever's turn it is
+  regardless of who's connected, so the remaining players just keep playing. `checkForfeitWin`
+  runs once someone's confirmed gone for good (consented leave, or the grace period expiring) —
+  if that leaves exactly one player connected, they win by forfeit via the same `declareWinner`
+  path a normal 4-tokens-home win uses (including `persistResult`); with 2+ still connected, the
+  game simply continues. `handleRoll`/`handleSelectToken` no longer require every player to be
+  connected — only that the sender is the current player. `design/game.js` mirrors this:
+  `snapshot.started` (not "is everyone connected") gates the dice button and the full-board
+  overlay, and the overlay only blocks for *my own* connection being the problem, not someone
+  else's — another player leaving now shows as a status message + player-row "(disconnected)"/
+  turn-banner "(away)" tag, not a frozen board. `sessionUserIds` is intentionally never deleted on
+  leave, since `client.sessionId` is preserved across a successful reconnect.
 - **Atomic wallet updates**: `persistResult` calls the `increment_wallet_balance(p_user_id,
   p_delta)` Postgres RPC (migration `add_atomic_increment_wallet_balance_rpc`, `SECURITY DEFINER`,
   execute revoked from anon/authenticated — only `service_role` can call it) instead of a

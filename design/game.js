@@ -344,7 +344,11 @@
     snapshot.players.forEach((p, i) => {
       const row = document.createElement('div');
       row.className = 'player-row' + (i === snapshot.currentPlayerIdx ? ' current' : '');
-      const name = p.connected ? (p.name || 'Player') : 'Waiting…';
+      // Pre-game, an empty seat just hasn't joined yet ("Waiting…"). Once
+      // started, "disconnected" covers both someone mid-reconnect-grace and
+      // someone gone for good — the status log/banner carries that nuance,
+      // this row just needs to show they're not currently in the game.
+      const name = p.connected ? (p.name || 'Player') : (snapshot.started ? `${p.name || 'Player'} (disconnected)` : 'Waiting…');
       const dots = Array.from({ length: 4 }, (_, d) => `<span class="${d < p.homeCount ? 'home' : ''}"></span>`).join('');
       row.innerHTML = `
         <div class="avatar-ring" style="background:var(--${p.color});">${(name[0] || '?').toUpperCase()}</div>
@@ -357,20 +361,25 @@
 
   function renderTurnBanner(snapshot) {
     const p = snapshot.players[snapshot.currentPlayerIdx];
-    turnBanner.innerHTML = `<span class="dot dot-${p.color}"></span> ${p.connected ? p.name : 'Waiting'}'s Turn`;
+    const name = p.connected ? p.name : (snapshot.started ? `${p.name} (away)` : 'Waiting');
+    turnBanner.innerHTML = `<span class="dot dot-${p.color}"></span> ${name}'s Turn`;
   }
 
   function updateDiceUI(snapshot) {
     const myTurn = myPlayerIdx === snapshot.currentPlayerIdx;
-    const allConnected = snapshot.players.every(p => p.connected);
-    const canRollNow = myTurn && allConnected && !snapshot.awaitingMove && !snapshot.gameOver;
+    // Gameplay only waits on the table filling up pre-game (snapshot.started)
+    // — once started, another player leaving/dropping doesn't block anyone
+    // else from playing (the game keeps going with whoever's left; see
+    // LudoRoom's forfeit-win rules), so this must NOT also gate on every
+    // player being connected the way it used to.
+    const canRollNow = myTurn && snapshot.started && !snapshot.awaitingMove && !snapshot.gameOver;
     diceFace.classList.toggle('disabled', !canRollNow);
 
     if (snapshot.gameOver) {
       const winner = snapshot.players.find(p => p.color === snapshot.winnerColor);
       diceStatus.textContent = `🏆 ${winner ? winner.name : 'Someone'} wins!`;
       diceBadge.textContent = '🏆 Game over';
-    } else if (!allConnected) {
+    } else if (!snapshot.started) {
       diceStatus.textContent = 'Waiting for players…';
       diceBadge.textContent = `👥 ${snapshot.players.filter(p => p.connected).length}/${snapshot.players.length} joined`;
     } else {
@@ -379,7 +388,7 @@
         ? (myTurn ? '👉 Choose a token to move' : `⏳ ${snapshot.players[snapshot.currentPlayerIdx].name} is choosing…`)
         : myTurn ? '🎲 Your turn to roll' : `⏳ ${snapshot.players[snapshot.currentPlayerIdx].name}'s turn`;
     }
-    updateCosmeticTimer(snapshot, myTurn, allConnected);
+    updateCosmeticTimer(snapshot, myTurn, snapshot.started);
   }
 
   // Purely decorative — the real 15s auto-roll/auto-pick timeout is
@@ -391,8 +400,8 @@
   let cosmeticRemaining = 0;
   let cosmeticKey = null;
 
-  function updateCosmeticTimer(snapshot, myTurn, allConnected) {
-    const key = allConnected && !snapshot.gameOver
+  function updateCosmeticTimer(snapshot, myTurn, gameActive) {
+    const key = gameActive && !snapshot.gameOver
       ? `${snapshot.currentPlayerIdx}:${snapshot.awaitingMove}`
       : null;
 
@@ -586,14 +595,17 @@
 
   function handleStateChange(snapshot) {
     myPlayerIdx = snapshot.players.findIndex(p => p.sessionId === room.sessionId);
-    const allConnected = snapshot.players.every(p => p.connected);
+    // Full-board block only for "still filling the table" (pre-game) or "my
+    // own connection is the problem" — once the game has started, another
+    // player leaving/dropping does NOT block the board for everyone else
+    // (the game keeps going with whoever's left; see LudoRoom's forfeit-win
+    // rules), it just becomes a status message + log entry like any other
+    // game event, same as e.g. "X captured Y's token".
+    const myConnected = myPlayerIdx === -1 || snapshot.players[myPlayerIdx].connected;
+    const blockBoard = !snapshot.started || !myConnected;
 
-    connectingOverlay.classList.toggle('open', !allConnected);
-    // Uses the server's own statusMessage (already "Waiting for players… (N/M)"
-    // with the room's real table size) instead of recomputing it here — a
-    // previous hardcoded "/4" here ignored playerCount entirely and always
-    // showed 4 regardless of the actual table size.
-    if (!allConnected) connectingStatus.textContent = snapshot.statusMessage || 'Waiting for players…';
+    connectingOverlay.classList.toggle('open', blockBoard);
+    if (blockBoard) connectingStatus.textContent = snapshot.statusMessage || 'Waiting for players…';
 
     if (!prevSnapshot) {
       renderAll(snapshot);
