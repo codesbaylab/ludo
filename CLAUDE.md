@@ -16,8 +16,10 @@ by a Supabase project for auth/wallet-ledger/match-history.
   signed-in display name + wallet balance. Games-played/wins/win-rate stats are still fake —
   wiring real match history into the lobby/profile/history pages hasn't been done yet.
 - `design/waiting-room.html`, `stake-confirm.html` — still static/query-param-driven mockup (not
-  backed by the real Colyseus room's player list yet), except `stake-confirm.html`'s 2/3/4-player
+  backed by the real Colyseus room's player list yet), except `stake-confirm.html`'s 2/4-player
   table-size picker, which is real and forwards the choice via `?players=` through to `board.html`.
+  Every lobby entry point (Cash Tables, Quick Match, Create Room, Join Room) routes through this
+  picker now — none of them skip straight to `waiting-room.html` anymore.
 - `design/board.html` — the actual game; loads `game.js`, `supabase-client.js`, and the
   `colyseus.js` client SDK from CDN.
 - `design/manifest.json` + `design/icons/` — PWA manifest and app icons (installable to a phone
@@ -69,10 +71,12 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   (no reconnection handling, wallet updates aren't atomic yet). Hosting: self-hosted via
   Docker on Render's free tier (`server/Dockerfile`, `render.yaml`) — chosen over Colyseus
   Cloud, which has no free tier.
-- **Table size**: rooms support 2, 3, or 4 players (`playerCount` create option, default 4) —
-  2p uses colors yellow/red (opposite corners on the ring), 3p drops yellow. `index.ts` registers
-  `filterBy(['playerCount', 'stake'])` so matchmaking never mixes players who asked for different
-  table sizes or stakes into the same room.
+- **Table size**: rooms support 2 or 4 players (`playerCount` create option, default 4) — 2p uses
+  colors yellow/red (opposite corners on the ring). `index.ts` registers `filterBy(['playerCount',
+  'stake'])` so matchmaking never mixes players who asked for different table sizes or stakes into
+  the same room. All entry points (`lobby.html`'s Cash Tables, Quick Match, Create Room, and Join
+  Room) route through `stake-confirm.html`'s player-count picker before `waiting-room.html`/
+  `board.html` — nothing joins a room without the player explicitly choosing table size first.
 - **Client integration done** (Phase C): `design/game.js` talks to a running Colyseus server
   instead of running its own rules locally; `login.html`/`lobby.html` use real Supabase Auth.
 - **Live server**: deployed on Render's free tier at `wss://ludo-x96u.onrender.com` (spins down
