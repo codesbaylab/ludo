@@ -99,8 +99,9 @@ Purely a renderer + network client now — **all game rules moved server-side** 
   bounce at the end (the server sends only the final position in one patch), not the old
   per-cell hop-hop-hop the local-authority version had. Still looks fine, just not identical.
 - `renderAll(snapshot)` wraps the per-snapshot render calls in try/catch — a bad snapshot logs and
-  moves on instead of freezing the board. `handleStateChange` always advances `prevSnapshot` even
-  if rendering threw, specifically because of a real bug this caught: `FINISHED_POS` used to be
+  moves on instead of freezing the board. The wider `applySnapshot(snapshot)` (see below) also
+  wraps its own diff loop the same way and always advances `prevSnapshot` in a `finally`, even if
+  something threw, specifically because of a real bug this caught: `FINISHED_POS` used to be
   57 server-side (`server/src/rules.ts`) while `coordFor` here only has coordinates up to pos 55
   ring/home-column, treating 56 as its own "finished" — so the server would broadcast an 'active'
   token at pos 56, `coordFor` returned `null`, and destructuring it threw. Without the safety net
@@ -108,6 +109,22 @@ Purely a renderer + network client now — **all game rules moved server-side** 
   diff, permanently freezing that token's movable glow/click handling for the rest of the match.
   Fixed at the source (`FINISHED_POS` corrected to 56), but the try/catch stays as a general
   guard against the next client/server position mismatch, whatever it turns out to be.
+- **Dice reveal now gates the move it caused**: `handleStateChange` only updates connectivity
+  state (the connecting overlay) immediately; everything else — the token diff, `renderAll`, the
+  status log, game-over — goes through `applySnapshot(snapshot)`, chained onto a single
+  `renderQueue` promise so snapshots are always applied one at a time, in order. When a snapshot's
+  `diceValue` changed, `applySnapshot` calls `revealDice()` and then `await`s `DICE_REVEAL_MS`
+  (1550ms, matching the cube's own CSS animation) before touching anything else. Root cause this
+  fixes: the server can move a token (or even pass the turn) in the very same patch as the roll
+  that caused it (e.g. a single valid move gets auto-applied in `resolveRoll` itself), and
+  rendering that patch immediately made the token teleport to its destination — hop sound and all
+  — while the dice was still visibly mid-spin, before the player had actually seen what they
+  rolled. `applySnapshot`'s try/catch wraps its *entire* body (not just `renderAll`), specifically
+  because chaining through `renderQueue` means an uncaught throw would now reject that link and
+  silently freeze every future render for the rest of the match, not just skip one bad frame —
+  worse than the pre-chaining bug above. Verified with a standalone test of the exact
+  queuing/timing/error-isolation pattern (a bad snapshot mid-stream doesn't block snapshots after
+  it, and a roll's render is provably ordered after its reveal, not concurrent with it).
 - `revealDice` cancels and clears any pending roll-cleanup `setTimeout` before starting a new roll
   (plus the same reflow-restart trick `hop()` uses). Rolling a 6 grants an extra roll, so
   back-to-back rolls are common — without this, a second roll landing inside the first roll's
