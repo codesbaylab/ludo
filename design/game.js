@@ -372,7 +372,8 @@
     // else from playing (the game keeps going with whoever's left; see
     // LudoRoom's forfeit-win rules), so this must NOT also gate on every
     // player being connected the way it used to.
-    const canRollNow = myTurn && snapshot.started && !snapshot.awaitingMove && !snapshot.gameOver;
+    const canRollNow = myTurn && snapshot.started && !snapshot.awaitingMove && !snapshot.gameOver
+      && !snapshot.turnPassPending;
     diceFace.classList.toggle('disabled', !canRollNow);
 
     if (snapshot.gameOver) {
@@ -401,7 +402,10 @@
   let cosmeticKey = null;
 
   function updateCosmeticTimer(snapshot, myTurn, gameActive) {
-    const key = gameActive && !snapshot.gameOver
+    // turnPassPending means the real roll already happened (and the result
+    // is on screen) — nothing left to count down to, so hide it instead of
+    // ticking on toward a timeout that was already resolved server-side.
+    const key = gameActive && !snapshot.gameOver && !snapshot.turnPassPending
       ? `${snapshot.currentPlayerIdx}:${snapshot.awaitingMove}`
       : null;
 

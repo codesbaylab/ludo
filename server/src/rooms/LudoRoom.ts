@@ -25,6 +25,8 @@ interface CreateOptions {
   // How long a disconnected player's seat stays reserved for a reconnect,
   // in seconds. Overridable so tests don't have to wait a full minute.
   reconnectGraceSeconds?: number;
+  // Overridable so tests don't have to wait through the pause below.
+  turnPassDelayMs?: number;
 }
 
 // Which colors play at a smaller table, chosen for board balance rather
@@ -41,8 +43,21 @@ export class LudoRoom extends Room<LudoState> {
   private rollTimeoutMs = 15000;
   private selectTimeoutMs = 15000;
   private reconnectGraceSeconds = 60;
+  // Colyseus batches every schema mutation made within one JS tick into a
+  // single patch — so a resolveRoll() that sets diceValue/statusMessage and
+  // then calls passTurn() synchronously (same tick) never actually shows
+  // clients the roll: passTurn() overwrites statusMessage with "<next>'s
+  // turn." before either value is ever broadcast, and currentPlayerIdx
+  // flips in that same patch. A player watching this (most visibly the
+  // idle-timeout auto-roll, but a manual roll with no valid move hits the
+  // exact same path) sees the turn jump to the other player with no visible
+  // "you rolled a 4, no valid moves" beat — looks like the dice never
+  // rolled at all. This delay lets the roll's own patch reach clients (and
+  // revealDice's animation start) before the turn actually passes.
+  private turnPassDelayMs = 1200;
   private rollTimer: any = null;
   private selectTimer: any = null;
+  private passTurnTimer: any = null;
   // Supabase auth user id per session, only populated for clients that pass
   // one at join time. Not part of the synced schema (opponents don't need it).
   private sessionUserIds: Record<string, string> = {};
@@ -51,6 +66,7 @@ export class LudoRoom extends Room<LudoState> {
     this.rollTimeoutMs = options.rollTimeoutMs ?? 15000;
     this.selectTimeoutMs = options.selectTimeoutMs ?? 15000;
     this.reconnectGraceSeconds = options.reconnectGraceSeconds ?? 60;
+    this.turnPassDelayMs = options.turnPassDelayMs ?? 1200;
 
     const playerCount = COLORS_BY_PLAYER_COUNT[options.playerCount!] ? options.playerCount! : 4;
     this.maxClients = playerCount;
@@ -180,6 +196,7 @@ export class LudoRoom extends Room<LudoState> {
     if (this.state.gameOver) return;
     if (playerIdx !== this.state.currentPlayerIdx) return;
     if (this.state.awaitingMove) return;
+    if (this.state.turnPassPending) return;
 
     this.rollTimer?.clear();
     this.resolveRoll(playerIdx);
@@ -194,7 +211,7 @@ export class LudoRoom extends Room<LudoState> {
     if (this.state.consecutiveSixes === 3) {
       this.state.consecutiveSixes = 0;
       this.state.statusMessage = `${player.name} rolled three 6s in a row — turn forfeited!`;
-      this.passTurn();
+      this.schedulePassTurn();
       return;
     }
 
@@ -209,7 +226,7 @@ export class LudoRoom extends Room<LudoState> {
         return;
       }
       this.state.statusMessage = `No valid moves for ${player.name}.`;
-      this.passTurn();
+      this.schedulePassTurn();
       return;
     }
 
@@ -335,6 +352,7 @@ export class LudoRoom extends Room<LudoState> {
   }
 
   private passTurn() {
+    this.state.turnPassPending = false;
     this.state.consecutiveSixes = 0;
     this.state.awaitingMove = false;
     this.state.players.forEach((p) => p.tokens.forEach((t) => (t.movable = false)));
@@ -342,6 +360,20 @@ export class LudoRoom extends Room<LudoState> {
     const next = this.currentPlayer();
     this.state.statusMessage = `${next.name}'s turn.`;
     this.armRollTimer(this.state.currentPlayerIdx);
+  }
+
+  /** Used instead of calling passTurn() directly whenever the turn ends on
+   *  the strength of a message (no valid moves / three 6s) that passTurn()
+   *  would otherwise immediately clobber in the same patch — see
+   *  turnPassDelayMs above for the full reasoning. */
+  private schedulePassTurn() {
+    this.state.turnPassPending = true;
+    this.passTurnTimer?.clear();
+    this.passTurnTimer = this.clock.setTimeout(() => {
+      this.passTurnTimer = null;
+      if (this.state.gameOver) return;
+      this.passTurn();
+    }, this.turnPassDelayMs);
   }
 
   // --- Timers (auto-roll / auto-pick if a player leaves the game idle) ---
@@ -368,6 +400,7 @@ export class LudoRoom extends Room<LudoState> {
   private clearTimers() {
     this.rollTimer?.clear();
     this.selectTimer?.clear();
+    this.passTurnTimer?.clear();
   }
 
   // --- Persistence ------------------------------------------------------
