@@ -108,6 +108,12 @@ Purely a renderer + network client now — **all game rules moved server-side** 
   diff, permanently freezing that token's movable glow/click handling for the rest of the match.
   Fixed at the source (`FINISHED_POS` corrected to 56), but the try/catch stays as a general
   guard against the next client/server position mismatch, whatever it turns out to be.
+- `revealDice` cancels and clears any pending roll-cleanup `setTimeout` before starting a new roll
+  (plus the same reflow-restart trick `hop()` uses). Rolling a 6 grants an extra roll, so
+  back-to-back rolls are common — without this, a second roll landing inside the first roll's
+  1550ms `.rolling` animation window had its cleanup timer fire mid-spin and cut the CSS animation
+  short instead of letting each roll finish its own full spin. Found via a proactive smoothness
+  audit, not a user report.
 - Known gotcha: don't put `filter: drop-shadow(...)` on `.dice-cube` itself — it has
   `transform-style: preserve-3d` and combining the two flattens/hides the cube in Chromium.
   The drop-shadow lives on the outer `.dice-face` button instead.

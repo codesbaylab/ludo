@@ -446,7 +446,20 @@
     gameOverOverlay.classList.add('open');
   }
 
+  let diceRollTimeout = null;
+
   function revealDice(value) {
+    // Extra turns (rolling a 6) mean back-to-back rolls are common — without
+    // this, a second roll landing before the first roll's 1550ms cleanup
+    // fires would get its ".rolling" animation cut short by that stale
+    // timer, snapping the dice cube mid-animation instead of finishing the
+    // second roll's spin. Cancel any pending cleanup and force-restart the
+    // CSS animation (same reflow trick hop() already uses) so every roll
+    // gets its own full, uninterrupted 1550ms.
+    if (diceRollTimeout) clearTimeout(diceRollTimeout);
+    diceFace.classList.remove('rolling');
+    diceShadow.classList.remove('rolling');
+    void diceFace.offsetWidth;
     diceFace.classList.add('rolling');
     diceShadow.classList.add('rolling');
     playDiceSound();
@@ -454,9 +467,10 @@
     currentX = spinTo(target.x, currentX, 2, 3);
     currentY = spinTo(target.y, currentY, 3, 5);
     diceCube.style.transform = `rotateX(${currentX}deg) rotateY(${currentY}deg)`;
-    setTimeout(() => {
+    diceRollTimeout = setTimeout(() => {
       diceFace.classList.remove('rolling');
       diceShadow.classList.remove('rolling');
+      diceRollTimeout = null;
     }, 1550);
   }
 
