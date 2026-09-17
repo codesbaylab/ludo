@@ -829,7 +829,15 @@
     // Awaited so the navigation below can't cut the WebSocket off before the
     // LEAVE_ROOM message actually reaches the server — a bare fire-and-forget
     // call raced and lost in exactly this way when this same pattern was
-    // first tried for the waiting-room -> board handoff.
+    // first tried for the waiting-room -> board handoff. That round trip is
+    // usually well under a second but isn't instant, and with nothing on
+    // screen acknowledging the click, the board just sat there unchanged
+    // until the sudden jump to lobby.html — reported as an unexplained
+    // delay. Reusing the connecting-overlay here doesn't shorten the wait
+    // (still needed, still real), it just makes clear the app is actually
+    // leaving the match rather than looking stuck.
+    connectingOverlay.classList.add('open');
+    connectingStatus.textContent = 'Leaving match…';
     reconnecting = true; // suppress attachRoomHandlers' onLeave auto-reconnect for this deliberate close
     await room.leave(true);
     location.href = 'lobby.html';

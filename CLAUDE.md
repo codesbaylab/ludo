@@ -164,6 +164,18 @@ Purely a renderer + network client now — **all game rules moved server-side** 
   1550ms `.rolling` animation window had its cleanup timer fire mid-spin and cut the CSS animation
   short instead of letting each roll finish its own full spin. Found via a proactive smoothness
   audit, not a user report.
+- **Exit shows a "Leaving match…" overlay immediately**: the exit-link handler awaits
+  `room.leave(true)` before navigating to `lobby.html` — deliberately, so navigation can't cut the
+  WebSocket off before the `LEAVE_ROOM` message actually reaches the server (a bare fire-and-forget
+  call raced and lost this way when first tried for the waiting-room → board handoff; skipping the
+  await would make the exit look like an unconsented drop to the other player — a 60s reconnect
+  grace period and "X disconnected — reconnecting…" instead of "X left the game."). That round
+  trip is genuinely fast (a few ms locally; real-world it's just normal network latency to Render,
+  not anything server-side — `LudoRoom.onLeave`'s consented-leave branch does no awaited work), but
+  with nothing on screen acknowledging the click, the board sat there unchanged the whole time and
+  then jumped straight to the lobby — reported as an unexplained delay. Reusing the
+  connecting-overlay for "Leaving match…" the instant the confirm dialog closes doesn't shorten the
+  (already tiny) wait, it just makes clear the app is actually doing something.
 - Known gotcha: don't put `filter: drop-shadow(...)` on `.dice-cube` itself — it has
   `transform-style: preserve-3d` and combining the two flattens/hides the cube in Chromium.
   The drop-shadow lives on the outer `.dice-face` button instead.
