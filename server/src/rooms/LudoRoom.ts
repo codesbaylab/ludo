@@ -84,6 +84,7 @@ export class LudoRoom extends Room<LudoState> {
     if (options.userId) this.sessionUserIds[client.sessionId] = options.userId;
 
     if (this.state.players.every((p) => p.connected)) {
+      this.state.started = true;
       this.state.statusMessage = `${this.state.players[0]!.name}'s turn.`;
       this.armRollTimer(0);
     } else {
@@ -99,15 +100,22 @@ export class LudoRoom extends Room<LudoState> {
     player.connected = false;
     if (this.state.gameOver) return;
 
-    // Pause the clock for everyone while this seat is empty — reconnecting
-    // resumes below; sessionUserIds is intentionally NOT cleared here since
-    // client.sessionId is preserved across a successful reconnect (needed by
-    // persistResult if the game finishes after they're back).
-    this.clearTimers();
+    if (!this.state.started) {
+      // Still filling the table pre-game — no turn order or timers exist
+      // yet, so there's nothing to skip and no forfeit-win to apply.
+      const connected = this.state.players.filter((p) => p.connected).length;
+      this.state.statusMessage = `Waiting for players… (${connected}/${this.state.players.length})`;
+      return;
+    }
 
     if (consented) {
-      // Explicit client.leave() — not a dropped connection, don't wait for one.
-      this.state.statusMessage = `${player.name} left the game.`;
+      // Explicit client.leave() — not a dropped connection, don't wait for
+      // one. sessionUserIds is intentionally NOT cleared: harmless to keep,
+      // and client.sessionId survives a (now moot, for a consented leave)
+      // reconnect either way.
+      const reason = `${player.name} left the game.`;
+      this.state.statusMessage = reason;
+      this.checkForfeitWin(reason);
       return;
     }
 
@@ -115,19 +123,22 @@ export class LudoRoom extends Room<LudoState> {
     try {
       await this.allowReconnection(client, this.reconnectGraceSeconds);
     } catch {
-      // Grace period expired without a reconnect.
-      this.state.statusMessage = `${player.name} disconnected — waiting…`;
+      // Grace period expired without a reconnect — they're gone for good.
+      const reason = `${player.name} disconnected and never reconnected.`;
+      this.state.statusMessage = reason;
+      this.checkForfeitWin(reason);
       return;
     }
 
+    // Reconnected within the grace window. The rest of the table was never
+    // paused waiting for this (see checkForfeitWin/handleRoll below) — deal
+    // timers already kept cycling through whoever's turn it actually was —
+    // so this just needs to resume this player's own turn if it's
+    // currently theirs, giving them a fresh window rather than whatever was
+    // left when they dropped.
     player.connected = true;
-    if (!this.state.players.every((p) => p.connected)) {
-      const connected = this.state.players.filter((p) => p.connected).length;
-      this.state.statusMessage = `Waiting for players… (${connected}/${this.state.players.length})`;
-      return;
-    }
-
     this.state.statusMessage = `${player.name} reconnected.`;
+    if (this.state.currentPlayerIdx !== this.state.players.indexOf(player)) return;
     if (this.state.awaitingMove) {
       const options = this.currentPlayer()
         .tokens.map((t, i) => (t.movable ? i : -1))
@@ -136,6 +147,22 @@ export class LudoRoom extends Room<LudoState> {
     } else {
       this.armRollTimer(this.state.currentPlayerIdx);
     }
+  }
+
+  /** Called once someone's confirmed gone for good (a consented leave, or
+   *  an unconsented drop whose reconnection grace period expired). If that
+   *  leaves exactly one player still connected, they win by forfeit —
+   *  matching a normal win's path (gameOver, winnerColor, persistResult).
+   *  With 2+ still connected, the game just keeps going: whoever's turn it
+   *  is (now or once the existing roll/select timers naturally cycle past
+   *  the departed player — those timers never checked connection status,
+   *  so they already auto-play an absent player's turn the same way they
+   *  already auto-play an idle-but-connected one) carries on unaffected. */
+  private checkForfeitWin(reason: string) {
+    const stillConnected = this.state.players.filter((p) => p.connected);
+    if (stillConnected.length !== 1) return;
+    const winnerIdx = this.state.players.indexOf(stillConnected[0]!);
+    this.declareWinner(winnerIdx, `${stillConnected[0]!.name} wins — ${reason}`);
   }
 
   // --- Turn flow -----------------------------------------------------
@@ -151,7 +178,6 @@ export class LudoRoom extends Room<LudoState> {
     const playerIdx = this.state.players.findIndex((p) => p.sessionId === client.sessionId);
     if (playerIdx === -1) return;
     if (this.state.gameOver) return;
-    if (!this.state.players.every((p) => p.connected)) return;
     if (playerIdx !== this.state.currentPlayerIdx) return;
     if (this.state.awaitingMove) return;
 
@@ -287,11 +313,7 @@ export class LudoRoom extends Room<LudoState> {
     }
 
     if (player.homeCount === 4) {
-      this.state.gameOver = true;
-      this.state.winnerColor = player.color;
-      this.state.statusMessage = `${player.name} wins!`;
-      this.clearTimers();
-      this.persistResult(playerIdx).catch((err) => console.error('[ludo] persistResult failed:', err));
+      this.declareWinner(playerIdx, `${player.name} wins!`);
       return;
     }
 
@@ -301,6 +323,15 @@ export class LudoRoom extends Room<LudoState> {
     } else {
       this.passTurn();
     }
+  }
+
+  private declareWinner(winnerIdx: number, statusMessage: string) {
+    const winner = this.state.players[winnerIdx]!;
+    this.state.gameOver = true;
+    this.state.winnerColor = winner.color;
+    this.state.statusMessage = statusMessage;
+    this.clearTimers();
+    this.persistResult(winnerIdx).catch((err) => console.error('[ludo] persistResult failed:', err));
   }
 
   private passTurn() {
