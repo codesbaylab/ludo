@@ -671,5 +671,21 @@
     document.getElementById('log-panel').classList.toggle('open');
   });
 
+  document.getElementById('exit-link').addEventListener('click', async (e) => {
+    if (!room) return; // not connected yet — plain navigation is fine
+    e.preventDefault();
+    if (!confirm('Leave this match? The other player will see that you left.')) return;
+    // Consented leave (Colyseus close code 4000) — LudoRoom's onLeave shows
+    // "<name> left the game." to everyone else instead of holding the seat
+    // open for the reconnection grace period like an accidental drop would.
+    // Awaited so the navigation below can't cut the WebSocket off before the
+    // LEAVE_ROOM message actually reaches the server — a bare fire-and-forget
+    // call raced and lost in exactly this way when this same pattern was
+    // first tried for the waiting-room -> board handoff.
+    reconnecting = true; // suppress attachRoomHandlers' onLeave auto-reconnect for this deliberate close
+    await room.leave(true);
+    location.href = 'lobby.html';
+  });
+
   connect();
 })();
