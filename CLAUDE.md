@@ -127,8 +127,9 @@ Purely a renderer + network client now — **all game rules moved server-side** 
   state (the connecting overlay) immediately; everything else — the token diff, `renderAll`, the
   status log, game-over — goes through `applySnapshot(snapshot)`, chained onto a single
   `renderQueue` promise so snapshots are always applied one at a time, in order. When a snapshot's
-  `diceValue` changed, `applySnapshot` calls `revealDice()` and then `await`s `DICE_REVEAL_MS`
-  (1550ms, matching the cube's own CSS animation) before touching anything else. Root cause this
+  `rollSeq` changed (see below for why that, not `diceValue`), `applySnapshot` calls `revealDice()`
+  and then `await`s `DICE_REVEAL_MS` (1550ms, matching the cube's own CSS animation) before
+  touching anything else. Root cause this
   fixes: the server can move a token (or even pass the turn) in the very same patch as the roll
   that caused it (e.g. a single valid move gets auto-applied in `resolveRoll` itself), and
   rendering that patch immediately made the token teleport to its destination — hop sound and all
@@ -142,6 +143,21 @@ Purely a renderer + network client now — **all game rules moved server-side** 
 - `hop()` tracks its cleanup `setTimeout` per element in a `WeakMap` — with per-cell stepping
   those now fire back to back (`STEP_MS` apart, barely wider than the 170ms cleanup), so an
   untracked stale timer clipped mid-walk bounces short.
+- **`rollSeq`, not `diceValue`, detects "a new roll happened"**: a die only has 6 faces, so two
+  consecutive rolls landing on the same number is a 1-in-6 event on *every single turn* — common
+  enough to hit repeatedly during the early "everyone needs a 6" phase of a fresh game. The client
+  used to detect a fresh roll by comparing `diceValue` itself
+  (`snapshot.diceValue !== prevSnapshot.diceValue`), which silently misses that case: no
+  `revealDice()`, no `DICE_REVEAL_MS` wait, so the roll's real consequences (the move, the turn
+  passing, the "No valid moves for X."/"X's turn." message) all landed with zero animation or
+  visible feedback — looked exactly like the game had frozen or skipped a turn, reported as such
+  from a real screenshot even though the underlying "No valid moves" logic itself was independently
+  verified correct (`movableTokenIndices` cross-checked against 2,033 real turns across 15 full
+  simulated games, zero false positives). Fixed by adding `LudoState.rollSeq`, bumped once inside
+  `resolveRoll` every time a real roll happens regardless of its face value; `applySnapshot` keys
+  its reveal on that instead. Reproduced against the old logic with a rigged-timing 2-client test
+  forcing a same-value-back-to-back roll and confirming the old check would have missed it while
+  `rollSeq` catches it every time.
 - `revealDice` cancels and clears any pending roll-cleanup `setTimeout` before starting a new roll
   (plus the same reflow-restart trick `hop()` uses). Rolling a 6 grants an extra roll, so
   back-to-back rolls are common — without this, a second roll landing inside the first roll's

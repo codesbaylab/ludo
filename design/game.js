@@ -729,7 +729,12 @@
         return;
       }
 
-      if (snapshot.diceValue !== prevSnapshot.diceValue && snapshot.diceValue > 0) {
+      // Keyed on rollSeq, NOT on diceValue itself: a die only has 6 faces,
+      // so two consecutive rolls landing on the same number is a 1-in-6
+      // event on every single turn — common enough that comparing values
+      // silently skipped the whole reveal (and the move/turn-pass it
+      // gates) whenever it happened, making the dice look frozen mid-game.
+      if (snapshot.rollSeq !== prevSnapshot.rollSeq) {
         revealDice(snapshot.diceValue);
         await new Promise(resolve => setTimeout(resolve, DICE_REVEAL_MS));
       }
