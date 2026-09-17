@@ -48,6 +48,7 @@
           <input class="input" type="password" id="login-password" placeholder="••••••••" required />
         </div>
         <button type="submit" class="btn btn-primary">Log In</button>
+        <button type="button" class="btn btn-ghost" id="forgot-password-btn" style="margin-top:8px;">Forgot password?</button>
       </form>
 
       <form id="form-signup" style="display:none;">
@@ -142,6 +143,17 @@
     const { error } = await ludoSupabase.auth.signInWithOtp({ email });
     if (error) { showMessage(error.message, true); return; }
     showMessage(`Magic link sent to ${email} — check your inbox.`, false);
+  });
+
+  document.getElementById('forgot-password-btn').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('login-email').value.trim();
+    if (!email) { showMessage('Enter your email above first, then tap "Forgot password?" again.', true); return; }
+    const { error } = await ludoSupabase.auth.resetPasswordForEmail(email, {
+      redirectTo: new URL('reset-password.html', location.href).href,
+    });
+    if (error) { showMessage(error.message, true); return; }
+    showMessage(`Password reset link sent to ${email} — check your inbox.`, false);
   });
 </script>
 </body>

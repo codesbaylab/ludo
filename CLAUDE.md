@@ -20,7 +20,17 @@ by a Supabase project for auth/wallet-ledger/match-history.
   auth: `lobby.html`, `profile.html`, `history.html`, `wallet.html`, `waiting-room.html`,
   `board.html`, `admin.html`.
 - `design/login.html` — real Supabase Auth (email/password signup+login, magic link); routes to
-  `admin.html` instead of `lobby.html` after signing in if `ludoIsAdmin` is true.
+  `admin.html` instead of `lobby.html` after signing in if `ludoIsAdmin` is true. Has a "Forgot
+  password?" button (`auth.resetPasswordForEmail`, `redirectTo` computed as
+  `reset-password.html` relative to the current origin so it works both on GitHub Pages and
+  local dev) — **the project's Auth → URL Configuration allowlist needs
+  `reset-password.html` (or a wildcard covering it) added, or Supabase silently redirects to
+  whatever the default Site URL is instead of landing there; not something settable via the MCP
+  tools available in this session, only the dashboard or Management API.**
+- `design/reset-password.html` — where the emailed reset link lands. supabase-js auto-detects the
+  recovery token in the URL and establishes a session; no session means an invalid/expired link
+  (shown as such, with a link back to `login.html`), not a form. On success, routes the same way
+  `login.html` does (`admin.html` vs `lobby.html` via `ludoIsAdmin`).
 - `design/admin.html` — same login form, no separate admin login page. Auth-guarded (redirects
   non-admins to `lobby.html`, not just non-signed-in visitors to `login.html`) dashboard: platform
   stats (`get_platform_stats()` RPC), every user with their real wallet balance and games/wins
@@ -35,7 +45,9 @@ by a Supabase project for auth/wallet-ledger/match-history.
   gateway" demo UI). `profile.html`'s Log Out now actually calls `auth.signOut()` (it previously
   just navigated away, leaving the session live). The fake "✓ Verified"/"Identity Verification
   (KYC)" badges on `profile.html` were removed rather than left fabricated — no such feature
-  exists anywhere in the schema or backend.
+  exists anywhere in the schema or backend. `profile.html` also has a Change Password panel
+  (`auth.updateUser({password})`) — works for any signed-in user, admin or not, since it's the
+  same page for everyone.
 - `design/stake-confirm.html` — real 2/4-player table-size picker, forwards the choice via
   `?players=` through to `waiting-room.html`. Every lobby entry point (Cash Tables, Quick Match,
   Create Room, Join Room) routes through it — none of them skip straight to `waiting-room.html`.
