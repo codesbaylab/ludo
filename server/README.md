@@ -67,23 +67,28 @@ other Docker host) later with zero code changes, since the app already reads
 Local Docker sanity check before pushing: `docker build -t ludo-server ./server
 && docker run -p 2567:2567 ludo-server`.
 
+## Reconnection
+
+`onLeave` gives a disconnected player a grace window (`reconnectGraceSeconds`
+create option, default 60s) via `this.allowReconnection(client, seconds)`
+before giving up — the game clock pauses for everyone while any seat is
+empty, and resumes the current player's roll/select timer once every seat is
+reconnected. `client.sessionId` is preserved across a successful
+`client.reconnect()`, so `sessionUserIds` is intentionally never cleared on
+leave (needed by `persistResult` if the game finishes after they're back).
+
+`design/waiting-room.html` hands its live connection to `design/board.html`
+this same way on purpose (stashing `room.reconnectionToken` in
+`sessionStorage` before navigating) instead of a fresh `joinOrCreate`, which
+would otherwise double up on the same room. There's no hard ordering
+guarantee that the server's processed that handoff leave before the resume
+attempt lands, so `board.html` retries the reconnect a few times rather than
+treating a single failure as final.
+
 ## What this does NOT do yet (known scope gaps)
 
-- **No client integration.** `design/game.js` still runs its own local copy
-  of the rules entirely client-side — nothing in `design/` talks to this
-  server yet. That's Phase C.
-- **No auth wiring.** `onJoin` accepts an optional `userId` (meant to be a
-  Supabase auth user id) but nothing sets it yet, so `persistResult` always
-  skips writing to Supabase until Phase C's client auth exists.
-- **No reconnection handling.** If a player disconnects mid-game, the room
-  just pauses (clears timers, sets a status message) and waits — there's no
-  grace-period reconnect flow or bot takeover.
-- **Wallet updates aren't atomic.** `persistResult`'s balance update is a
-  plain read-then-write, which has a race condition under concurrent
-  matches finishing for the same user. Fine for solo testing, not for
-  production — replace with a Postgres RPC that increments the balance in
-  one statement before this handles real money.
-- **Hosting is decided but only Dockerized, not yet actually deployed
-  live.** See "Deploying" above — `Dockerfile` + `render.yaml` exist; someone
-  still needs to click through the Render dashboard, set the env vars, and
-  give the client the real `wss://` URL.
+- **No spectator handling.** Every seat is a required active player;
+  there's no read-only observer mode.
+- **No bot takeover / forfeit.** If a player never reconnects within the
+  grace window, the game just stays paused indefinitely — there's no
+  auto-forfeit or AI takeover for their seat.

@@ -22,6 +22,9 @@ interface CreateOptions {
   // Overridable so the automated smoke test doesn't have to wait 15s per turn.
   rollTimeoutMs?: number;
   selectTimeoutMs?: number;
+  // How long a disconnected player's seat stays reserved for a reconnect,
+  // in seconds. Overridable so tests don't have to wait a full minute.
+  reconnectGraceSeconds?: number;
 }
 
 // Which colors play at a smaller table, chosen for board balance rather
@@ -37,6 +40,7 @@ export class LudoRoom extends Room<LudoState> {
 
   private rollTimeoutMs = 15000;
   private selectTimeoutMs = 15000;
+  private reconnectGraceSeconds = 60;
   private rollTimer: any = null;
   private selectTimer: any = null;
   // Supabase auth user id per session, only populated for clients that pass
@@ -46,6 +50,7 @@ export class LudoRoom extends Room<LudoState> {
   onCreate(options: CreateOptions) {
     this.rollTimeoutMs = options.rollTimeoutMs ?? 15000;
     this.selectTimeoutMs = options.selectTimeoutMs ?? 15000;
+    this.reconnectGraceSeconds = options.reconnectGraceSeconds ?? 60;
 
     const playerCount = COLORS_BY_PLAYER_COUNT[options.playerCount!] ? options.playerCount! : 4;
     this.maxClients = playerCount;
@@ -87,17 +92,49 @@ export class LudoRoom extends Room<LudoState> {
     }
   }
 
-  onLeave(client: Client) {
+  async onLeave(client: Client, consented: boolean) {
     const player = this.state.players.find((p) => p.sessionId === client.sessionId);
     if (!player) return;
+
     player.connected = false;
-    delete this.sessionUserIds[client.sessionId];
-    if (!this.state.gameOver) {
-      // Scaffold-level handling: pause the clock and wait. Reconnection and
-      // "what happens if someone never comes back" are follow-up work, not
-      // solved by this pass.
-      this.clearTimers();
+    if (this.state.gameOver) return;
+
+    // Pause the clock for everyone while this seat is empty — reconnecting
+    // resumes below; sessionUserIds is intentionally NOT cleared here since
+    // client.sessionId is preserved across a successful reconnect (needed by
+    // persistResult if the game finishes after they're back).
+    this.clearTimers();
+
+    if (consented) {
+      // Explicit client.leave() — not a dropped connection, don't wait for one.
+      this.state.statusMessage = `${player.name} left the game.`;
+      return;
+    }
+
+    this.state.statusMessage = `${player.name} disconnected — reconnecting…`;
+    try {
+      await this.allowReconnection(client, this.reconnectGraceSeconds);
+    } catch {
+      // Grace period expired without a reconnect.
       this.state.statusMessage = `${player.name} disconnected — waiting…`;
+      return;
+    }
+
+    player.connected = true;
+    if (!this.state.players.every((p) => p.connected)) {
+      const connected = this.state.players.filter((p) => p.connected).length;
+      this.state.statusMessage = `Waiting for players… (${connected}/${this.state.players.length})`;
+      return;
+    }
+
+    this.state.statusMessage = `${player.name} reconnected.`;
+    if (this.state.awaitingMove) {
+      const options = this.currentPlayer()
+        .tokens.map((t, i) => (t.movable ? i : -1))
+        .filter((i) => i >= 0);
+      this.armSelectTimer(this.state.currentPlayerIdx, options);
+    } else {
+      this.armRollTimer(this.state.currentPlayerIdx);
     }
   }
 
@@ -343,15 +380,15 @@ export class LudoRoom extends Room<LudoState> {
       const pot = this.state.stake * players.length;
       const fee = Math.round(pot * 0.1);
       const payout = pot - fee;
-      // TODO: replace with an atomic Postgres RPC (increment balance in one
-      // statement) before this runs concurrently for real — a plain
-      // read-then-write has a race condition under load.
+      // increment_wallet_balance does `balance = balance + delta` in one
+      // UPDATE statement (see migration add_atomic_increment_wallet_balance_rpc),
+      // so concurrent matches finishing for the same user can no longer race
+      // like a plain read-then-write would.
       for (let i = 0; i < players.length; i++) {
         const uid = userIds[i];
         const delta = i === winnerIdx ? payout - this.state.stake : -this.state.stake;
-        const { data: wallet } = await supabase.from('wallets').select('balance').eq('user_id', uid).single();
-        const newBalance = Number(wallet?.balance ?? 240) + delta;
-        await supabase.from('wallets').update({ balance: newBalance, updated_at: new Date().toISOString() }).eq('user_id', uid);
+        const { error } = await supabase.rpc('increment_wallet_balance', { p_user_id: uid, p_delta: delta });
+        if (error) console.error(`[ludo] failed to update wallet balance for ${uid}:`, error);
       }
     }
   }
