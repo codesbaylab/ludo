@@ -481,7 +481,7 @@
   const stakeParam = new URLSearchParams(location.search).get('stake');
   const joinStake = stakeParam === null ? 50 : Math.max(0, Number(stakeParam) || 0);
   const playersParam = Number(new URLSearchParams(location.search).get('players'));
-  const joinPlayerCount = [2, 3, 4].includes(playersParam) ? playersParam : 4;
+  const joinPlayerCount = [2, 4].includes(playersParam) ? playersParam : 4;
 
   let room = null;
   let myPlayerIdx = -1;

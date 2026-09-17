@@ -17,7 +17,7 @@ interface JoinOptions {
 
 interface CreateOptions {
   stake?: number;
-  // 2-4; defaults to 4 (a full table) when omitted or out of range.
+  // 2 or 4; defaults to 4 (a full table) when omitted or out of range.
   playerCount?: number;
   // Overridable so the automated smoke test doesn't have to wait 15s per turn.
   rollTimeoutMs?: number;
@@ -29,7 +29,6 @@ interface CreateOptions {
 // gap as green/blue), matching the classic 2-player Ludo variant.
 const COLORS_BY_PLAYER_COUNT: Record<number, Color[]> = {
   2: ['yellow', 'red'],
-  3: ['green', 'blue', 'red'],
   4: TURN_ORDER,
 };
 

@@ -92,7 +92,7 @@
   const stakeParam = new URLSearchParams(location.search).get('stake');
   const stake = stakeParam === null ? 50 : Math.max(0, Number(stakeParam) || 0);
   const playersParam = Number(new URLSearchParams(location.search).get('players'));
-  const playerCount = [2, 3, 4].includes(playersParam) ? playersParam : 4;
+  const playerCount = [2, 4].includes(playersParam) ? playersParam : 4;
   const isFree = stake <= 0;
   const pot = stake * playerCount;
   const fee = Math.round(pot * 0.1);
