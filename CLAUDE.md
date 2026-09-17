@@ -71,10 +71,12 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   see `server/README.md` → "Deploying" for the click-through steps.
 - **Client integration done** (Phase C): `design/game.js` talks to a running Colyseus server
   instead of running its own rules locally; `login.html`/`lobby.html` use real Supabase Auth.
+- **Live server**: deployed on Render's free tier at `wss://ludo-x96u.onrender.com` (spins down
+  after ~15 min idle; first connection after that has a ~30-60s cold start). `design/game.js`
+  now defaults to this URL; `?server=` still overrides it for local dev.
 - **Not yet done**: `waiting-room.html`/`stake-confirm.html` still don't reflect the real Colyseus
   room's player list (they're the pre-multiplayer mockup); no reconnection/spectator handling;
-  wallet updates on match end aren't atomic; the Colyseus server is Dockerized for Render but
-  not yet actually deployed to a live `wss://` URL.
+  wallet updates on match end aren't atomic.
 
 ## Running it
 
@@ -87,5 +89,5 @@ Full stack locally:
 cd server && npm install && npm run dev     # ws://localhost:2567
 # separately, serve design/ (e.g. `python -m http.server` from design/) and open board.html
 ```
-`design/game.js` defaults to `ws://localhost:2567`; pass `?server=wss://your-host` to point it
-elsewhere once the server is actually deployed somewhere.
+`design/game.js` defaults to the live Render deployment (`wss://ludo-x96u.onrender.com`); pass
+`?server=ws://localhost:2567` (or any other host) to override it for local dev.
