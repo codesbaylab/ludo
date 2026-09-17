@@ -69,8 +69,6 @@
 
       <p id="auth-message" class="hint" style="display:none;"></p>
 
-      <div class="divider">OR</div>
-      <button type="button" class="btn btn-secondary" id="magic-link-btn">✉️ Continue with magic link</button>
       <p class="hint">By continuing you agree to the Terms &amp; Privacy Policy.</p>
     </div>
   </div>
@@ -135,14 +133,6 @@
     setBusy(formSignup, false);
     if (error) { showMessage(error.message, true); return; }
     showMessage('Account created — check your email to confirm, then log in.', false);
-  });
-
-  document.getElementById('magic-link-btn').addEventListener('click', async () => {
-    const email = (document.getElementById('login-email').value || document.getElementById('signup-email').value || '').trim();
-    if (!email) { showMessage('Enter your email above first.', true); return; }
-    const { error } = await ludoSupabase.auth.signInWithOtp({ email });
-    if (error) { showMessage(error.message, true); return; }
-    showMessage(`Magic link sent to ${email} — check your inbox.`, false);
   });
 
   document.getElementById('forgot-password-btn').addEventListener('click', async (e) => {

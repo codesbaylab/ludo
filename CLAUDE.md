@@ -19,14 +19,17 @@ by a Supabase project for auth/wallet-ledger/match-history.
   stored directly), and `ludoIsAdmin` (checks `profiles.is_admin`). Loaded by every page under
   auth: `lobby.html`, `profile.html`, `history.html`, `wallet.html`, `waiting-room.html`,
   `board.html`, `admin.html`.
-- `design/login.html` — real Supabase Auth (email/password signup+login, magic link); routes to
-  `admin.html` instead of `lobby.html` after signing in if `ludoIsAdmin` is true. Has a "Forgot
-  password?" button (`auth.resetPasswordForEmail`, `redirectTo` computed as
-  `reset-password.html` relative to the current origin so it works both on GitHub Pages and
-  local dev) — **the project's Auth → URL Configuration allowlist needs
+- `design/login.html` — real Supabase Auth (email/password signup+login only — the magic-link
+  option was removed; it redirected to whatever the project's Auth → URL Configuration Site URL
+  is set to, which is a stale `localhost` address, and fixing that is a dashboard/Management-API
+  setting outside what this session's Supabase MCP tools can read or write, same root cause as
+  the note below). Routes to `admin.html` instead of `lobby.html` after signing in if
+  `ludoIsAdmin` is true. Has a "Forgot password?" button (`auth.resetPasswordForEmail`,
+  `redirectTo` computed as `reset-password.html` relative to the current origin so it works both
+  on GitHub Pages and local dev) — **the project's Auth → URL Configuration allowlist needs
   `reset-password.html` (or a wildcard covering it) added, or Supabase silently redirects to
-  whatever the default Site URL is instead of landing there; not something settable via the MCP
-  tools available in this session, only the dashboard or Management API.**
+  that same stale Site URL instead of landing there; not something settable via the MCP tools
+  available in this session, only the dashboard or Management API.**
 - `design/reset-password.html` — where the emailed reset link lands. supabase-js auto-detects the
   recovery token in the URL and establishes a session; no session means an invalid/expired link
   (shown as such, with a link back to `login.html`), not a form. On success, routes the same way
@@ -61,8 +64,11 @@ by a Supabase project for auth/wallet-ledger/match-history.
   leave before the resume attempt lands (a bare single attempt measurably races and fails).
 - `design/board.html` — the actual game; loads `game.js`, `supabase-client.js`, and the
   `colyseus.js` client SDK from CDN.
+- `design/index.html` — no longer the design-mockup index (removed); a silent redirect stub to
+  `login.html`, since GitHub Pages serves `index.html` for the bare site root regardless of what
+  `manifest.json` says.
 - `design/manifest.json` + `design/icons/` — PWA manifest and app icons (installable to a phone
-  home screen).
+  home screen). `start_url` is `login.html`, not `index.html`.
 - `server/` — the Colyseus + Supabase-persistence backend (see `server/README.md`).
 - `.github/workflows/pages.yml` — deploys `design/` to GitHub Pages on every push to `main`.
   Live at https://codesbaylab.github.io/ludo/ (client only — see "Running the backend" below for
