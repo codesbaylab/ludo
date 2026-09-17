@@ -95,9 +95,23 @@ Purely a renderer + network client now — **all game rules moved server-side** 
   `client.reconnect(room.reconnectionToken)` every 3s for up to 20 attempts, matching the
   server's reconnection grace window (see `LudoRoom` below) instead of just showing a dead-end
   "Disconnected" message.
-- **Known simplification**: a multi-square move now animates as one smooth CSS slide + a single
-  bounce at the end (the server sends only the final position in one patch), not the old
-  per-cell hop-hop-hop the local-authority version had. Still looks fine, just not identical.
+- **Per-cell move animation restored**: the server only ever sends a token's final resting
+  position (it has no notion of "board cells", just an abstract path index — see `rules.ts`), so a
+  multi-square move used to render as one smooth CSS slide straight from A to B — reported as the
+  coin "jumping straight to the destination" instead of visibly walking each square. `applySnapshot`
+  now reconstructs the intermediate path itself (`coordFor` for every position between the old and
+  new one) and steps through it via `animateTokenSteps`, one cell at a time with its own `hop()`
+  bounce + sound (`STEP_MS` per cell), matching the old locally-authoritative version's feel.
+  Guarded by `MAX_STEP_ANIMATE_DELTA` (6, the longest a single roll can move a token): anything
+  bigger snaps instead of crawling cell-by-cell, since a bigger jump means the "previous" snapshot
+  being diffed against is actually stale (e.g. the first `onStateChange` after a reconnect,
+  compared against whatever was on screen before the drop) rather than a real single move. A yard
+  entry (pos -1 → 0) has no path to walk yet either, so it also just gets the immediate bump. A
+  capture only flashes after the capturing token's own step animation finishes (`await
+  Promise.all(moverPromises)` before `capturedEls.forEach(flashCapture)`), so the "captured!" flash
+  lands when the token visibly arrives, not before. Verified with a standalone test of the exact
+  diff/sequencing logic (step count, capture-after-arrival ordering, yard-entry and oversized-jump
+  snapping) since the sandbox can't drive a real browser against the live board.
 - `renderAll(snapshot)` wraps the per-snapshot render calls in try/catch — a bad snapshot logs and
   moves on instead of freezing the board. The wider `applySnapshot(snapshot)` (see below) also
   wraps its own diff loop the same way and always advances `prevSnapshot` in a `finally`, even if

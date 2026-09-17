@@ -496,6 +496,36 @@
     setTimeout(() => el.classList.remove('captured'), 300);
   }
 
+  // The server only ever sends a token's final resting position — it has no
+  // notion of "board cells" at all, just an abstract path index (see
+  // rules.ts) — so a 4-square move used to render as one smooth CSS slide
+  // straight from A to B. That reads as the coin teleporting rather than
+  // walking the board, so the client reconstructs the intermediate path
+  // itself and steps through it one cell at a time, each step getting its
+  // own hop() bounce + sound, same as the old locally-authoritative version.
+  const STEP_MS = 180; // ~matches .token-on-board's own .16s CSS slide
+  // The longest a single dice roll can move a token — used only to tell a
+  // real move apart from a patch whose "previous" snapshot is actually
+  // stale (e.g. the first onStateChange after a reconnect, diffed against
+  // whatever was on screen before the drop). Stepping cell-by-cell across
+  // that kind of gap would crawl the token across half the board, so
+  // anything bigger than one roll's reach just snaps instead.
+  const MAX_STEP_ANIMATE_DELTA = 6;
+
+  async function animateTokenSteps(color, fromPos, toPos, el) {
+    // 56 (finished) has no board coordinate of its own — coordFor's usable
+    // range stops at 55; renderAll's normal finished-tray placement takes
+    // over from there once the step animation below hands off to it.
+    const lastVisiblePos = Math.min(toPos, 55);
+    for (let p = fromPos + 1; p <= lastVisiblePos; p++) {
+      const [r, c] = coordFor(color, p);
+      el.style.left = ((c - 0.5) / size * 100) + '%';
+      el.style.top = ((r - 0.5) / size * 100) + '%';
+      hop(el);
+      await new Promise(resolve => setTimeout(resolve, STEP_MS));
+    }
+  }
+
   function statusToLogLine(msg) {
     if (/wins!$/.test(msg)) return `🏆 ${msg}`;
     if (msg.includes('captured')) return msg;
@@ -673,7 +703,13 @@
 
       // Diff every token against the previous snapshot to trigger the right
       // cosmetic effect — the server already decided WHAT happened, the
-      // client only has to notice and animate it.
+      // client only has to notice and animate it. Real moves step through
+      // every intermediate cell (awaited, so they finish before anything
+      // else renders); a yard entry (no path to walk yet) or an oversized
+      // jump (see MAX_STEP_ANIMATE_DELTA) just gets an immediate bump; a
+      // capture only flashes once the capturing token has actually arrived.
+      const moverPromises = [];
+      const capturedEls = [];
       snapshot.players.forEach((p, pi) => {
         const prevPlayer = prevSnapshot.players[pi];
         if (!prevPlayer) return;
@@ -681,13 +717,25 @@
           const prevT = prevPlayer.tokens[ti];
           if (!prevT) return;
           const el = tokenEl(p.color, ti);
+
           if (prevT.state === 'active' && t.state === 'yard') {
-            flashCapture(el);
-          } else if (prevT.pos !== t.pos || prevT.state !== t.state) {
+            capturedEls.push(el);
+            return;
+          }
+          if (prevT.state === t.state && prevT.pos === t.pos) return;
+
+          const isNormalMove = prevT.state === 'active' && t.pos > prevT.pos
+            && (t.pos - prevT.pos) <= MAX_STEP_ANIMATE_DELTA;
+          if (isNormalMove) {
+            moverPromises.push(animateTokenSteps(p.color, prevT.pos, t.pos, el));
+          } else {
             hop(el);
           }
         });
       });
+
+      await Promise.all(moverPromises);
+      capturedEls.forEach(flashCapture);
 
       renderAll(snapshot);
 
