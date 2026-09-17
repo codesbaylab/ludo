@@ -38,4 +38,13 @@ export class LudoState extends Schema {
   // actually see that roll's result before currentPlayerIdx advances. See
   // LudoRoom's turnPassDelayMs for why this exists.
   @type('boolean') turnPassPending: boolean = false;
+  // Bumped every time a fresh roll/select countdown is armed server-side.
+  // The client's cosmetic countdown keys off this rather than trying to
+  // infer "a new turn window started" from currentPlayerIdx/awaitingMove —
+  // an extra turn (rolling a 6) changes neither, so the countdown used to
+  // silently not restart for it.
+  @type('number') turnSeq: number = 0;
+  // The real server-side timeout the countdown above is mirroring, so the
+  // client can't drift out of sync with it by hardcoding its own guess.
+  @type('number') turnTimeoutMs: number = 0;
 }

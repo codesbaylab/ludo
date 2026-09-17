@@ -295,16 +295,25 @@ export class LudoRoom extends Room<LudoState> {
     player.tokens.forEach((t) => (t.movable = false));
     this.state.awaitingMove = false;
 
+    // Every branch below must end up setting a message. A plain ring move
+    // used to set none at all, which left whatever was there before frozen
+    // on screen — and since a 6 grants an extra turn (so passTurn() never
+    // runs to overwrite it), players were left staring at "X, choose a
+    // token to move." with nothing selectable while the game was actually
+    // waiting on them to roll again. It also meant plain moves never
+    // appeared in the game log, since that only logs on message changes.
+    let moveMessage = `${player.name} moved ${roll}.`;
+
     if (token.state === 'yard') {
       token.state = 'active';
       token.pos = 0;
-      this.state.statusMessage = `${player.name} brought a token out.`;
+      moveMessage = `${player.name} brought a token out.`;
     } else {
       token.pos += roll;
       if (token.pos === FINISHED_POS) {
         token.state = 'finished';
         player.homeCount++;
-        this.state.statusMessage = `${player.name}'s token reached home!`;
+        moveMessage = `${player.name}'s token reached home!`;
       }
     }
 
@@ -323,7 +332,7 @@ export class LudoRoom extends Room<LudoState> {
             hits[0].state = 'yard';
             hits[0].pos = -1;
             capturedSomething = true;
-            this.state.statusMessage = `${player.name} captured ${opp.name}'s token!`;
+            moveMessage = `${player.name} captured ${opp.name}'s token!`;
           }
         });
       }
@@ -335,10 +344,19 @@ export class LudoRoom extends Room<LudoState> {
     }
 
     const extraTurn = roll === 6 || capturedSomething || token.state === 'finished';
+    // On an extra turn this message is the only thing telling the player
+    // the board is waiting on them again, since passTurn() won't run.
+    this.state.statusMessage = extraTurn ? `${moveMessage} Roll again!` : moveMessage;
     if (extraTurn) {
       this.armRollTimer(playerIdx);
     } else {
-      this.passTurn();
+      // schedulePassTurn, not passTurn: calling passTurn() here would
+      // overwrite the message just set, in the same tick, so Colyseus would
+      // batch both into one patch and clients would only ever see "<next>'s
+      // turn." — the move itself would never show or reach the game log.
+      // The delay is mostly absorbed by the client's own dice-reveal/step
+      // animation for this same patch, so it doesn't add dead time.
+      this.schedulePassTurn();
     }
   }
 
@@ -380,6 +398,7 @@ export class LudoRoom extends Room<LudoState> {
 
   private armRollTimer(playerIdx: number) {
     this.rollTimer?.clear();
+    this.startTurnCountdown(this.rollTimeoutMs);
     this.rollTimer = this.clock.setTimeout(() => {
       if (this.state.gameOver) return;
       if (this.state.currentPlayerIdx !== playerIdx) return;
@@ -390,11 +409,22 @@ export class LudoRoom extends Room<LudoState> {
 
   private armSelectTimer(playerIdx: number, options: number[]) {
     this.selectTimer?.clear();
+    this.startTurnCountdown(this.selectTimeoutMs);
     this.selectTimer = this.clock.setTimeout(() => {
       if (this.state.gameOver) return;
       if (!this.state.awaitingMove) return;
       this.autoPickToken(playerIdx, options);
     }, this.selectTimeoutMs);
+  }
+
+  /** Tells clients a fresh countdown window just started, and how long it
+   *  is. Keyed on a counter rather than left for the client to infer from
+   *  currentPlayerIdx/awaitingMove, neither of which changes on an extra
+   *  turn — so that case used to leave the on-screen countdown stuck on
+   *  whatever was left of the previous one (or hidden entirely). */
+  private startTurnCountdown(timeoutMs: number) {
+    this.state.turnSeq++;
+    this.state.turnTimeoutMs = timeoutMs;
   }
 
   private clearTimers() {

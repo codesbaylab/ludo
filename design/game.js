@@ -402,20 +402,34 @@
   let cosmeticKey = null;
 
   function updateCosmeticTimer(snapshot, myTurn, gameActive) {
-    // turnPassPending means the real roll already happened (and the result
-    // is on screen) — nothing left to count down to, so hide it instead of
-    // ticking on toward a timeout that was already resolved server-side.
+    // Keyed on the server's turnSeq (bumped every time it arms a fresh
+    // roll/select timer), NOT on currentPlayerIdx/awaitingMove: an extra
+    // turn from rolling a 6 changes neither, so keying on those left the
+    // countdown stuck mid-tick from the previous window — or hidden
+    // entirely, if that one had already run out — while the server had
+    // quietly started a whole new 15s.
+    // turnPassPending means the roll already resolved and the turn is on
+    // its way out, so there's nothing left to count down to.
     const key = gameActive && !snapshot.gameOver && !snapshot.turnPassPending
-      ? `${snapshot.currentPlayerIdx}:${snapshot.awaitingMove}`
+      ? String(snapshot.turnSeq)
       : null;
 
     if (key !== cosmeticKey) {
       cosmeticKey = key;
       if (cosmeticInterval) { clearInterval(cosmeticInterval); cosmeticInterval = null; }
       if (key && myTurn) {
-        cosmeticRemaining = COSMETIC_TIMER_SECONDS;
+        // Count down from when this snapshot ARRIVED, not from now:
+        // rendering it can lag arrival by the dice reveal plus the
+        // per-cell step animation (~2.6s worst case), and the server's
+        // real timer started at arrival. Counting from render time showed
+        // a full 15s that then got auto-rolled out from under the player
+        // with seconds still on the clock.
+        const totalMs = snapshot.turnTimeoutMs || COSMETIC_TIMER_SECONDS * 1000;
+        const elapsedMs = Math.max(0, Date.now() - renderingArrivedAt);
+        cosmeticRemaining = Math.max(0, Math.round((totalMs - elapsedMs) / 1000));
+        if (cosmeticRemaining <= 0) { diceTimerEl.style.display = 'none'; return; }
         diceTimerEl.style.display = 'block';
-        diceTimerEl.classList.remove('urgent');
+        diceTimerEl.classList.toggle('urgent', cosmeticRemaining <= 5);
         const label = snapshot.awaitingMove ? 'Auto-pick in' : 'Auto-roll in';
         diceTimerEl.textContent = `⏱ ${label} ${cosmeticRemaining}s`;
         cosmeticInterval = setInterval(() => {
@@ -482,12 +496,22 @@
     }, DICE_REVEAL_MS);
   }
 
+  // Per-element so a previous hop's cleanup can't strip the class out from
+  // under the next one — with per-cell stepping these now fire back to back
+  // (STEP_MS apart, barely wider than the 170ms cleanup), so an untracked
+  // stale timer would clip mid-walk bounces short.
+  const hopTimeouts = new WeakMap();
+
   function hop(el) {
+    clearTimeout(hopTimeouts.get(el));
     el.classList.remove('hop');
     void el.offsetWidth; // restart the animation even if the class was already there
     el.classList.add('hop');
     playHopSound();
-    setTimeout(() => el.classList.remove('hop'), 170);
+    hopTimeouts.set(el, setTimeout(() => {
+      el.classList.remove('hop');
+      hopTimeouts.delete(el);
+    }, 170));
   }
 
   function flashCapture(el) {
@@ -551,6 +575,13 @@
   // can hold its own snapshot back until the cube's spin actually finishes
   // (see applySnapshot below) without racing whatever snapshot arrives next.
   let renderQueue = Promise.resolve();
+  // When the snapshot currently being rendered actually arrived from the
+  // server. Rendering deliberately lags arrival (dice reveal + per-cell
+  // step animation), and the server's turn timer is running that whole
+  // time, so anything clock-related has to measure from here, not from
+  // whenever the render finally happens. Safe as a single variable because
+  // renderQueue guarantees one snapshot is in flight at a time.
+  let renderingArrivedAt = Date.now();
 
   // Colyseus close code sent when the client called room.leave() on purpose
   // (see colyseus.js's ServerError.CloseCode.CONSENTED) — anything else means
@@ -667,7 +698,8 @@
     // right away. Everything below is the snapshot's visual *consequences*
     // (did a token move, did the turn pass, ...) and is queued instead of
     // applied immediately — see applySnapshot for why.
-    renderQueue = renderQueue.then(() => applySnapshot(snapshot));
+    const arrivedAt = Date.now();
+    renderQueue = renderQueue.then(() => applySnapshot(snapshot, arrivedAt));
   }
 
   // Applies one snapshot's diff against the previous one, in order, one at
@@ -681,7 +713,8 @@
   // through a single promise keeps snapshots applied in server order even
   // when several land in quick succession (e.g. consecutive 6s), each
   // getting its own full reveal before the next one starts.
-  async function applySnapshot(snapshot) {
+  async function applySnapshot(snapshot, arrivedAt) {
+    renderingArrivedAt = arrivedAt;
     // The whole body is wrapped, not just renderAll — applySnapshot calls
     // are now chained through renderQueue (see handleStateChange), so an
     // uncaught throw here wouldn't just skip one frame like it used to, it'd
