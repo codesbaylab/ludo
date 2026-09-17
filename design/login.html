@@ -101,9 +101,13 @@
     form.querySelectorAll('button').forEach(b => b.disabled = busy);
   }
 
+  async function redirectAfterLogin(userId) {
+    location.href = (await ludoIsAdmin(userId)) ? 'admin.html' : 'lobby.html';
+  }
+
   // Already signed in? Skip straight past the login screen.
   ludoSupabase.auth.getSession().then(({ data }) => {
-    if (data.session) location.href = 'lobby.html';
+    if (data.session) redirectAfterLogin(data.session.user.id);
   });
 
   formLogin.addEventListener('submit', async (e) => {
@@ -111,10 +115,10 @@
     setBusy(formLogin, true);
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
-    const { error } = await ludoSupabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await ludoSupabase.auth.signInWithPassword({ email, password });
     setBusy(formLogin, false);
     if (error) { showMessage(error.message, true); return; }
-    location.href = 'lobby.html';
+    redirectAfterLogin(data.user.id);
   });
 
   formSignup.addEventListener('submit', async (e) => {

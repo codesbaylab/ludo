@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Online — Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff8a3d">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ludo">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="dice">🛠️</div>
+      <h1 style="font-size:20px;">Admin</h1>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <a href="lobby.html" class="nav-item" style="flex-direction:row; gap:6px; color:var(--text-dim); font-size:13px;">Player view</a>
+      <div class="avatar" id="admin-avatar" title="Sign out" style="cursor:pointer;">?</div>
+    </div>
+  </div>
+
+  <div style="padding: 8px 20px;">
+    <p id="denied-message" class="hint" style="display:none; color:var(--red);">Not authorized — redirecting…</p>
+
+    <div class="section-title" style="margin-top:8px;">Platform</div>
+    <div class="stat-row">
+      <div class="stat"><div class="num" id="stat-users">…</div><div class="lbl">Total Users</div></div>
+      <div class="stat"><div class="num" id="stat-matches">…</div><div class="lbl">Total Matches</div></div>
+      <div class="stat"><div class="num" id="stat-revenue">…</div><div class="lbl">Fee Revenue</div></div>
+    </div>
+
+    <div class="section-title">Users &amp; Wallets</div>
+    <div style="display:flex; flex-direction:column; gap:10px;" id="users-list">
+      <p class="hint" style="margin:0;">Loading…</p>
+    </div>
+
+    <div class="section-title">All Matches</div>
+    <div style="display:flex; flex-direction:column; gap:10px;" id="matches-list">
+      <p class="hint" style="margin:0;">Loading…</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  const usersById = {};
+
+  function renderUsers(profiles, wallets, statsByUser) {
+    const walletByUser = {};
+    wallets.forEach(w => { walletByUser[w.user_id] = w.balance; });
+
+    const list = document.getElementById('users-list');
+    list.innerHTML = '';
+    profiles.forEach(p => {
+      usersById[p.id] = p;
+      const stats = statsByUser[p.id] || { games: 0, wins: 0 };
+      const row = document.createElement('div');
+      row.className = 'player-chip';
+      row.innerHTML = `
+        <div class="avatar" style="width:34px; height:34px; font-size:13px;">${(p.display_name || '?')[0].toUpperCase()}</div>
+        <div style="flex:1; min-width:0;">
+          <div class="name">${p.display_name || 'Player'}${p.is_admin ? ' <span class="badge badge-host">Admin</span>' : ''}</div>
+          <div class="status"><span data-balance>₹${Number(walletByUser[p.id] ?? 0).toFixed(2)}</span> · ${stats.games} games · ${stats.wins} wins</div>
+        </div>
+        <input type="number" class="input" placeholder="±₹" style="width:80px; padding:8px;" data-adjust-input />
+        <button class="btn btn-secondary btn-sm" data-adjust-btn>Apply</button>
+      `;
+      row.querySelector('[data-adjust-btn]').addEventListener('click', async () => {
+        const btn = row.querySelector('[data-adjust-btn]');
+        const input = row.querySelector('[data-adjust-input]');
+        const delta = Number(input.value);
+        if (!delta) return;
+        btn.disabled = true;
+        const { data: newBalance, error } = await ludoSupabase.rpc('admin_adjust_wallet_balance', { p_user_id: p.id, p_delta: delta });
+        btn.disabled = false;
+        if (error) { alert('Failed: ' + error.message); return; }
+        input.value = '';
+        row.querySelector('[data-balance]').textContent = `₹${Number(newBalance).toFixed(2)}`;
+      });
+      list.appendChild(row);
+    });
+  }
+
+  function renderMatches(matches) {
+    const list = document.getElementById('matches-list');
+    list.innerHTML = '';
+    if (matches.length === 0) {
+      list.innerHTML = '<p class="hint" style="margin:0;">No matches played yet.</p>';
+      return;
+    }
+    matches.forEach(m => {
+      const winner = m.winner_id ? usersById[m.winner_id] : null;
+      const row = document.createElement('div');
+      row.className = 'player-chip';
+      const tableLabel = m.stake > 0 ? `₹${m.stake} table` : 'Free table';
+      const winnerLabel = winner ? `Winner: ${winner.display_name || 'Player'}` : (m.status === 'finished' ? 'Winner: —' : m.status);
+      row.innerHTML = `
+        <div class="tile-icon" style="width:34px; height:34px; font-size:15px; background:var(--paper-2);">🎲</div>
+        <div>
+          <div class="name">${tableLabel}</div>
+          <div class="status">${winnerLabel} · ${m.finished_at ? ludoTimeAgo(m.finished_at) : 'in progress'}</div>
+        </div>
+        <span class="badge ${m.status === 'finished' ? 'badge-ready' : 'badge-waiting'}">${m.status}</span>
+      `;
+      list.appendChild(row);
+    });
+  }
+
+  (async () => {
+    const { data: { session } } = await ludoSupabase.auth.getSession();
+    if (!session) { location.href = 'login.html'; return; }
+
+    if (!(await ludoIsAdmin(session.user.id))) {
+      document.getElementById('denied-message').style.display = 'block';
+      setTimeout(() => { location.href = 'lobby.html'; }, 1200);
+      return;
+    }
+
+    document.getElementById('admin-avatar').textContent = 'A';
+
+    const [stats, { data: profiles }, { data: wallets }, { data: allMatchPlayers }, { data: matches }] = await Promise.all([
+      ludoSupabase.rpc('get_platform_stats').then(r => r.data?.[0] || { total_users: 0, total_matches: 0, total_revenue: 0 }),
+      ludoSupabase.from('profiles').select('id, display_name, is_admin'),
+      ludoSupabase.from('wallets').select('user_id, balance'),
+      ludoSupabase.from('match_players').select('user_id, result'),
+      ludoSupabase.from('matches').select('id, stake, status, winner_id, finished_at').order('created_at', { ascending: false }),
+    ]);
+
+    document.getElementById('stat-users').textContent = stats.total_users;
+    document.getElementById('stat-matches').textContent = stats.total_matches;
+    document.getElementById('stat-revenue').textContent = `₹${Number(stats.total_revenue).toFixed(0)}`;
+
+    const statsByUser = {};
+    (allMatchPlayers || []).forEach(row => {
+      const s = statsByUser[row.user_id] || (statsByUser[row.user_id] = { games: 0, wins: 0 });
+      s.games++;
+      if (row.result === 'win') s.wins++;
+    });
+
+    renderUsers(profiles || [], wallets || [], statsByUser);
+    renderMatches(matches || []);
+  })();
+
+  document.getElementById('admin-avatar').addEventListener('click', async () => {
+    if (!confirm('Sign out?')) return;
+    await ludoSupabase.auth.signOut();
+    location.href = 'login.html';
+  });
+</script>
+</body>
+</html>
