@@ -43,8 +43,8 @@
       </div>
     </div>
 
-    <div class="section-title">Players (2/4)</div>
-    <div style="display:flex; flex-direction:column; gap:10px;">
+    <div class="section-title" id="players-title">Players (2/4)</div>
+    <div style="display:flex; flex-direction:column; gap:10px;" id="players-list">
       <div class="player-chip ready">
         <div class="avatar" style="width:36px; height:36px; font-size:13px; background:linear-gradient(135deg, var(--red), #c93a3a);">R</div>
         <div class="name">Ragnar (You)</div>
@@ -56,11 +56,11 @@
         <div class="name">Aria</div>
         <span class="badge badge-waiting">Not Ready</span>
       </div>
-      <div class="player-chip empty">
+      <div class="player-chip empty" data-empty-slot>
         <div class="avatar" style="width:36px; height:36px; font-size:13px; background:var(--paper-2); color:var(--text-faint); box-shadow:none; border:2px dashed var(--border);">?</div>
         <div class="name" style="color:var(--text-faint);">Waiting for player…</div>
       </div>
-      <div class="player-chip empty">
+      <div class="player-chip empty" data-empty-slot>
         <div class="avatar" style="width:36px; height:36px; font-size:13px; background:var(--paper-2); color:var(--text-faint); box-shadow:none; border:2px dashed var(--border);">?</div>
         <div class="name" style="color:var(--text-faint);">Waiting for player…</div>
       </div>
@@ -70,7 +70,7 @@
     <div class="card" style="display:flex; flex-direction:column; gap:14px;">
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <span style="font-size:14px; font-weight:700;">Max Players</span>
-        <span style="color:var(--text-dim); font-size:14px; font-weight:700;">4</span>
+        <span id="max-players-value" style="color:var(--text-dim); font-size:14px; font-weight:700;">4</span>
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <span style="font-size:14px; font-weight:700;">Turn Timer</span>
@@ -91,12 +91,23 @@
 <script>
   const stakeParam = new URLSearchParams(location.search).get('stake');
   const stake = stakeParam === null ? 50 : Math.max(0, Number(stakeParam) || 0);
+  const playersParam = Number(new URLSearchParams(location.search).get('players'));
+  const playerCount = [2, 3, 4].includes(playersParam) ? playersParam : 4;
   const isFree = stake <= 0;
-  const pot = stake * 4;
+  const pot = stake * playerCount;
   const fee = Math.round(pot * 0.1);
   const payout = pot - fee;
 
-  document.getElementById('start-link').href = `board.html?stake=${stake}`;
+  document.getElementById('start-link').href = `board.html?stake=${stake}&players=${playerCount}`;
+  document.getElementById('max-players-value').textContent = String(playerCount);
+  // Mock player list below is still static (no real room-list wiring yet —
+  // see CLAUDE.md); this just keeps its slot count consistent with the
+  // table size the player actually picked, instead of always showing 4.
+  document.getElementById('players-title').textContent = `Players (2/${playerCount})`;
+  const emptySlots = document.querySelectorAll('[data-empty-slot]');
+  emptySlots.forEach((el, i) => {
+    el.style.display = i < Math.max(0, playerCount - 2) ? '' : 'none';
+  });
 
   if (isFree) {
     document.getElementById('table-badge').textContent = 'Free Match';

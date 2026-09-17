@@ -12,7 +12,10 @@ const gameServer = new Server({
   transport: new WebSocketTransport({ server: httpServer }),
 });
 
-gameServer.define('ludo', LudoRoom);
+// Keeps matchmaking from mixing players who asked for different table sizes
+// or stakes into the same room (joinOrCreate would otherwise fill whatever
+// open 'ludo' room it finds first, regardless of these options).
+gameServer.define('ludo', LudoRoom).filterBy(['playerCount', 'stake']);
 
 const port = Number(process.env.PORT) || 2567;
 gameServer.listen(port).then(() => {

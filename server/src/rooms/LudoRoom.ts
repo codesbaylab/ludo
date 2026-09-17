@@ -17,10 +17,21 @@ interface JoinOptions {
 
 interface CreateOptions {
   stake?: number;
+  // 2-4; defaults to 4 (a full table) when omitted or out of range.
+  playerCount?: number;
   // Overridable so the automated smoke test doesn't have to wait 15s per turn.
   rollTimeoutMs?: number;
   selectTimeoutMs?: number;
 }
+
+// Which colors play at a smaller table, chosen for board balance rather
+// than arbitrarily: yellow/red sit at opposite corners of the ring (same
+// gap as green/blue), matching the classic 2-player Ludo variant.
+const COLORS_BY_PLAYER_COUNT: Record<number, Color[]> = {
+  2: ['yellow', 'red'],
+  3: ['green', 'blue', 'red'],
+  4: TURN_ORDER,
+};
 
 export class LudoRoom extends Room<LudoState> {
   maxClients = 4;
@@ -37,15 +48,21 @@ export class LudoRoom extends Room<LudoState> {
     this.rollTimeoutMs = options.rollTimeoutMs ?? 15000;
     this.selectTimeoutMs = options.selectTimeoutMs ?? 15000;
 
+    const playerCount = COLORS_BY_PLAYER_COUNT[options.playerCount!] ? options.playerCount! : 4;
+    this.maxClients = playerCount;
+
     const state = new LudoState();
     state.stake = options.stake ?? 0;
-    TURN_ORDER.forEach((color) => {
+    COLORS_BY_PLAYER_COUNT[playerCount]!.forEach((color) => {
       const player = new PlayerState();
       player.color = color;
       for (let i = 0; i < 4; i++) player.tokens.push(new TokenState());
       state.players.push(player);
     });
     this.setState(state);
+    // Read by filterBy(['playerCount', 'stake']) in index.ts so joinOrCreate
+    // only matches players who asked for the same table size and stake.
+    this.setMetadata({ playerCount, stake: state.stake });
 
     this.onMessage('roll', (client) => this.handleRoll(client));
     this.onMessage('selectToken', (client, message) => this.handleSelectToken(client, message));
@@ -66,7 +83,8 @@ export class LudoRoom extends Room<LudoState> {
       this.state.statusMessage = `${this.state.players[0]!.name}'s turn.`;
       this.armRollTimer(0);
     } else {
-      this.state.statusMessage = `Waiting for players… (${this.state.players.filter((p) => p.connected).length}/4)`;
+      const connected = this.state.players.filter((p) => p.connected).length;
+      this.state.statusMessage = `Waiting for players… (${connected}/${this.state.players.length})`;
     }
   }
 
@@ -87,8 +105,9 @@ export class LudoRoom extends Room<LudoState> {
   // --- Turn flow -----------------------------------------------------
 
   private currentPlayer(): PlayerState {
-    // Always populated: exactly 4 player slots are created up front in
-    // onCreate() and currentPlayerIdx only ever cycles within that range.
+    // Always populated: the table's player slots (2-4, per COLORS_BY_PLAYER_COUNT)
+    // are created up front in onCreate() and currentPlayerIdx only ever cycles
+    // within that range.
     return this.state.players[this.state.currentPlayerIdx]!;
   }
 
