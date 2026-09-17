@@ -37,6 +37,36 @@ There's no unit-test framework wired up yet; `rules.ts` is written as pure
 functions specifically so it's easy to add one later without touching
 `LudoRoom.ts`.
 
+## Deploying (self-hosted, Render free tier)
+
+Decision: self-hosted via Docker on Render's free tier (no credit card required,
+750 free instance-hours/month, real WebSocket support). Colyseus Cloud was
+considered but has no free tier ($15/mo minimum); Render's only real tradeoff
+is that a free instance spins down after ~15 min idle, so the next connection
+after a quiet period has a ~30-60s cold start. Fine for pre-launch traffic —
+upgrade to a paid Render instance (or move the same Dockerfile to Fly.io/any
+other Docker host) later with zero code changes, since the app already reads
+`PORT` from the environment and exposes `/health`.
+
+1. Push this repo to GitHub (Render deploys from a connected repo).
+2. In the Render dashboard: **New -> Blueprint**, point it at this repo. Render
+   picks up `render.yaml` at the repo root, which builds `server/Dockerfile`.
+   (No Blueprint access? **New -> Web Service** instead, set the Dockerfile
+   path to `server/Dockerfile` and the Docker build context to `server`
+   manually, plan **Free**.)
+3. Set the `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` env vars in the
+   Render dashboard (marked `sync: false` in `render.yaml` on purpose — never
+   commit the service role key). `PORT` is injected by Render automatically;
+   don't set it yourself.
+4. Once deployed, Render gives you a `https://<service>.onrender.com` URL —
+   the Colyseus WebSocket endpoint is the same host with `wss://`, e.g.
+   `wss://ludo-server.onrender.com`. Point the client at it with
+   `board.html?server=wss://ludo-server.onrender.com`.
+5. Verify with `curl https://<service>.onrender.com/health` -> `{"ok":true}`.
+
+Local Docker sanity check before pushing: `docker build -t ludo-server ./server
+&& docker run -p 2567:2567 ludo-server`.
+
 ## What this does NOT do yet (known scope gaps)
 
 - **No client integration.** `design/game.js` still runs its own local copy
@@ -53,5 +83,7 @@ functions specifically so it's easy to add one later without touching
   matches finishing for the same user. Fine for solo testing, not for
   production — replace with a Postgres RPC that increments the balance in
   one statement before this handles real money.
-- **No deployment/hosting decision made yet.** Needs Colyseus Cloud vs.
-  self-hosted Docker, per the plan.
+- **Hosting is decided but only Dockerized, not yet actually deployed
+  live.** See "Deploying" above — `Dockerfile` + `render.yaml` exist; someone
+  still needs to click through the Render dashboard, set the env vars, and
+  give the client the real `wss://` URL.
