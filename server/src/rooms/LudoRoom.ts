@@ -206,6 +206,7 @@ export class LudoRoom extends Room<LudoState> {
     const player = this.state.players[playerIdx]!;
     const result = 1 + Math.floor(Math.random() * 6);
     this.state.diceValue = result;
+    this.state.rollSeq++;
     this.state.consecutiveSixes = result === 6 ? this.state.consecutiveSixes + 1 : 0;
 
     if (this.state.consecutiveSixes === 3) {

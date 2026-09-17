@@ -20,6 +20,13 @@ export class LudoState extends Schema {
   @type([PlayerState]) players = new ArraySchema<PlayerState>();
   @type('number') currentPlayerIdx: number = 0;
   @type('number') diceValue: number = 0;
+  // Bumped on every real roll, independent of the face value. A die only
+  // has 6 faces, so two consecutive rolls landing on the same number is a
+  // 1-in-6 event every single turn — common enough that clients comparing
+  // diceValue itself to detect "did a roll just happen" silently skipped
+  // the whole reveal animation (and the move/turn-pass it gates) whenever
+  // that happened, making the dice look frozen mid-game.
+  @type('number') rollSeq: number = 0;
   @type('boolean') rolling: boolean = false;
   @type('boolean') awaitingMove: boolean = false;
   @type('number') consecutiveSixes: number = 0;
