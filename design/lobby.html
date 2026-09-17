@@ -35,9 +35,9 @@
     <h2 style="font-size:23px; margin-top:2px;" id="welcome-name">…</h2>
 
     <div class="stat-row" style="margin-top:18px;">
-      <div class="stat"><div class="num">27</div><div class="lbl">Games Played</div></div>
-      <div class="stat"><div class="num">12</div><div class="lbl">Wins</div></div>
-      <div class="stat"><div class="num">44%</div><div class="lbl">Win Rate</div></div>
+      <div class="stat"><div class="num" id="stat-games">…</div><div class="lbl">Games Played</div></div>
+      <div class="stat"><div class="num" id="stat-wins">…</div><div class="lbl">Wins</div></div>
+      <div class="stat"><div class="num" id="stat-winrate">…</div><div class="lbl">Win Rate</div></div>
     </div>
 
     <div class="section-title">Free Play</div>
@@ -99,23 +99,8 @@
     </div>
 
     <div class="section-title">Recent Games</div>
-    <div style="display:flex; flex-direction:column; gap:10px;">
-      <div class="player-chip">
-        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:linear-gradient(135deg, var(--green), #1f9c56);">A</div>
-        <div>
-          <div class="name">Won as Green</div>
-          <div class="status">vs Aria, Kofi, Mei · 2 hours ago</div>
-        </div>
-        <span class="badge badge-ready">+₹36</span>
-      </div>
-      <div class="player-chip">
-        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:linear-gradient(135deg, var(--blue), #2c7fd6);">B</div>
-        <div>
-          <div class="name">Lost as Blue</div>
-          <div class="status">vs Sana, Tom · yesterday</div>
-        </div>
-        <span class="badge badge-waiting">3rd</span>
-      </div>
+    <div style="display:flex; flex-direction:column; gap:10px;" id="recent-games-list">
+      <p class="hint" style="margin:0;">Loading…</p>
     </div>
   </div>
 
@@ -146,6 +131,34 @@
     document.getElementById('welcome-name').textContent = `${name} 👋`;
     document.getElementById('user-avatar').textContent = name[0].toUpperCase();
     document.getElementById('wallet-chip').textContent = `💰 ₹${Number(wallet?.balance ?? 0).toFixed(2)}`;
+
+    const stats = await ludoFetchStats(session.user.id);
+    document.getElementById('stat-games').textContent = stats.gamesPlayed;
+    document.getElementById('stat-wins').textContent = stats.wins;
+    document.getElementById('stat-winrate').textContent = `${stats.winRate}%`;
+
+    const matches = await ludoFetchMatches(session.user.id, 3);
+    const list = document.getElementById('recent-games-list');
+    list.innerHTML = '';
+    if (matches.length === 0) {
+      list.innerHTML = '<p class="hint" style="margin:0;">No games played yet — jump into a table above!</p>';
+    } else {
+      matches.forEach(m => {
+        const won = m.result === 'win';
+        const row = document.createElement('div');
+        row.className = 'player-chip';
+        const tableLabel = m.matches.stake > 0 ? `₹${m.matches.stake} table` : 'Free match';
+        row.innerHTML = `
+          <div class="avatar" style="width:34px; height:34px; font-size:13px; background:var(--${m.color});">${m.color[0].toUpperCase()}</div>
+          <div>
+            <div class="name">${won ? 'Won' : 'Lost'} as ${m.color[0].toUpperCase()}${m.color.slice(1)}</div>
+            <div class="status">${tableLabel} · ${ludoTimeAgo(m.matches.finished_at)}</div>
+          </div>
+          <span class="badge ${won ? 'badge-ready' : 'badge-waiting'}">${won ? 'Win' : 'Loss'}</span>
+        `;
+        list.appendChild(row);
+      });
+    }
   })();
 
   document.getElementById('user-avatar').addEventListener('click', async () => {

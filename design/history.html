@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#ff8a3d">
 <link rel="icon" href="icons/icon-192.png">
@@ -25,45 +27,14 @@
 
   <div style="padding: 10px 20px;">
     <div class="stat-row" style="margin-bottom:18px;">
-      <div class="stat"><div class="num">27</div><div class="lbl">Games Played</div></div>
-      <div class="stat"><div class="num">12</div><div class="lbl">Wins</div></div>
-      <div class="stat"><div class="num">₹412</div><div class="lbl">Net Winnings</div></div>
+      <div class="stat"><div class="num" id="stat-games">…</div><div class="lbl">Games Played</div></div>
+      <div class="stat"><div class="num" id="stat-wins">…</div><div class="lbl">Wins</div></div>
+      <div class="stat"><div class="num" id="stat-net">…</div><div class="lbl">Net Winnings</div></div>
     </div>
 
     <div class="section-title">All Games</div>
-    <div style="display:flex; flex-direction:column; gap:10px;">
-      <a class="player-chip" href="board.html" style="text-decoration:none; color:inherit;">
-        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:linear-gradient(135deg, var(--green), #1f9c56);">A</div>
-        <div>
-          <div class="name">Won as Green</div>
-          <div class="status">vs Aria, Kofi, Mei · ₹50 table · 2 hours ago</div>
-        </div>
-        <span class="badge badge-ready">+₹36</span>
-      </a>
-      <a class="player-chip" href="board.html" style="text-decoration:none; color:inherit;">
-        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:linear-gradient(135deg, var(--blue), #2c7fd6);">B</div>
-        <div>
-          <div class="name">Lost as Blue</div>
-          <div class="status">vs Sana, Tom · ₹10 table · yesterday</div>
-        </div>
-        <span class="badge badge-waiting">3rd</span>
-      </a>
-      <a class="player-chip" href="board.html" style="text-decoration:none; color:inherit;">
-        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:linear-gradient(135deg, var(--yellow), #d9a300);">K</div>
-        <div>
-          <div class="name">Won as Yellow</div>
-          <div class="status">vs Ragnar, Mei, Tom · Free table · 2 days ago</div>
-        </div>
-        <span class="badge badge-ready">Win</span>
-      </a>
-      <a class="player-chip" href="board.html" style="text-decoration:none; color:inherit;">
-        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:linear-gradient(135deg, var(--red), #c93a3a);">R</div>
-        <div>
-          <div class="name">Lost as Red</div>
-          <div class="status">vs Aria, Sana · ₹10 table · 3 days ago</div>
-        </div>
-        <span class="badge badge-waiting">2nd</span>
-      </a>
+    <div style="display:flex; flex-direction:column; gap:10px;" id="games-list">
+      <p class="hint" style="margin:0;">Loading…</p>
     </div>
 
     <div class="section-title">Wallet Activity</div>
@@ -77,5 +48,48 @@
     <a href="profile.html" class="nav-item"><div class="ic">👤</div>Profile</a>
   </div>
 </div>
+<script>
+  (async () => {
+    const { data: { session } } = await ludoSupabase.auth.getSession();
+    if (!session) { location.href = 'login.html'; return; }
+
+    const [stats, matches, { data: wallet }] = await Promise.all([
+      ludoFetchStats(session.user.id),
+      ludoFetchMatches(session.user.id, 50),
+      ludoSupabase.from('wallets').select('balance').eq('user_id', session.user.id).single(),
+    ]);
+
+    document.getElementById('stat-games').textContent = stats.gamesPlayed;
+    document.getElementById('stat-wins').textContent = stats.wins;
+    // Net winnings since signup: with no deposit/withdrawal feature live yet
+    // (see wallet.html), every ₹ above or below the starting ₹240 balance
+    // can only have come from match stakes/payouts, so this is exact today —
+    // it'll need real deposit/withdrawal tracking once that ships for real.
+    const net = Number(wallet?.balance ?? 240) - 240;
+    document.getElementById('stat-net').textContent = `${net >= 0 ? '+' : ''}₹${net.toFixed(0)}`;
+
+    const list = document.getElementById('games-list');
+    list.innerHTML = '';
+    if (matches.length === 0) {
+      list.innerHTML = '<p class="hint" style="margin:0;">No games played yet.</p>';
+    } else {
+      matches.forEach(m => {
+        const won = m.result === 'win';
+        const row = document.createElement('div');
+        row.className = 'player-chip';
+        const tableLabel = m.matches.stake > 0 ? `₹${m.matches.stake} table` : 'Free table';
+        row.innerHTML = `
+          <div class="avatar" style="width:34px; height:34px; font-size:13px; background:var(--${m.color});">${m.color[0].toUpperCase()}</div>
+          <div>
+            <div class="name">${won ? 'Won' : 'Lost'} as ${m.color[0].toUpperCase()}${m.color.slice(1)}</div>
+            <div class="status">${tableLabel} · ${ludoTimeAgo(m.matches.finished_at)}</div>
+          </div>
+          <span class="badge ${won ? 'badge-ready' : 'badge-waiting'}">${won ? 'Win' : 'Loss'}</span>
+        `;
+        list.appendChild(row);
+      });
+    }
+  })();
+</script>
 </body>
 </html>
