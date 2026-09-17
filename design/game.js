@@ -372,7 +372,7 @@
       diceBadge.textContent = '🏆 Game over';
     } else if (!allConnected) {
       diceStatus.textContent = 'Waiting for players…';
-      diceBadge.textContent = `👥 ${snapshot.players.filter(p => p.connected).length}/4 joined`;
+      diceBadge.textContent = `👥 ${snapshot.players.filter(p => p.connected).length}/${snapshot.players.length} joined`;
     } else {
       diceStatus.textContent = snapshot.statusMessage || 'Tap the dice to roll';
       diceBadge.textContent = snapshot.awaitingMove
@@ -524,7 +524,11 @@
     const allConnected = snapshot.players.every(p => p.connected);
 
     connectingOverlay.classList.toggle('open', !allConnected);
-    if (!allConnected) connectingStatus.textContent = `Waiting for players… (${snapshot.players.filter(p => p.connected).length}/4)`;
+    // Uses the server's own statusMessage (already "Waiting for players… (N/M)"
+    // with the room's real table size) instead of recomputing it here — a
+    // previous hardcoded "/4" here ignored playerCount entirely and always
+    // showed 4 regardless of the actual table size.
+    if (!allConnected) connectingStatus.textContent = snapshot.statusMessage || 'Waiting for players…';
 
     if (!prevSnapshot) {
       renderTokens(snapshot);
