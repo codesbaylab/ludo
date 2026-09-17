@@ -2,7 +2,7 @@
   "name": "Ludo Online",
   "short_name": "Ludo",
   "description": "Play Ludo online with friends — free or for cash stakes.",
-  "start_url": "index.html",
+  "start_url": "login.html",
   "scope": ".",
   "display": "standalone",
   "orientation": "portrait",
