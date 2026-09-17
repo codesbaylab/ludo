@@ -65,13 +65,16 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   No advisories/lints outstanding.
 - **Colyseus server** (`server/`): an authoritative `LudoRoom` — see `server/README.md` for
   setup, `npm run test:sim` for the 4-client full-game regression check, and known gaps
-  (no reconnection handling, wallet updates aren't atomic yet, no hosting decision made).
+  (no reconnection handling, wallet updates aren't atomic yet). Hosting: self-hosted via
+  Docker on Render's free tier (`server/Dockerfile`, `render.yaml`) — chosen over Colyseus
+  Cloud, which has no free tier. Dockerized but not yet actually deployed to a live URL;
+  see `server/README.md` → "Deploying" for the click-through steps.
 - **Client integration done** (Phase C): `design/game.js` talks to a running Colyseus server
   instead of running its own rules locally; `login.html`/`lobby.html` use real Supabase Auth.
 - **Not yet done**: `waiting-room.html`/`stake-confirm.html` still don't reflect the real Colyseus
   room's player list (they're the pre-multiplayer mockup); no reconnection/spectator handling;
-  wallet updates on match end aren't atomic; no production hosting decision for the Colyseus
-  server (Colyseus Cloud vs. self-hosted).
+  wallet updates on match end aren't atomic; the Colyseus server is Dockerized for Render but
+  not yet actually deployed to a live `wss://` URL.
 
 ## Running it
 
