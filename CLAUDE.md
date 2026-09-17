@@ -15,8 +15,9 @@ by a Supabase project for auth/wallet-ledger/match-history.
 - `design/lobby.html` — requires a session (redirects to `login.html` otherwise); shows the real
   signed-in display name + wallet balance. Games-played/wins/win-rate stats are still fake —
   wiring real match history into the lobby/profile/history pages hasn't been done yet.
-- `design/waiting-room.html`, `stake-confirm.html` — still static/query-param-driven mockup, not
-  backed by the real Colyseus room's player list yet.
+- `design/waiting-room.html`, `stake-confirm.html` — still static/query-param-driven mockup (not
+  backed by the real Colyseus room's player list yet), except `stake-confirm.html`'s 2/3/4-player
+  table-size picker, which is real and forwards the choice via `?players=` through to `board.html`.
 - `design/board.html` — the actual game; loads `game.js`, `supabase-client.js`, and the
   `colyseus.js` client SDK from CDN.
 - `design/manifest.json` + `design/icons/` — PWA manifest and app icons (installable to a phone
@@ -67,8 +68,11 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   setup, `npm run test:sim` for the 4-client full-game regression check, and known gaps
   (no reconnection handling, wallet updates aren't atomic yet). Hosting: self-hosted via
   Docker on Render's free tier (`server/Dockerfile`, `render.yaml`) — chosen over Colyseus
-  Cloud, which has no free tier. Dockerized but not yet actually deployed to a live URL;
-  see `server/README.md` → "Deploying" for the click-through steps.
+  Cloud, which has no free tier.
+- **Table size**: rooms support 2, 3, or 4 players (`playerCount` create option, default 4) —
+  2p uses colors yellow/red (opposite corners on the ring), 3p drops yellow. `index.ts` registers
+  `filterBy(['playerCount', 'stake'])` so matchmaking never mixes players who asked for different
+  table sizes or stakes into the same room.
 - **Client integration done** (Phase C): `design/game.js` talks to a running Colyseus server
   instead of running its own rules locally; `login.html`/`lobby.html` use real Supabase Auth.
 - **Live server**: deployed on Render's free tier at `wss://ludo-x96u.onrender.com` (spins down
