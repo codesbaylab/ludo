@@ -596,10 +596,7 @@
     if (!allConnected) connectingStatus.textContent = snapshot.statusMessage || 'Waiting for players…';
 
     if (!prevSnapshot) {
-      renderTokens(snapshot);
-      renderPlayersPanel(snapshot);
-      renderTurnBanner(snapshot);
-      updateDiceUI(snapshot);
+      renderAll(snapshot);
       prevSnapshot = snapshot;
       return;
     }
@@ -626,17 +623,36 @@
       });
     });
 
-    renderTokens(snapshot);
-    renderPlayersPanel(snapshot);
-    renderTurnBanner(snapshot);
-    updateDiceUI(snapshot);
+    renderAll(snapshot);
 
     if (snapshot.statusMessage && snapshot.statusMessage !== prevSnapshot.statusMessage) {
       log(statusToLogLine(snapshot.statusMessage));
     }
     if (snapshot.gameOver && !prevSnapshot.gameOver) showGameOver(snapshot);
 
+    // Always advance, even if a render call above threw — otherwise a single
+    // bad snapshot repeats the same crash on every future update forever
+    // (this is exactly how a real bug froze a live match: a server/client
+    // position mismatch made renderTokens throw, which skipped this line,
+    // which fed the same stale snapshot into the next diff, which threw
+    // again — movable glows and click handlers never got a chance to catch
+    // up to the real state again for the rest of that game).
     prevSnapshot = snapshot;
+  }
+
+  // Wraps the per-snapshot render calls so one bad token/state never freezes
+  // the rest of the board — logs and moves on instead of leaving the UI
+  // stuck showing stale movable/click state that no longer matches the
+  // server (see the comment on prevSnapshot above for how that happens).
+  function renderAll(snapshot) {
+    try {
+      renderTokens(snapshot);
+      renderPlayersPanel(snapshot);
+      renderTurnBanner(snapshot);
+      updateDiceUI(snapshot);
+    } catch (err) {
+      console.error('[ludo] render failed for this snapshot:', err, snapshot);
+    }
   }
 
   diceFace.addEventListener('click', () => {

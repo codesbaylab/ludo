@@ -12,7 +12,18 @@
 
 export const RING_LENGTH = 52;
 export const HOME_COLUMN_LENGTH = 5;
-export const FINISHED_POS = RING_LENGTH + HOME_COLUMN_LENGTH; // 56
+// A token only travels 51 of the ring's 52 cells (pos 0-50) before peeling off
+// into its own home column (pos 51-55), then one more step lands it home
+// (pos 56) — matching design/game.js's coordFor exactly. RING_LENGTH itself
+// stays 52 (it's also used for absoluteRingIndex's modulo, where the full
+// physical cell count is correct), so this deliberately doesn't reuse it
+// directly: RING_LENGTH + HOME_COLUMN_LENGTH would be 57, one past where the
+// client's coordFor actually has a coordinate for — that mismatch was a real
+// bug (caught from an actual played game): the server let a token sit at
+// pos 56 as still "active", but the client's coordFor has no coordinate for
+// 56 at all (it's the client's own finished state), crashing renderTokens's
+// destructure and freezing rendering for the rest of that game.
+export const FINISHED_POS = RING_LENGTH - 1 + HOME_COLUMN_LENGTH; // 56
 
 // Turn order follows the ring direction (ascending entryIndex, wrapping).
 export const TURN_ORDER: Color[] = ['green', 'yellow', 'blue', 'red'];
