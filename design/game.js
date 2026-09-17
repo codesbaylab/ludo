@@ -450,16 +450,20 @@
     gameOverOverlay.classList.add('open');
   }
 
+  // How long the dice cube's CSS roll animation actually takes — also how
+  // long applySnapshot waits before revealing a roll's consequences (token
+  // move, turn change), so nothing appears to happen before the cube stops.
+  const DICE_REVEAL_MS = 1550;
   let diceRollTimeout = null;
 
   function revealDice(value) {
     // Extra turns (rolling a 6) mean back-to-back rolls are common — without
-    // this, a second roll landing before the first roll's 1550ms cleanup
-    // fires would get its ".rolling" animation cut short by that stale
-    // timer, snapping the dice cube mid-animation instead of finishing the
-    // second roll's spin. Cancel any pending cleanup and force-restart the
-    // CSS animation (same reflow trick hop() already uses) so every roll
-    // gets its own full, uninterrupted 1550ms.
+    // this, a second roll landing before the first roll's cleanup fires
+    // would get its ".rolling" animation cut short by that stale timer,
+    // snapping the dice cube mid-animation instead of finishing the second
+    // roll's spin. Cancel any pending cleanup and force-restart the CSS
+    // animation (same reflow trick hop() already uses) so every roll gets
+    // its own full, uninterrupted spin.
     if (diceRollTimeout) clearTimeout(diceRollTimeout);
     diceFace.classList.remove('rolling');
     diceShadow.classList.remove('rolling');
@@ -475,7 +479,7 @@
       diceFace.classList.remove('rolling');
       diceShadow.classList.remove('rolling');
       diceRollTimeout = null;
-    }, 1550);
+    }, DICE_REVEAL_MS);
   }
 
   function hop(el) {
@@ -513,6 +517,10 @@
   let room = null;
   let myPlayerIdx = -1;
   let prevSnapshot = null;
+  // Serializes applying each snapshot's visual effects so a fresh dice roll
+  // can hold its own snapshot back until the cube's spin actually finishes
+  // (see applySnapshot below) without racing whatever snapshot arrives next.
+  let renderQueue = Promise.resolve();
 
   // Colyseus close code sent when the client called room.leave() on purpose
   // (see colyseus.js's ServerError.CloseCode.CONSENTED) — anything else means
@@ -625,49 +633,73 @@
     connectingOverlay.classList.toggle('open', blockBoard);
     if (blockBoard) connectingStatus.textContent = snapshot.statusMessage || 'Waiting for players…';
 
-    if (!prevSnapshot) {
-      renderAll(snapshot);
-      prevSnapshot = snapshot;
-      return;
-    }
+    // Everything above is about connectivity and must reflect this snapshot
+    // right away. Everything below is the snapshot's visual *consequences*
+    // (did a token move, did the turn pass, ...) and is queued instead of
+    // applied immediately — see applySnapshot for why.
+    renderQueue = renderQueue.then(() => applySnapshot(snapshot));
+  }
 
-    if (snapshot.diceValue !== prevSnapshot.diceValue && snapshot.diceValue > 0) {
-      revealDice(snapshot.diceValue);
-    }
+  // Applies one snapshot's diff against the previous one, in order, one at
+  // a time. Queued (rather than called directly from handleStateChange)
+  // because a fresh dice roll needs to hold its own snapshot back until the
+  // cube's 1550ms spin actually finishes: the server can move a token (and
+  // even pass the turn) in the very same patch as the roll that caused it,
+  // and rendering that patch immediately made the token teleport to its
+  // destination — hop sound and all — while the dice was still visibly
+  // mid-spin, before the player could even see what they'd rolled. Chaining
+  // through a single promise keeps snapshots applied in server order even
+  // when several land in quick succession (e.g. consecutive 6s), each
+  // getting its own full reveal before the next one starts.
+  async function applySnapshot(snapshot) {
+    // The whole body is wrapped, not just renderAll — applySnapshot calls
+    // are now chained through renderQueue (see handleStateChange), so an
+    // uncaught throw here wouldn't just skip one frame like it used to, it'd
+    // reject that link in the chain and silently freeze every render for
+    // the rest of the match (every future .then() staying on a rejected
+    // promise forever). The finally still guarantees prevSnapshot always
+    // advances, same reasoning as before: a bad snapshot should log and get
+    // skipped, never get re-diffed against itself forever.
+    try {
+      if (!prevSnapshot) {
+        renderAll(snapshot);
+        return;
+      }
 
-    // Diff every token against the previous snapshot to trigger the right
-    // cosmetic effect — the server already decided WHAT happened, the
-    // client only has to notice and animate it.
-    snapshot.players.forEach((p, pi) => {
-      const prevPlayer = prevSnapshot.players[pi];
-      if (!prevPlayer) return;
-      p.tokens.forEach((t, ti) => {
-        const prevT = prevPlayer.tokens[ti];
-        if (!prevT) return;
-        const el = tokenEl(p.color, ti);
-        if (prevT.state === 'active' && t.state === 'yard') {
-          flashCapture(el);
-        } else if (prevT.pos !== t.pos || prevT.state !== t.state) {
-          hop(el);
-        }
+      if (snapshot.diceValue !== prevSnapshot.diceValue && snapshot.diceValue > 0) {
+        revealDice(snapshot.diceValue);
+        await new Promise(resolve => setTimeout(resolve, DICE_REVEAL_MS));
+      }
+
+      // Diff every token against the previous snapshot to trigger the right
+      // cosmetic effect — the server already decided WHAT happened, the
+      // client only has to notice and animate it.
+      snapshot.players.forEach((p, pi) => {
+        const prevPlayer = prevSnapshot.players[pi];
+        if (!prevPlayer) return;
+        p.tokens.forEach((t, ti) => {
+          const prevT = prevPlayer.tokens[ti];
+          if (!prevT) return;
+          const el = tokenEl(p.color, ti);
+          if (prevT.state === 'active' && t.state === 'yard') {
+            flashCapture(el);
+          } else if (prevT.pos !== t.pos || prevT.state !== t.state) {
+            hop(el);
+          }
+        });
       });
-    });
 
-    renderAll(snapshot);
+      renderAll(snapshot);
 
-    if (snapshot.statusMessage && snapshot.statusMessage !== prevSnapshot.statusMessage) {
-      log(statusToLogLine(snapshot.statusMessage));
+      if (snapshot.statusMessage && snapshot.statusMessage !== prevSnapshot.statusMessage) {
+        log(statusToLogLine(snapshot.statusMessage));
+      }
+      if (snapshot.gameOver && !prevSnapshot.gameOver) showGameOver(snapshot);
+    } catch (err) {
+      console.error('[ludo] applySnapshot failed for this snapshot:', err, snapshot);
+    } finally {
+      prevSnapshot = snapshot;
     }
-    if (snapshot.gameOver && !prevSnapshot.gameOver) showGameOver(snapshot);
-
-    // Always advance, even if a render call above threw — otherwise a single
-    // bad snapshot repeats the same crash on every future update forever
-    // (this is exactly how a real bug froze a live match: a server/client
-    // position mismatch made renderTokens throw, which skipped this line,
-    // which fed the same stale snapshot into the next diff, which threw
-    // again — movable glows and click handlers never got a chance to catch
-    // up to the real state again for the rest of that game).
-    prevSnapshot = snapshot;
   }
 
   // Wraps the per-snapshot render calls so one bad token/state never freezes
