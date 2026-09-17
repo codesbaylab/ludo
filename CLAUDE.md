@@ -117,6 +117,11 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   now defaults to this URL; `?server=` still overrides it for local dev.
 - **Not yet done**: no spectator handling; no real deposit/withdrawal (payment gateway)
   integration — `wallet.html`'s deposit/withdraw UI is still an explicitly-labeled mock.
+- **Open decision, deferred**: match history doesn't show opponent names (just your own
+  color/result/stake/time) because `profiles`' RLS only lets a client read its own row. Showing
+  real opponent names would mean adding a policy that makes `display_name` readable by any
+  authenticated user, not just its owner — a deliberate privacy/product call to revisit later,
+  not something to change as a side effect of another task.
 
 ## Running it
 
