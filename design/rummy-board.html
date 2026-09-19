@@ -308,15 +308,18 @@
     .ocount { font-size: 8px; margin-top: 0; }
     .oturn-label { font-size: 8px; padding: 0 5px; margin-top: 1px; }
 
+    /* Closed deck / wild-joker / discard all match the hand cards' own
+       size (54x75, set below) — a player asked for this specifically so
+       every card on the table reads at the same size, not just the hand. */
     .center-row { padding: 2px 0; gap: 16px; }
     .pile-label { font-size: 8px; }
-    .closed-deck { width: 40px; height: 56px; }
-    .closed-deck .card-back { width: 40px; height: 56px; }
+    .closed-deck { width: 54px; height: 75px; }
+    .closed-deck .card-back { width: 54px; height: 75px; }
     .deck-count { font-size: 9px; padding: 1px 5px; }
     .joker-chip { padding: 4px 8px; gap: 4px; }
-    .joker-chip .pcard { width: 26px; height: 36px; }
-    .joker-chip .pcard .pip { font-size: 11px; }
-    .discard-pile .pcard, .discard-pile.empty { width: 40px; height: 56px; }
+    .joker-chip .pcard { width: 54px; height: 75px; }
+    .joker-chip .pcard .pip { font-size: 23px; }
+    .discard-pile .pcard, .discard-pile.empty { width: 54px; height: 75px; }
     .status-strip { position: absolute; bottom: 4px; right: 10px; margin-top: 0; font-size: 9px; padding: 3px 8px; }
 
     /* No card background here either now — same shared full-bleed green as
