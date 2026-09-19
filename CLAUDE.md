@@ -43,9 +43,12 @@ by a Supabase project for auth/wallet-ledger/match-history.
   (redirect to `login.html` otherwise — `profile.html`/`history.html`/`wallet.html` had NO auth
   guard at all before this was fixed) and show real data: signed-in name/email, real wallet
   balance, real games-played/wins/win-rate, real per-match results (via the `supabase-client.js`
-  helpers above), and a real derived transaction list on `wallet.html` (match stakes/winnings —
-  there's no deposit/withdrawal ledger table, so those stay as the explicitly-labeled "Mock
-  gateway" demo UI). `profile.html`'s Log Out now actually calls `auth.signOut()` (it previously
+  helpers above), and a real merged transaction list on `wallet.html` (match stakes/winnings +
+  real USDT deposits, time-sorted together — see "Crypto deposits" below; no more mock/fabricated
+  entries in that list). `wallet.html`'s Deposit panel is a real USDT (TRC-20) address + QR code
+  (fetched from the game server, not the Colyseus WS connection — see "Crypto deposits"); Withdraw
+  is still the explicitly-labeled "Mock gateway" demo UI (deposits only so far, on purpose — see
+  "Crypto deposits"). `profile.html`'s Log Out now actually calls `auth.signOut()` (it previously
   just navigated away, leaving the session live). The fake "✓ Verified"/"Identity Verification
   (KYC)" badges on `profile.html` were removed rather than left fabricated — no such feature
   exists anywhere in the schema or backend. `profile.html` also has a Change Password panel
@@ -189,11 +192,13 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
 
 - **Supabase project**: `ludo-backend` (project id `suojgcpxdelpvbfjcrfn`, region ap-south-1, org
   "Yosh Call App"). Schema: `profiles` (includes `is_admin bool`), `wallets` (internal ledger,
-  starts at a fake ₹240), `matches`, `match_players` — RLS on every table (clients can only read
-  their own profile/wallet + read match history, unless `is_admin`; all writes are server-side via
-  the service role key, except the two admin RPCs below). A `handle_new_user()` trigger on
-  `auth.users` auto-creates the `profiles`/`wallets` row on signup (client has no insert policy on
-  either — this is the only way those rows get created). No advisories/lints outstanding.
+  starts at a fake ₹240), `matches`, `match_players`, `crypto_deposit_addresses`, `crypto_deposits`,
+  `crypto_settings` (see "Crypto deposits" below) — RLS on every table (clients can only read
+  their own profile/wallet/deposit-address/deposit-history + read match history, unless `is_admin`;
+  all writes are server-side via the service role key, except the two admin RPCs below). A
+  `handle_new_user()` trigger on `auth.users` auto-creates the `profiles`/`wallets` row on signup
+  (client has no insert policy on either — this is the only way those rows get created). No
+  advisories/lints outstanding.
 - **Admin**: `profiles.is_admin` gates access — a `before update` trigger
   (`prevent_is_admin_self_update`) silently reverts any attempt to change it from a non-
   `service_role` connection, so it can only be toggled via the dashboard/service role, never by a
@@ -280,13 +285,100 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
 - **Live server**: deployed on Render's free tier at `wss://ludo-x96u.onrender.com` (spins down
   after ~15 min idle; first connection after that has a ~30-60s cold start). `design/game.js`
   now defaults to this URL; `?server=` still overrides it for local dev.
-- **Not yet done**: no spectator handling; no real deposit/withdrawal (payment gateway)
-  integration — `wallet.html`'s deposit/withdraw UI is still an explicitly-labeled mock.
+- **Not yet done**: no spectator handling; no real withdrawal path (deposits are real now — see
+  "Crypto deposits" below — but `wallet.html`'s Withdraw UI is still an explicitly-labeled mock).
 - **Open decision, deferred**: match history doesn't show opponent names (just your own
   color/result/stake/time) because `profiles`' RLS only lets a client read its own row. Showing
   real opponent names would mean adding a policy that makes `display_name` readable by any
   authenticated user, not just its owner — a deliberate privacy/product call to revisit later,
   not something to change as a side effect of another task.
+
+## Crypto deposits (USDT / TRC-20)
+
+Custodial, no third-party payment gateway (explicit product decision — the alternative would be a
+service like CoinPayments/BitPay, which the user wanted to avoid). Self-hosted: this app's own
+server holds the key material and derives/watches addresses itself, rather than a vault/custody
+service holding it on the app's behalf — a deliberate simple-to-start tradeoff (real risk: a
+compromised server means a compromised hot wallet) accepted for v1, with mitigations noted below.
+
+- **One deposit address per user, deterministically derived.** `server/src/crypto/tron.ts` reads
+  a single BIP39 mnemonic from `TRON_MASTER_SEED` (a server-only env var, never in the database,
+  never logged) and derives a Tron address + private key per user via `TronWeb.fromMnemonic(seed,
+  "m/44'/195'/0'/0/{index}")` — standard BIP44, Tron's coin type 195. Critically, **no private key
+  is ever stored anywhere** — every one is perfectly reproducible on demand from the seed + that
+  user's `derivation_index` alone (verified deterministic: same index always derives the same
+  address/key). Losing the database loses no money; losing the seed (without a separate backup of
+  the mnemonic) means every address it controls becomes permanently unsweepable.
+- **Race-free index allocation.** `crypto_deposit_index_seq` (a Postgres sequence) plus the
+  `next_crypto_deposit_index()` RPC hands out each user's index atomically — no address is ever
+  derived twice for two different users, and sequence gaps (e.g. from an aborted request) are
+  harmless by design.
+- **`server/src/crypto/depositAddress.ts`** — `getOrCreateDepositAddress(userId)`: reads
+  `crypto_deposit_addresses` first: existing user, existing row (Postgres `PRIMARY KEY (user_id)`
+  is the idempotency guard) — return it. New user — reserve an index, derive off-chain, insert.
+  Handles the insert racing against a concurrent request for the same user (Postgres error code
+  `23505`, unique violation) by simply reading back whatever the other request already wrote,
+  rather than erroring — verified directly against the real database (a duplicate insert for the
+  same `user_id` does hit `23505`, exactly as the retry branch expects).
+- **`POST /api/crypto/deposit-address`** (`server/src/index.ts`) — the one HTTP route on an
+  otherwise pure-WebSocket server (Colyseus doesn't need this; only crypto deposits do). Verifies
+  the caller via `Authorization: Bearer <supabase access_token>` (the same token supabase-js
+  already attaches to its own requests, just forwarded manually since this is a plain Express
+  route, not a Supabase Edge Function) using `supabase.auth.getUser(token)`. `cors()` is wide open
+  on origin here — deliberately: the actual access control is the bearer token, not the calling
+  origin, and this needs to be reachable from GitHub Pages, local dev, and any future domain
+  without maintaining an allowlist.
+- **`server/src/crypto/depositWatcher.ts`** — polls TronGrid (`GET
+  /v1/accounts/{address}/transactions/trc20?contract_address={USDT}&only_to=true&only_confirmed=true`)
+  every 30s for every known deposit address (small batches, `POLL_CONCURRENCY = 5`, to stay under
+  TronGrid's free-tier rate limit as the user base grows — add `TRONGRID_API_KEY` and raise this if
+  it ever needs to scale further). `only_confirmed=true` queries TronGrid's "solidity" node
+  specifically, which only ever exposes blocks Tron's own consensus already considers irreversible
+  (~19 blocks / ~1 minute behind the tip — the industry-standard "safe" threshold for TRC-20 USDT),
+  so nothing here does its own block-counting on top of that.
+  - **Contract-address check is the real security boundary.** USDT is itself just a token contract
+    on Tron; a transfer's `token_info.address` is checked against the one true USDT contract
+    (`TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`, `USDT_CONTRACT_ADDRESS` in `tron.ts`) before anything is
+    credited. Skipping this would let anyone send a worthless look-alike token with USDT's name/
+    symbol and get real ₹ credited for it — verified with a unit test asserting a scam-contract
+    transfer alongside a genuine one only ever credits the genuine one.
+  - **Idempotent by design, not by accident.** `credit_crypto_deposit(...)` (the Postgres RPC —
+    migration `add_crypto_usdt_deposits`) does `insert into crypto_deposits (..., tx_hash, ...) on
+    conflict (tx_hash) do nothing` and only credits `wallets.balance` if that insert actually
+    happened (checked via PL/pgSQL's `FOUND`, which `on conflict do nothing` correctly sets false
+    when the row already existed) — so a transaction TronGrid's history surfaces again on a later
+    poll (the steady-state common case, not an error) is a costless no-op, never a double-credit.
+    Verified directly against the real database: crediting the same `tx_hash` twice credits the
+    wallet once, returns `credited: false` the second time, and leaves the balance unchanged.
+  - **USDT → ₹ conversion**: `crypto_settings.usdt_inr_rate` (a plain singleton-row table,
+    admin-editable via SQL/dashboard) — no live price-feed dependency, on purpose, for v1.
+- **`design/wallet.html`**: the Deposit panel calls the server endpoint above (lazily — only once
+  actually opened, since it's a network round trip that can hit Render's cold-start delay) and
+  renders the returned address as both text (with a Copy button) and a QR code (`qrcode-generator`
+  from jsdelivr — a plain dependency-free script, not a build-step library, so it works the same
+  way `colyseus.js`/`supabase-js` already do from CDN). A clear warning that TRC-20 is the *only*
+  supported network sits above the address, since funds sent on any other network are unrecoverable.
+  "Transaction History" now merges two real sources — match results and `crypto_deposits` (via the
+  new `ludoFetchCryptoDeposits` helper in `supabase-client.js`) — sorted together by time; no more
+  mock/fabricated entries anywhere in that list.
+- **Not built yet, on purpose**: withdrawals (a separate, harder problem — sending funds back out);
+  automated sweeping of collected USDT out of per-user hot addresses into cold storage (do this as
+  a manual/periodic admin action for now, keeping v1 simpler and the blast radius of a server
+  compromise limited to whatever hasn't been swept out yet); live USD/INR pricing.
+- **Verification note**: `api.trongrid.io` is blocked by this project's own dev sandbox's network
+  policy (only a handful of package registries are allowlisted there), so the TronGrid HTTP
+  integration itself could only be written against its documented API shape and unit-tested with a
+  mocked `fetch` — not exercised against a real response from this environment. Everything else
+  (address derivation determinism, the atomic-credit/idempotency RPC, the deposit-panel UI
+  end-to-end with a mocked server response) *was* verified for real — directly against the live
+  Supabase project for the database logic, and in a real Chromium browser for the UI. Rehearse the
+  TronGrid piece specifically against Tron's Shasta/Nile testnet (`USDT_CONTRACT_ADDRESS_OVERRIDE`
+  + `TRONGRID_API_BASE` exist for exactly this) before this touches real mainnet funds.
+- **Legal note**: accepting/custodying crypto deposits for users can plausibly make this platform
+  a "Virtual Asset Service Provider" under Indian law (FIU-IND/PMLA registration, TDS deduction
+  duties under Section 194S) — a second, separate layer of legal exposure on top of the real-money
+  Ludo question already flagged elsewhere in this file. Not something resolved here; flagged for
+  whenever this goes further than internal testing.
 
 ## Running it
 
