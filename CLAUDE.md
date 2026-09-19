@@ -400,23 +400,43 @@ by a Supabase project for auth/wallet-ledger/match-history.
   drawing a 14th card rebalances to 7/7 rather than leaving a lopsided 7/7-turned-8/6. Verified in
   a real headless-Chromium run: no horizontal overflow at 390px, correct 7/6 → 7/7 split across a
   draw, and selecting a card in the second row still lifts the right one.
-- `design/rummy-board-landscape-mockup.html` — a **standalone visual mockup**, not wired into the
-  app (no `game.js`/`rummy-rules.js`/real state — hardcoded example hand/opponents/deck), proposing
-  a landscape-orientation table layout (a player suggested something closer to how RummyCircle's
-  own landscape table looks) for discussion before touching `rummy-board.html` for real. Reuses
-  `styles.css`'s color tokens and the existing `.pcard`/`.card-back` visual language so it reads as
-  a real variant of this app rather than a generic wireframe, but is otherwise self-contained.
-  Shows a phone-frame preview at any viewport size, and a "rotate your phone" prompt in an actual
-  portrait viewport (`@media (orientation: portrait)`) so the layout it's proposing is only ever
-  seen the way it's meant to be seen. Key layout decisions it's proposing, for discussion: opponents
-  move from a `players-panel` scroll-strip (portrait) to a slim always-visible row across the top;
-  the hand renders as a single row of large cards instead of the portrait two-row split (landscape
-  width easily fits all 13-14 overlapped big cards without wrapping); and the action buttons
-  (Arrange/Discard/Declare) move from a full-width bar under the hand to a slim column docked
-  beside it, since landscape has width to spare but very little height. Deliberately not linked
-  from anywhere in the live app's navigation — reachable only by direct URL, the same way
-  `rummy-lobby.html`/`rummy-board.html` themselves started out (see their own entries above) —
-  since it's a conversation piece, not a shipped feature.
+- **Landscape table layout** (`rummy-board.html`): a real, CSS-media-query-driven second layout
+  for the SAME page and the SAME game state — never a separate mockup or a separate DOM, since a
+  player approved a standalone mockup (`rummy-board-landscape-mockup.html`, now deleted — its job
+  was done once this shipped) proposing exactly this, closer to how RummyCircle's own landscape
+  table looks. Gated on `@media (orientation: landscape) and (max-height: 520px)` — the height cap
+  specifically so a landscape *desktop* browser window (wide AND tall) doesn't trigger phone-table
+  styling meant for an actual rotated phone's short viewport. What changes, all pure CSS restyling
+  of the existing elements: opponents shrink into a slim always-visible top row instead of
+  portrait's larger cards; the deck/wild/discard center row gets more breathing room and the
+  status strip moves to an absolutely-positioned corner tag (freeing a whole line of vertical
+  space); the hand's cards get noticeably bigger (`.pcard` 54×75 vs. portrait's 46×64); and
+  `#hand-section-content` becomes a CSS grid docking the action buttons (Arrange/Discard/Declare)
+  in a column beside the hand instead of a full-width bar under it — landscape has width to spare
+  and almost none of the scarcer resource, height. The Pool Standings panel's rows go from stacked
+  to `flex-wrap`ped so they don't eat a full column of height either. One thing CSS alone can't do:
+  `renderHand()`'s portrait behavior deliberately splits the hand into two rows (see that function's
+  own entry above) so the whole hand stays visible without a portrait-width scroll — in landscape
+  that split is unnecessary (the extra width easily fits all 13-14 big overlapped cards in one row)
+  and would only waste vertical space fighting the two-row CSS, so `renderHand()` checks
+  `isLandscapeMode()` (`window.matchMedia` on the *identical* media-query string the CSS uses,
+  kept in sync on purpose) and skips the split entirely when landscape is active. A
+  `landscapeQuery.addEventListener('change', ...)` re-renders the board the instant a real device
+  crosses the portrait/landscape boundary — verified with a live viewport-resize test mid-game:
+  the hand correctly re-splits to two rows on rotating to portrait and back to one row on rotating
+  back, with no page reload. Two inline `style="width:…; height:…"` attributes (the wild-joker
+  indicator card, both in the static HTML and in `renderWildIndicator()`'s own JS template) had to
+  move into a `.joker-chip .pcard` CSS rule first — an inline style always wins over any stylesheet
+  rule regardless of media query, so leaving it inline would have silently defeated the landscape
+  override for that one card. Verified end-to-end in real Chromium at real phone landscape sizes
+  (844×390, 932×430, and a narrower 740×360 with a full 14-card hand) in both 2-player and
+  4-player tables: zero horizontal overflow, a full hand played start-to-finish with real gameplay
+  (draw/discard/declare, pool standings updating), manual drag-reorder and the just-drawn highlight
+  both still working at the bigger card size, and the shuffle/deal flight animation correctly
+  landing on the resized opponent/deck/hand positions (`flyCard()` reads element positions live via
+  `getBoundingClientRect()`, so it never needed any changes itself). The full existing points/pool
+  e2e regression suite (fixed at a tall 390×900 test viewport, so `max-height:520px` never matches)
+  re-ran clean — confirms portrait is completely unaffected by any of this.
 - `design/index.html` — no longer the design-mockup index (removed); a silent redirect stub to
   `login.html`, since GitHub Pages serves `index.html` for the bare site root regardless of what
   `manifest.json` says.

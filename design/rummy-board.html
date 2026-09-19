@@ -101,6 +101,11 @@
     border:1px solid rgba(255,255,255,.3); border-radius: 12px; padding: 6px 10px;
   }
   .joker-chip .jlabel { color:#fff; font-size:10px; font-weight:800; }
+  /* Sized via CSS (not an inline style on the element) specifically so the
+     landscape media query below can override it — an inline style attribute
+     beats any stylesheet rule regardless of media query. */
+  .joker-chip .pcard { width:32px; height:44px; }
+  .joker-chip .pcard .pip { font-size:15px; }
 
   /* Playing cards */
   .pcard {
@@ -244,6 +249,79 @@
   .pool-row.eliminated { opacity:.45; text-decoration:line-through; }
   .pool-row .cap { font-weight:600; color:var(--text-dim); }
   .you-eliminated-banner { text-align:center; padding: 20px 10px; color:var(--text-dim); font-weight:700; font-size:13px; }
+
+  /* --- Landscape table layout --------------------------------------------
+     A player asked for something closer to RummyCircle's own landscape
+     table: bigger cards, opponents out of the way in a slim strip, actions
+     docked beside the hand instead of in a bar under it. This is CSS-only
+     restyling of the SAME elements the portrait layout uses (never a
+     separate landscape DOM/page) — real game state, not a mockup — plus
+     one JS behavior change: renderHand() puts the whole hand in a single
+     row here instead of portrait's two-row split, since landscape width
+     easily fits 13-14 big overlapped cards without wrapping (see
+     isLandscapeMode() below; kept in sync with this exact media query).
+     Gated on max-height too, not just orientation, so a landscape DESKTOP
+     browser window (wide AND tall) doesn't trigger phone-table styling
+     meant for a rotated phone's short viewport. */
+  @media (orientation: landscape) and (max-height: 520px) {
+    .rummy-page { max-width: 100%; padding: 6px 10px calc(6px + env(safe-area-inset-bottom)); }
+    .preview-banner { display: none; } /* reclaim vertical space; still shown in portrait */
+    .rummy-header { margin-bottom: 4px; }
+    .rummy-title .name { font-size: 13px; }
+    .rummy-title .sub { font-size: 9px; }
+
+    .pool-standings { padding: 4px 10px; margin-bottom: 4px; }
+    .pool-standings-title { font-size: 9px; margin-bottom: 2px; }
+    #pool-standings-rows { display: flex; flex-wrap: wrap; gap: 0 14px; }
+    .pool-row { font-size: 10px; padding: 0; }
+
+    .felt { padding: 6px 8px 8px; }
+    .opponent-row { margin-bottom: 4px; gap: 4px; }
+    .opponent { padding: 2px 6px; gap: 2px; }
+    .opponent .avatar { width: 24px; height: 24px; font-size: 11px; border-width: 1.5px; }
+    .opponent .oname { font-size: 10px; max-width: 60px; }
+    .opponent .ocards .card-back { width: 14px; height: 20px; margin-left: -9px; border-width: 1px; }
+    .ocount { font-size: 8px; margin-top: 0; }
+    .oturn-label { font-size: 8px; padding: 0 5px; margin-top: 1px; }
+
+    .center-row { padding: 2px 0; gap: 16px; }
+    .pile-label { font-size: 8px; }
+    .closed-deck { width: 40px; height: 56px; }
+    .closed-deck .card-back { width: 40px; height: 56px; }
+    .deck-count { font-size: 9px; padding: 1px 5px; }
+    .joker-chip { padding: 4px 8px; gap: 4px; }
+    .joker-chip .pcard { width: 26px; height: 36px; }
+    .joker-chip .pcard .pip { font-size: 11px; }
+    .discard-pile .pcard, .discard-pile.empty { width: 40px; height: 56px; }
+    .status-strip { position: absolute; bottom: 4px; right: 10px; margin-top: 0; font-size: 9px; padding: 3px 8px; }
+
+    .hand-section { margin-top: 4px; }
+    .hand-section.active-turn { padding: 5px; margin: 4px -5px 0; }
+    /* The hand + its head/hint/legend sit in a left column; the action
+       buttons form their own column docked to the right, spanning that
+       whole column's height — landscape's one asset (width) pays for its
+       scarcest one (height) here. */
+    #hand-section-content {
+      display: grid; grid-template-columns: 1fr auto; column-gap: 10px; align-items: center;
+      grid-template-areas: "head actions" "hint actions" "legend actions" "cards actions";
+    }
+    .hand-head { grid-area: head; margin-bottom: 0; }
+    .hand-hint { grid-area: hint; font-size: 10px; margin-bottom: 2px; }
+    .legend { grid-area: legend; gap: 6px; margin: 0 0 4px; font-size: 8px; }
+    .legend i { width: 7px; height: 7px; }
+    .hand-row { grid-area: cards; padding: 2px 2px 0; }
+    .action-bar { grid-area: actions; flex-direction: column; width: 92px; gap: 5px; margin-top: 0; }
+    .action-bar .btn { padding: 9px 6px; font-size: 11px; }
+
+    /* Bigger cards — the whole point of landscape mode. */
+    .pcard { width: 54px; height: 75px; border-radius: 8px; }
+    .pcard .corner { font-size: 12px; }
+    .pcard .pip { font-size: 23px; }
+    .hand-line .pcard { margin-left: -17px; }
+    .pcard.lifted { transform: translateY(-16px); }
+
+    .log-panel { margin-top: 4px; }
+  }
 </style>
 </head>
 <body>
@@ -303,7 +381,7 @@
         </div>
 
         <div class="joker-chip">
-          <div class="pcard red" id="wild-indicator-card" style="width:32px; height:44px;"><span class="corner">9<br>♦</span><span class="pip" style="font-size:15px;">♦</span></div>
+          <div class="pcard red" id="wild-indicator-card"><span class="corner">9<br>♦</span><span class="pip">♦</span></div>
           <div class="jlabel">Wild<br>Joker</div>
         </div>
 
@@ -657,15 +735,24 @@
     }
   }
 
+  // Same media query as the landscape CSS block above — kept identical on
+  // purpose, since renderHand()'s one-row-vs-two-row decision has to agree
+  // with which CSS layout is actually active, or the JS-computed rows and
+  // the CSS grid they're rendered into fall out of sync.
+  const landscapeQuery = window.matchMedia('(orientation: landscape) and (max-height: 520px)');
+  function isLandscapeMode() { return landscapeQuery.matches; }
+
   function renderHand() {
     const hand = state.hands[0];
     const container = document.getElementById('hand-row');
     container.innerHTML = '';
 
-    // Two explicit rows so the whole hand is visible without scrolling —
-    // each row resets its own card-overlap margin.
+    // Portrait: two explicit rows so the whole hand is visible without
+    // scrolling — each row resets its own card-overlap margin. Landscape
+    // has enough width to fit all 13-14 big overlapped cards in one row
+    // (see isLandscapeMode()), so it skips the split entirely.
     const splitAt = Math.ceil(hand.length / 2);
-    const lines = [hand.slice(0, splitAt), hand.slice(splitAt)];
+    const lines = isLandscapeMode() ? [hand] : [hand.slice(0, splitAt), hand.slice(splitAt)];
     const interactive = phase === 'your-turn-discard';
     const draggable = phase !== 'round-over';
 
@@ -869,7 +956,7 @@
     el.className = 'pcard' + (card.rank === 'JOKER' ? ' joker' : ' ' + RummyRules.SUIT_COLOR[card.suit]);
     el.innerHTML = card.rank === 'JOKER'
       ? '<span class="pip">🃏</span>'
-      : `<span class="corner">${card.rank}<br>${card.suit}</span><span class="pip" style="font-size:15px;">${card.suit}</span>`;
+      : `<span class="corner">${card.rank}<br>${card.suit}</span><span class="pip">${card.suit}</span>`;
   }
 
   // --- Hand lifecycle --------------------------------------------------
@@ -1222,6 +1309,16 @@
 
   document.getElementById('log-toggle').addEventListener('click', () => {
     document.getElementById('log-panel').classList.toggle('open');
+  });
+
+  // Rotating the phone mid-game needs to actually re-lay-out the hand (the
+  // CSS grid/sizing swap is automatic, but the one-row-vs-two-row DOM split
+  // renderHand() builds is a JS decision, not something a media query can
+  // do by itself) — re-render on the query's own change event rather than a
+  // generic resize listener, so this fires exactly on the portrait<->
+  // landscape crossing and not on every intermediate resize event.
+  landscapeQuery.addEventListener('change', () => {
+    if (state && phase !== 'round-over') renderAll();
   });
 
   dealHand();
