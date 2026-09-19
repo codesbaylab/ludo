@@ -477,6 +477,40 @@ by a Supabase project for auth/wallet-ledger/match-history.
     stays hidden in landscape, stays hidden under `?fast=1` even in a portrait test viewport, and a
     live viewport resize toggles it correctly in both directions with no reload — plus the full
     e2e regression suite re-ran clean, confirming automated tests are genuinely unaffected.
+  - **The landscape table is now full-bleed** — the whole screen IS the felt, not a big green card
+    on the page's cream background anymore. `html, body { overflow: hidden; height: 100% }` (the
+    page can never scroll — there's nothing below the fold to scroll to), `body` carries the felt's
+    gradient plus an `inset box-shadow` vignette for a richer look, `.app`/`.rummy-page` drop their
+    max-width/bottom-padding and `.rummy-page` becomes a `100dvh` column flexbox so every region
+    (header, pool standings, felt, hand) gets sized to actually fit instead of overflowing. The
+    header (Exit link, title, wallet chip) and the Game Log — previously outside/below the green —
+    both moved onto the shared background too: header text flips to white/light, and the log
+    becomes a small floating pill fixed at the bottom-left corner (`position: fixed`, so it's
+    outside `.rummy-page`'s flex height budget entirely and can never be *why* the page needs to
+    scroll) that expands into an overlay on tap rather than an in-flow panel that pushes anything
+    down. **Two real bugs caught wiring the log toggle up, neither found by reasoning about the
+    CSS on paper:**
+    1. The toggle button uses the base stylesheet's `width:100%`, but `.log-panel` is
+       `position:fixed` with only `left`/`bottom` set, so its own width is shrink-to-fit around its
+       content — a `100%`-width child inside a shrink-to-fit parent resolves against an
+       ambiguous/zero basis and collapsed the button's real clickable area to nothing. Fixed with
+       `width:auto; display:inline-flex` on the button in landscape instead.
+    2. Even after that, a real Playwright click still failed with "the ancestor intercepts pointer
+       events." Cause: `styles.css`'s own `@media (min-width:761px)` block — written for the Ludo
+       board's desktop 3-column layout, where the log sits permanently open in a side column —
+       sets `.log-toggle { pointer-events: none }` and `.log-body { max-height:130px !important }`
+       globally, not scoped to that board's own page. Any real phone in landscape is comfortably
+       over 761px wide, so that rule was *also* matching here: the toggle rendered with a normal
+       rect but had zero hit-testing, and the log body sat permanently expanded at 130px — both
+       silently defeating this design. Fixed with `!important` counter-rules in this page's own
+       landscape block (`pointer-events: auto !important`, explicit `max-height` for the open/
+       closed states) — needed `!important` right back, since equal specificity + equal importance
+       falls back to source order, and this page's own `<style>` block loads after `styles.css`.
+    Verified in real Chromium at 844×390, a narrower 740×360 with a full 14-card hand, and 2-player
+    mode: zero horizontal *or* vertical overflow (`body.scrollHeight === innerHeight` exactly) in
+    every case, the log pill actually clickable and expanding into a real overlay without changing
+    page height, the portrait rotate-block still fully covering this new full-bleed styling, and
+    the full existing e2e regression suite re-ran clean throughout.
 - `design/index.html` — no longer the design-mockup index (removed); a silent redirect stub to
   `login.html`, since GitHub Pages serves `index.html` for the bare site root regardless of what
   `manifest.json` says.

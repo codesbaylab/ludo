@@ -264,24 +264,42 @@
      browser window (wide AND tall) doesn't trigger phone-table styling
      meant for a rotated phone's short viewport. */
   @media (orientation: landscape) and (max-height: 520px) {
-    .rummy-page { max-width: 100%; padding: 4px 8px calc(4px + env(safe-area-inset-bottom)); }
+    /* Full-bleed: the ENTIRE screen is the felt now, not a rounded green
+       card floating on the page's cream background — header, pool
+       standings, opponents, center row and hand all become regions laid
+       out on one shared background instead of separate cards. html/body
+       overflow:hidden means the page can never scroll (nothing ever sits
+       below the fold to scroll to), and .rummy-page fills the exact
+       viewport height as a column flexbox so every region gets sized to
+       actually fit rather than overflowing. */
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      background: radial-gradient(ellipse at 50% 35%, #1c9463 0%, #0f6b47 55%, #073d29 100%);
+      box-shadow: inset 0 0 70px 20px rgba(0,0,0,.5);
+    }
+    .app { max-width: none; min-height: 100vh; min-height: 100dvh; padding-bottom: 0; }
+    .rummy-page {
+      max-width: 100%; height: 100vh; height: 100dvh; box-sizing: border-box;
+      padding: 4px 10px calc(4px + env(safe-area-inset-bottom));
+      display: flex; flex-direction: column;
+    }
     .preview-banner { display: none; } /* reclaim vertical space; still shown in portrait */
-    .rummy-header { margin-bottom: 2px; }
-    .rummy-title .name { font-size: 13px; }
-    .rummy-title .sub { font-size: 9px; }
 
-    .pool-standings { padding: 4px 10px; margin-bottom: 3px; }
-    .pool-standings-title { font-size: 9px; margin-bottom: 2px; }
+    .rummy-header { margin-bottom: 2px; flex: 0 0 auto; }
+    .rummy-header .back-link { color: #fff; opacity: .85; }
+    .rummy-title .name { font-size: 13px; color: #fff; }
+    .rummy-title .sub { font-size: 9px; color: rgba(255,255,255,.7); }
+    .rummy-header .wallet-chip { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.35); color: #fff; }
+
+    .pool-standings { background: transparent; box-shadow: none; border: none; padding: 0; margin-bottom: 3px; flex: 0 0 auto; }
+    .pool-standings-title { font-size: 9px; margin-bottom: 1px; color: rgba(255,255,255,.75); }
     #pool-standings-rows { display: flex; flex-wrap: wrap; gap: 0 14px; }
-    .pool-row { font-size: 10px; padding: 0; }
+    .pool-row { font-size: 10px; padding: 0; color: #fff; }
+    .pool-row .cap { color: rgba(255,255,255,.6); }
 
-    /* The felt and the hand read as ONE continuous green table instead of
-       a green card with a separate cream card stacked under it — matching
-       corners only on the outer edges (top of the felt, bottom of the
-       hand), a flat seam where they actually meet, and zero gap between
-       them, plus the hand picking up the felt's own background so it's
-       not a color break, just a shape break. */
-    .felt { padding: 6px 8px 4px; border-radius: var(--radius-lg) var(--radius-lg) 6px 6px; }
+    /* The felt is no longer its own rounded card either — same shared
+       background as the rest of the screen, just a layout region. */
+    .felt { background: transparent; box-shadow: none; border-radius: 0; padding: 2px 0; flex: 0 0 auto; }
     .opponent-row { margin-bottom: 4px; gap: 4px; }
     .opponent { padding: 2px 6px; gap: 2px; }
     .opponent .avatar { width: 24px; height: 24px; font-size: 11px; border-width: 1.5px; }
@@ -301,16 +319,16 @@
     .discard-pile .pcard, .discard-pile.empty { width: 40px; height: 56px; }
     .status-strip { position: absolute; bottom: 4px; right: 10px; margin-top: 0; font-size: 9px; padding: 3px 8px; }
 
+    /* No card background here either now — same shared full-bleed green as
+       the felt above it. flex:1 1 auto + min-height:0 gives it whatever
+       vertical space is left after the fixed-size regions above it claim
+       theirs, and #hand-section-content fills that exactly, so the hand
+       area sizes to the real remaining space instead of overflowing it. */
     .hand-section {
-      margin-top: 0; border-radius: 6px 6px var(--radius-lg) var(--radius-lg);
-      background: linear-gradient(180deg, #0f6b47 0%, #0a5537 100%);
-      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 10px 24px rgba(10,60,40,.3);
-      padding: 8px 12px;
+      margin-top: 2px; flex: 1 1 auto; min-height: 0;
+      display: flex; flex-direction: column; border-radius: 0; padding: 4px 0 0;
     }
-    .hand-section.active-turn {
-      box-shadow: 0 0 0 2px var(--accent), inset 0 0 0 1px rgba(255,255,255,.08), 0 10px 24px rgba(10,60,40,.3);
-      padding: 8px 12px; margin: 0;
-    }
+    .hand-section.active-turn { box-shadow: none; padding: 4px 0 0; margin: 2px 0 0; }
     .you-eliminated-banner { color: rgba(255,255,255,.85); }
     /* The hand + its head/hint/legend sit in a left column; the action
        buttons form their own column docked to the right, spanning that
@@ -321,6 +339,7 @@
     #hand-section-content {
       display: grid; grid-template-columns: 1fr auto; column-gap: 10px; align-items: center;
       grid-template-areas: "head actions" "hint actions" "legend actions" "cards actions";
+      flex: 1 1 auto; min-height: 0;
     }
     .hand-head { grid-area: head; margin-bottom: 0; }
     .hand-head .htitle { color: #fff; }
@@ -340,7 +359,50 @@
     .hand-line .pcard { margin-left: -17px; }
     .pcard.lifted { transform: translateY(-16px); }
 
-    .log-panel { margin-top: 4px; }
+    /* The Game Log moves out of the page's normal flow entirely — a small
+       floating pill fixed at the bottom-left corner that expands into an
+       overlay ON TOP of the felt when tapped, rather than an in-page panel
+       that pushes layout down. It can never be the reason the page needs
+       to scroll, since position:fixed elements don't participate in
+       .rummy-page's flex height budget at all. z-index sits below the
+       result modal (50) and the rotate-block (250) so either still covers
+       it correctly if both happen to be open. */
+    .log-panel {
+      position: fixed; left: 10px; bottom: 10px; z-index: 40;
+      max-width: min(320px, calc(100vw - 20px));
+      background: rgba(8,28,20,.78); border: 1px solid rgba(255,255,255,.22);
+      box-shadow: 0 8px 20px rgba(0,0,0,.4); border-radius: 999px;
+      transition: border-radius .2s ease;
+    }
+    .log-panel.open { border-radius: 14px; }
+    /* width:auto/inline-flex, not the base rule's width:100% — .log-panel
+       is position:fixed with only left/bottom set, so its own width is
+       shrink-to-fit around its content; a 100%-width child inside a
+       shrink-to-fit parent resolves against an ambiguous/zero basis and
+       collapsed the button's actual clickable area to nothing (an early
+       version of this hit exactly that). */
+    .log-toggle { width: auto; display: inline-flex; padding: 7px 12px; font-size: 11px; color: #fff; }
+    .log-toggle .chev { display: inline !important; color: rgba(255,255,255,.7); }
+    /* A REAL bug this caught: styles.css's own @media (min-width:761px)
+       block — meant for the Ludo board's desktop 3-column layout, where
+       the log sits permanently open in a side column — sets
+       `.log-toggle { pointer-events: none }` and `.log-body {
+       max-height:130px !important }` globally, not scoped to that board's
+       own page. Any real phone in landscape is comfortably over 761px
+       wide, so that rule was ALSO matching here: the toggle button was
+       rendered but literally unclickable (pointer-events:none), and the
+       log sat permanently expanded, both silently undoing this whole
+       collapsed-pill design. Caught by a real Playwright click failing
+       with "the ancestor intercepts pointer events" — the button had a
+       normal rect and geometry, just no hit-testing at all — not by
+       reasoning about which media queries could apply. Both `!important`
+       rules need `!important` right back to win, since equal specificity
+       + equal importance falls back to source order, and this page's own
+       <style> block loads after styles.css. */
+    .log-toggle { pointer-events: auto !important; }
+    .log-panel:not(.open) .log-body { max-height: 0 !important; padding: 0 12px !important; }
+    .log-panel.open .log-body { max-height: 140px !important; padding: 0 12px 10px !important; }
+    .log-body div { color: rgba(255,255,255,.85); border-top-color: rgba(255,255,255,.18); }
   }
 
   /* --- Landscape-only: block play entirely in portrait, rather than
