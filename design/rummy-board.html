@@ -47,6 +47,7 @@
     transition: box-shadow .2s ease;
   }
   .opponent.active { box-shadow: 0 0 0 2px var(--accent), 0 0 16px rgba(255,138,61,.5); background: rgba(255,255,255,.06); }
+  .opponent { transition: opacity .5s ease; }
   .opponent.eliminated { opacity:.35; }
   .opponent .avatar { width:38px; height:38px; font-size:15px; border: 2px solid rgba(255,255,255,.5); }
   .opponent .oname { color:#fff; font-size:12px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80px; }
@@ -71,6 +72,28 @@
   .deck-count {
     position:absolute; bottom:-9px; right:-9px; background:#fff; color:var(--text);
     font-size:10px; font-weight:800; border-radius:10px; padding:2px 6px; box-shadow: var(--shadow);
+  }
+
+  /* Shuffle: a quick riffle-jitter on the deck stack, not real card motion —
+     cheap to render and reads fine at a glance. */
+  .closed-deck.shuffling .card-back { animation: shuffle-jitter .22s ease-in-out infinite; }
+  .closed-deck.shuffling .card-back:nth-child(2) { animation-delay: .05s; }
+  .closed-deck.shuffling .card-back:nth-child(3) { animation-delay: .1s; }
+  @keyframes shuffle-jitter {
+    0%, 100% { transform: rotate(0deg) translateX(0); }
+    30% { transform: rotate(-6deg) translateX(-2px); }
+    70% { transform: rotate(6deg) translateX(2px); }
+  }
+
+  /* A card mid-flight between two points on the table (deal/draw/discard) —
+     a temporary position:fixed clone, removed once the flight completes. */
+  .flying-card { position: fixed; z-index: 200; pointer-events: none; margin: 0 !important; }
+
+  .trophy-bounce { animation: trophy-bounce .5s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes trophy-bounce {
+    0% { transform: scale(.4) rotate(-15deg); opacity: 0; }
+    60% { transform: scale(1.15) rotate(6deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); }
   }
 
   .joker-chip {
@@ -340,6 +363,9 @@
   let selectedCardId = null;
   let gameLog = [];
   let turnToken = 0; // bumped on every new hand to cancel any in-flight bot loop
+  let uiBusy = false; // true while a draw/discard flight animation is in progress — blocks a
+                       // rapid double-click from firing the same action twice mid-animation,
+                       // since `phase` itself only flips once the animation finishes
   // Pool Rummy only: cumulative score + elimination bookkeeping across
   // several hands (see RummyRules' createPoolPlayers/applyPoolHandResult).
   // Stays null in Points Rummy, where a "round" is just a single hand.
@@ -361,6 +387,123 @@
   }
 
   function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+  // --- Sound engine: synthesized via Web Audio, no audio files — same
+  // approach design/game.js already uses for the dice cube. Every call is
+  // wrapped so a blocked/unsupported AudioContext (autoplay policy, old
+  // browser) just silently does nothing rather than throwing; sound is
+  // decorative and must never be able to break gameplay. Skipped entirely
+  // under FAST (automated tests), both to keep test runs quiet and to
+  // avoid any audio-related flakiness in a headless test browser. -------
+  let audioCtx = null;
+  function getAudioCtx() {
+    if (audioCtx) return audioCtx;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+      audioCtx = null;
+    }
+    return audioCtx;
+  }
+
+  function playTone(freq, durationMs, { type = 'sine', peak = 0.15, delay = 0 } = {}) {
+    if (FAST) return;
+    try {
+      const ctx = getAudioCtx();
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      const start = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(peak, start + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + durationMs / 1000);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + durationMs / 1000 + 0.02);
+    } catch (e) { /* sound is decorative — never let it break gameplay */ }
+  }
+
+  function playNoiseBurst(durationMs, { peak = 0.08, delay = 0 } = {}) {
+    if (FAST) return;
+    try {
+      const ctx = getAudioCtx();
+      if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const size = Math.max(1, Math.floor(ctx.sampleRate * (durationMs / 1000)));
+      const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < size; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / size);
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+      const gain = ctx.createGain();
+      const start = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(peak, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + durationMs / 1000);
+      noise.connect(gain);
+      gain.connect(ctx.destination);
+      noise.start(start);
+    } catch (e) { /* sound is decorative — never let it break gameplay */ }
+  }
+
+  function sfxShuffle() {
+    playNoiseBurst(140, { peak: 0.06 });
+    playNoiseBurst(140, { peak: 0.05, delay: 0.12 });
+    playNoiseBurst(120, { peak: 0.04, delay: 0.26 });
+  }
+  function sfxDealCard() { playNoiseBurst(50, { peak: 0.07 }); }
+  function sfxCardMove() { playNoiseBurst(70, { peak: 0.08 }); }
+  function sfxWin() {
+    playTone(523.25, 160, { type: 'triangle', peak: 0.12 });
+    playTone(659.25, 160, { type: 'triangle', peak: 0.12, delay: 0.1 });
+    playTone(783.99, 260, { type: 'triangle', peak: 0.14, delay: 0.2 });
+  }
+  function sfxEliminated() {
+    playTone(220, 220, { type: 'sawtooth', peak: 0.08 });
+    playTone(164.81, 320, { type: 'sawtooth', peak: 0.08, delay: 0.15 });
+  }
+
+  // --- Flight animation: a temporary card clone flies from one element's
+  // on-screen position to another's, then is removed — the real DOM/state
+  // update happens right after, so the clone is purely decorative motion.
+  // Collapsed to ~instant under FAST so automated tests don't slow down. ---
+  const FLIGHT_MS = FAST ? 10 : 260;
+  const DEAL_STAGGER_MS = FAST ? 2 : 65;
+  const SHUFFLE_MS = FAST ? 20 : 650;
+
+  function flyCard(fromEl, toEl, innerHtml, durationMs) {
+    // Under automated tests (?fast=1) this skips creating any DOM clone or
+    // waiting on a transition/rAF hop at all — resolving on a bare
+    // Promise.resolve() keeps this genuinely instant (a fixed setTimeout
+    // buffer plus an rAF hop, even at a tiny duration, is enough real wall-
+    // clock time to break test scripts that sleep a fixed short interval
+    // after triggering an action rather than polling for completion).
+    if (FAST) return Promise.resolve();
+    return new Promise(resolve => {
+      if (!fromEl || !toEl) { resolve(); return; }
+      const fromRect = fromEl.getBoundingClientRect();
+      const toRect = toEl.getBoundingClientRect();
+      const clone = document.createElement('div');
+      clone.className = 'flying-card';
+      clone.innerHTML = innerHtml;
+      clone.style.left = fromRect.left + 'px';
+      clone.style.top = fromRect.top + 'px';
+      clone.style.transition = `transform ${durationMs}ms cubic-bezier(.2,.7,.3,1)`;
+      document.body.appendChild(clone);
+      const dx = (toRect.left + toRect.width / 2) - (fromRect.left + fromRect.width / 2);
+      const dy = (toRect.top + toRect.height / 2) - (fromRect.top + fromRect.height / 2);
+      void clone.offsetWidth; // force reflow so the transition applies
+      requestAnimationFrame(() => {
+        clone.style.transform = `translate(${dx}px, ${dy}px) scale(.94)`;
+      });
+      setTimeout(() => { clone.remove(); resolve(); }, durationMs + 20);
+    });
+  }
+
+  function cardBackHtml() { return '<div class="card-back" style="margin:0;"></div>'; }
 
   function cardLabel(card) {
     return card.rank === 'JOKER' ? 'a joker' : `${card.rank}${card.suit}`;
@@ -551,17 +694,44 @@
 
   // --- Hand lifecycle --------------------------------------------------
 
-  function dealHand() {
-    turnToken++;
+  async function dealHand() {
+    const myToken = ++turnToken;
+    document.getElementById('declare-modal').classList.remove('open');
+
+    // Shuffle: cosmetic jitter + sound on the deck stack, before any real
+    // state exists yet — nothing to race here even if a newer deal starts
+    // mid-shuffle, since the token check below just abandons this one.
+    const deckEl = document.getElementById('closed-deck');
+    deckEl.classList.add('shuffling');
+    sfxShuffle();
+    await sleep(SHUFFLE_MS);
+    deckEl.classList.remove('shuffling');
+    if (myToken !== turnToken) return;
+
     state = RummyRules.dealNewRound(playerCount);
     currentPlayerIdx = pickStarter();
     phase = currentPlayerIdx === 0 ? 'your-turn-draw' : 'bot-turn';
     selectedCardId = null;
     gameLog = [];
-    document.getElementById('declare-modal').classList.remove('open');
     logEvent(`New hand dealt. Wild joker rank is ${state.wildRank} (any suit) — plus the printed joker cards.`);
     renderWildIndicator();
     renderPoolStandings();
+
+    // Deal: 13 generic card-backs fly from the deck into the hand area,
+    // staggered so several are in flight at once — then the real,
+    // fully-arranged hand is revealed all at once rather than trying to
+    // animate each card to its exact final (post-arrangement) slot.
+    document.getElementById('hand-row').innerHTML = '';
+    const handRowEl = document.getElementById('hand-row');
+    for (let i = 0; i < 13; i++) {
+      await sleep(DEAL_STAGGER_MS);
+      if (myToken !== turnToken) return;
+      sfxDealCard();
+      flyCard(deckEl, handRowEl, cardBackHtml(), FLIGHT_MS); // not awaited — lets flights overlap
+    }
+    await sleep(FLIGHT_MS);
+    if (myToken !== turnToken) return;
+
     renderAll();
     if (currentPlayerIdx !== 0) runBotTurnsUntilYourTurn();
   }
@@ -588,6 +758,7 @@
     } else {
       scores = scoreLosers(winnerIdx);
       headline = winnerIdx === 0 ? '🏆 You declare — you win this hand!' : `🏆 ${players[winnerIdx].name} declares and wins this hand.`;
+      sfxWin();
     }
     logEvent(headline);
     phase = 'round-over';
@@ -608,6 +779,7 @@
     const handPoints = players.map((p, idx) => (eliminatedBefore[idx] ? 0 : scores[idx].points));
     poolPlayers = RummyRules.applyPoolHandResult(poolPlayers, handPoints, poolLimit);
     const newlyEliminated = poolPlayers.filter((p, i) => p.eliminated && !eliminatedBefore[i]).map(p => p.name);
+    if (newlyEliminated.length) sfxEliminated();
     renderOpponents();
     renderPoolStandings();
 
@@ -629,7 +801,7 @@
     }).join('');
 
     document.getElementById('declare-card-content').innerHTML = `
-      <div class="tile-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">${invalidDeclareBy !== undefined ? '❌' : '🏆'}</div>
+      <div class="tile-icon trophy-bounce" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">${invalidDeclareBy !== undefined ? '❌' : '🏆'}</div>
       <h1 style="font-size:19px; margin:0;">${headline}</h1>
       <p style="font-size:12px; color:var(--text-dim); font-weight:600; margin:8px 0 4px;">Practice round only — nothing here touches your real wallet.</p>
       <div style="margin-top:10px; text-align:left;">${rows}</div>
@@ -659,7 +831,7 @@
       : `<button class="btn btn-primary" id="btn-next-hand" style="margin-top:16px;">Next Hand →</button>`;
 
     document.getElementById('declare-card-content').innerHTML = `
-      <div class="tile-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">${headline.startsWith('❌') ? '❌' : '🏆'}</div>
+      <div class="tile-icon trophy-bounce" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">${headline.startsWith('❌') ? '❌' : '🏆'}</div>
       <h1 style="font-size:18px; margin:0;">${headline}</h1>
       ${eliminatedNote}
       <div style="margin-top:10px; text-align:left;">${rows}</div>
@@ -693,7 +865,7 @@
     const title = survivor.idx === 0 ? '🏆 You win the pool!' : `🏆 ${survivor.name} wins the pool!`;
 
     document.getElementById('declare-card-content').innerHTML = `
-      <div class="tile-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">🏆</div>
+      <div class="tile-icon trophy-bounce" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">🏆</div>
       <h1 style="font-size:19px; margin:0;">${title}</h1>
       <p style="font-size:12px; color:var(--text-dim); font-weight:600; margin:8px 0 4px;">Last hand: ${headline.replace(/^(🏆|❌)\s*/, '')}</p>
       <p style="font-size:12px; color:var(--text-dim); font-weight:600; margin:0 0 4px;">Practice pool only — nothing here touches your real wallet.</p>
@@ -710,11 +882,21 @@
 
   // --- Your turn -------------------------------------------------------
 
-  function drawFor0(fromDiscard) {
-    if (phase !== 'your-turn-draw') return;
+  async function drawFor0(fromDiscard) {
+    if (phase !== 'your-turn-draw' || uiBusy) return;
+    if (fromDiscard && !state.discardPile.length) return;
+    uiBusy = true;
+    const myToken = turnToken;
+
+    const sourceEl = document.getElementById(fromDiscard ? 'discard-pile' : 'closed-deck');
+    const handRowEl = document.getElementById('hand-row');
+    sfxCardMove();
+    const flightHtml = fromDiscard ? cardHtml(state.discardPile[state.discardPile.length - 1]) : cardBackHtml();
+    await flyCard(sourceEl, handRowEl, flightHtml, FLIGHT_MS);
+    if (myToken !== turnToken) { uiBusy = false; return; } // a new hand started mid-flight
+
     RummyRules.ensureClosedDeckNotEmpty(state);
     if (fromDiscard) {
-      if (!state.discardPile.length) return;
       const card = state.discardPile.pop();
       state.hands[0].push(card);
       logEvent(`You drew ${cardLabel(card)} from the discard pile.`);
@@ -726,6 +908,7 @@
     phase = 'your-turn-discard';
     selectedCardId = null;
     renderAll();
+    uiBusy = false;
   }
 
   document.getElementById('closed-deck').addEventListener('click', () => drawFor0(false));
@@ -736,10 +919,19 @@
     renderAll();
   });
 
-  document.getElementById('btn-discard').addEventListener('click', () => {
-    if (phase !== 'your-turn-discard' || !selectedCardId) return;
+  document.getElementById('btn-discard').addEventListener('click', async () => {
+    if (phase !== 'your-turn-discard' || !selectedCardId || uiBusy) return;
     const idx = state.hands[0].findIndex(c => c.id === selectedCardId);
     if (idx === -1) return;
+    uiBusy = true;
+    const myToken = turnToken;
+
+    const cardEl = document.querySelector('#hand-row .pcard.lifted');
+    const discardPileEl = document.getElementById('discard-pile');
+    sfxCardMove();
+    await flyCard(cardEl || document.getElementById('hand-row'), discardPileEl, cardHtml(state.hands[0][idx]), FLIGHT_MS);
+    if (myToken !== turnToken) { uiBusy = false; return; }
+
     const [card] = state.hands[0].splice(idx, 1);
     state.discardPile.push(card);
     logEvent(`You discarded ${cardLabel(card)}.`);
@@ -747,11 +939,12 @@
     phase = 'bot-turn';
     advanceTurn();
     renderAll();
+    uiBusy = false;
     runBotTurnsUntilYourTurn();
   });
 
   document.getElementById('btn-declare').addEventListener('click', () => {
-    if (phase !== 'your-turn-discard' || state.hands[0].length !== 14) return;
+    if (phase !== 'your-turn-discard' || state.hands[0].length !== 14 || uiBusy) return;
     const preferIdx = selectedCardId ? state.hands[0].findIndex(c => c.id === selectedCardId) : null;
     const option = RummyRules.findDeclareOption(state.hands[0], state.wildRank, preferIdx);
     if (option) {
@@ -774,12 +967,16 @@
     const hand = state.hands[idx];
     const discardTop = state.discardPile[state.discardPile.length - 1];
     const src = discardTop ? RummyRules.botChooseDrawSource(hand, discardTop, state.wildRank) : 'closed';
+    const slotEl = document.getElementById(SLOT_FOR_PLAYER[idx]);
 
+    sfxCardMove();
     if (src === 'discard') {
+      await flyCard(document.getElementById('discard-pile'), slotEl, cardHtml(discardTop), FLIGHT_MS);
       const card = state.discardPile.pop();
       hand.push(card);
       logEvent(`${players[idx].name} drew from the discard pile.`);
     } else {
+      await flyCard(document.getElementById('closed-deck'), slotEl, cardBackHtml(), FLIGHT_MS);
       const card = state.closedDeck.pop();
       hand.push(card);
       logEvent(`${players[idx].name} drew from the closed deck.`);
@@ -796,6 +993,8 @@
     }
 
     const discardIdx = RummyRules.botChooseDiscardIndex(hand, state.wildRank);
+    sfxCardMove();
+    await flyCard(slotEl, document.getElementById('discard-pile'), cardBackHtml(), FLIGHT_MS);
     const [discarded] = hand.splice(discardIdx, 1);
     state.discardPile.push(discarded);
     logEvent(`${players[idx].name} discarded ${cardLabel(discarded)}.`);
