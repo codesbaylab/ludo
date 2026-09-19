@@ -450,9 +450,9 @@
   }
 
   function sfxShuffle() {
-    playNoiseBurst(140, { peak: 0.06 });
-    playNoiseBurst(140, { peak: 0.05, delay: 0.12 });
-    playNoiseBurst(120, { peak: 0.04, delay: 0.26 });
+    playNoiseBurst(140, { peak: 0.09 });
+    playNoiseBurst(140, { peak: 0.08, delay: 0.12 });
+    playNoiseBurst(120, { peak: 0.07, delay: 0.26 });
   }
   function sfxDealCard() { playNoiseBurst(50, { peak: 0.07 }); }
   function sfxCardMove() { playNoiseBurst(70, { peak: 0.08 }); }
@@ -466,12 +466,31 @@
     playTone(164.81, 320, { type: 'sawtooth', peak: 0.08, delay: 0.15 });
   }
 
+  // Browsers refuse to run an AudioContext until a real user gesture has
+  // happened on the page — the very first `dealHand()` call below fires
+  // automatically on page load with no click behind it, so its shuffle
+  // sound is silently dropped no matter what (unavoidable, and fine: it's
+  // one hand's worth of silence). Without this listener, every dealt-again
+  // shuffle (Play Again / Next Hand / New Pool) was *also* racing the same
+  // suspended-context startup on top of whatever gesture triggered it,
+  // since `getAudioCtx()` caches and reuses the same suspended context
+  // created at load. Resuming it on the page's first pointerdown — a
+  // genuine gesture — means the context is already running well before any
+  // later shuffle plays, so it reliably has sound from then on.
+  document.addEventListener('pointerdown', () => {
+    const ctx = getAudioCtx();
+    if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {});
+  }, { once: true });
+
   // --- Flight animation: a temporary card clone flies from one element's
   // on-screen position to another's, then is removed — the real DOM/state
   // update happens right after, so the clone is purely decorative motion.
   // Collapsed to ~instant under FAST so automated tests don't slow down. ---
   const FLIGHT_MS = FAST ? 10 : 260;
-  const DEAL_STAGGER_MS = FAST ? 2 : 65;
+  // Dealing now goes round-robin to every seat (playerCount * 13 flights
+  // total, not just 13), so this is tuned lower than a single-hand stagger
+  // would need, keeping the whole deal under ~2s even at 4 players.
+  const DEAL_STAGGER_MS = FAST ? 2 : 38;
   const SHUFFLE_MS = FAST ? 20 : 650;
 
   function flyCard(fromEl, toEl, innerHtml, durationMs) {
@@ -717,17 +736,33 @@
     renderWildIndicator();
     renderPoolStandings();
 
-    // Deal: 13 generic card-backs fly from the deck into the hand area,
-    // staggered so several are in flight at once — then the real,
-    // fully-arranged hand is revealed all at once rather than trying to
-    // animate each card to its exact final (post-arrangement) slot.
+    // Deal: generic card-backs fly from the deck round-robin to every seat
+    // — you and every opponent — one card at a time going around the table
+    // 13 times, mirroring a real dealer, rather than only flying cards into
+    // your own hand while opponents' piles silently jump to their final
+    // count. Each opponent's own mini card-back stack/count grows live as
+    // their cards land; your own fully-arranged hand is still revealed all
+    // at once at the end, rather than trying to animate each card to its
+    // exact final (post-arrangement) slot.
     document.getElementById('hand-row').innerHTML = '';
     const handRowEl = document.getElementById('hand-row');
-    for (let i = 0; i < 13; i++) {
-      await sleep(DEAL_STAGGER_MS);
-      if (myToken !== turnToken) return;
-      sfxDealCard();
-      flyCard(deckEl, handRowEl, cardBackHtml(), FLIGHT_MS); // not awaited — lets flights overlap
+    const destEls = [handRowEl, ...Object.values(SLOT_FOR_PLAYER).map(slot => document.getElementById(`${slot}-cards`))];
+    Object.values(SLOT_FOR_PLAYER).forEach(slot => {
+      document.getElementById(`${slot}-cards`).innerHTML = '';
+      document.getElementById(`${slot}-count`).textContent = '0 cards';
+    });
+    for (let round = 0; round < 13; round++) {
+      for (let p = 0; p < playerCount; p++) {
+        await sleep(DEAL_STAGGER_MS);
+        if (myToken !== turnToken) return;
+        sfxDealCard();
+        flyCard(deckEl, destEls[p], cardBackHtml(), FLIGHT_MS); // not awaited — lets flights overlap
+        if (p > 0) {
+          const slot = SLOT_FOR_PLAYER[p];
+          document.getElementById(`${slot}-cards`).innerHTML = backsHtml(round + 1);
+          document.getElementById(`${slot}-count`).textContent = `${round + 1} cards`;
+        }
+      }
     }
     await sleep(FLIGHT_MS);
     if (myToken !== turnToken) return;
