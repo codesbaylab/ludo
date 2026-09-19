@@ -521,6 +521,20 @@ by a Supabase project for auth/wallet-ledger/match-history.
       plus a `padding-bottom: 44px` safety clearance on the grid itself. Verified with a real
       geometry check (`cardBottom < logTop`, not just a screenshot) confirming zero overlap, and
       the full e2e regression suite re-ran clean.
+    - **Closed deck, wild-joker indicator, and discard pile now render at the same size as the
+      hand's own cards** (54×75, matching `.pcard`) — a player asked for this specifically so
+      every card on the table reads at one consistent size instead of the center-row cards
+      looking noticeably smaller (they were 40×56, and the wild-joker chip smaller still at
+      26×36 with an 11px pip font) than the hand below them. `.closed-deck`/`.closed-deck
+      .card-back`/`.joker-chip .pcard`/`.discard-pile .pcard, .discard-pile.empty` in the
+      landscape media query block all changed to `width:54px; height:75px`, with `.joker-chip
+      .pcard .pip` bumped to the hand's own 23px so the wild rank's pip glyph scales with the
+      bigger card rather than looking undersized inside it. Verified in real headless Chromium at
+      844×390 (4-player Points and 2-player Pool) and the narrower 740×360 (4-player, full 14-card
+      hand): a live `getBoundingClientRect()` check confirms all four card types measure exactly
+      54×75, zero horizontal/vertical overflow in every case, and the full existing points/pool
+      e2e regression suite (portrait-only test viewport, unaffected by this landscape-only change)
+      re-ran clean.
 - `design/index.html` — no longer the design-mockup index (removed); a silent redirect stub to
   `login.html`, since GitHub Pages serves `index.html` for the bare site root regardless of what
   `manifest.json` says.
