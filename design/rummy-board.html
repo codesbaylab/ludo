@@ -47,6 +47,7 @@
     transition: box-shadow .2s ease;
   }
   .opponent.active { box-shadow: 0 0 0 2px var(--accent), 0 0 16px rgba(255,138,61,.5); background: rgba(255,255,255,.06); }
+  .opponent.eliminated { opacity:.35; }
   .opponent .avatar { width:38px; height:38px; font-size:15px; border: 2px solid rgba(255,255,255,.5); }
   .opponent .oname { color:#fff; font-size:12px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80px; }
   .opponent .ocards { display:flex; margin-top:2px; }
@@ -173,6 +174,16 @@
   .score-row:last-of-type { border-bottom:none; }
   .score-row .amt-pos { color:#178a4c; }
   .score-row .amt-neg { color:var(--red); }
+
+  /* Pool Rummy: running cumulative-score panel, visible throughout a pool
+     match (several hands) rather than only at the very end like the
+     Points Rummy results modal. */
+  .pool-standings { padding:10px 14px; margin-bottom:10px; }
+  .pool-standings-title { font-size:11px; font-weight:800; color:var(--text-dim); text-transform:uppercase; letter-spacing:.4px; margin-bottom:6px; }
+  .pool-row { display:flex; justify-content:space-between; font-size:13px; font-weight:700; padding:2px 0; }
+  .pool-row.eliminated { opacity:.45; text-decoration:line-through; }
+  .pool-row .cap { font-weight:600; color:var(--text-dim); }
+  .you-eliminated-banner { text-align:center; padding: 20px 10px; color:var(--text-dim); font-weight:700; font-size:13px; }
 </style>
 </head>
 <body>
@@ -184,10 +195,15 @@
     <div class="rummy-header">
       <a href="rummy-lobby.html" class="back-link">← Exit</a>
       <div class="rummy-title">
-        <div class="name">Points Rummy</div>
+        <div class="name" id="game-title">Points Rummy</div>
         <div class="sub" id="table-sub">₹1 / point · 4 players</div>
       </div>
       <a href="wallet.html" class="wallet-chip">💰 ₹250.00</a>
+    </div>
+
+    <div class="card pool-standings" id="pool-standings" style="display:none;">
+      <div class="pool-standings-title">🏊 Pool Standings</div>
+      <div id="pool-standings-rows"></div>
     </div>
 
     <div class="felt">
@@ -241,24 +257,29 @@
     </div>
 
     <div class="hand-section" id="hand-section">
-      <div class="hand-head">
-        <div class="htitle">Your Hand</div>
-        <div class="hcount"><span id="hand-count">13</span> cards · tap to select</div>
-      </div>
-      <div class="hand-hint" id="hand-hint">—</div>
-      <div class="legend">
-        <span><i class="lg-pure"></i>Pure sequence</span>
-        <span><i class="lg-seq"></i>Sequence</span>
-        <span><i class="lg-set"></i>Set</span>
-        <span><i class="lg-dead"></i>Deadwood</span>
-        <span><i class="lg-wild"></i>Wild card</span>
-      </div>
-      <div class="hand-row" id="hand-row"></div>
+      <div id="hand-section-content">
+        <div class="hand-head">
+          <div class="htitle">Your Hand</div>
+          <div class="hcount"><span id="hand-count">13</span> cards · tap to select</div>
+        </div>
+        <div class="hand-hint" id="hand-hint">—</div>
+        <div class="legend">
+          <span><i class="lg-pure"></i>Pure sequence</span>
+          <span><i class="lg-seq"></i>Sequence</span>
+          <span><i class="lg-set"></i>Set</span>
+          <span><i class="lg-dead"></i>Deadwood</span>
+          <span><i class="lg-wild"></i>Wild card</span>
+        </div>
+        <div class="hand-row" id="hand-row"></div>
 
-      <div class="action-bar">
-        <button class="btn btn-secondary" id="btn-sort">↕ Arrange</button>
-        <button class="btn btn-secondary" id="btn-discard" disabled>Discard</button>
-        <button class="btn btn-declare" id="btn-declare" disabled>Declare</button>
+        <div class="action-bar">
+          <button class="btn btn-secondary" id="btn-sort">↕ Arrange</button>
+          <button class="btn btn-secondary" id="btn-discard" disabled>Discard</button>
+          <button class="btn btn-declare" id="btn-declare" disabled>Declare</button>
+        </div>
+      </div>
+      <div class="you-eliminated-banner" id="you-eliminated-banner" style="display:none;">
+        You're out of this pool — watching the rest play out. Final standings will show once it's decided.
       </div>
     </div>
 
@@ -280,12 +301,17 @@
 
 <script src="rummy-rules.js"></script>
 <script>
-  // --- Setup from the lobby's picker (?players=2|4, ?value=1|2|5) --------
+  // --- Setup from the lobby's picker --------------------------------------
+  // Points Rummy: ?mode=points&players=2|4&value=1|2|5
+  // Pool Rummy:   ?mode=pool&players=2|4&pool=51|101|201&entry=50|100|200
   const params = new URLSearchParams(location.search);
   const FAST = params.get('fast') === '1'; // used by automated tests only
   const STEP_MS = FAST ? 15 : 650;
+  const MODE = params.get('mode') === 'pool' ? 'pool' : 'points';
   const playerCount = [2, 4].includes(Number(params.get('players'))) ? Number(params.get('players')) : 4;
   const pointsValue = [1, 2, 5].includes(Number(params.get('value'))) ? Number(params.get('value')) : 1;
+  const poolLimit = RummyRules.POOL_SIZES.includes(Number(params.get('pool'))) ? Number(params.get('pool')) : 101;
+  const entryFee = [50, 100, 200].includes(Number(params.get('entry'))) ? Number(params.get('entry')) : 100;
 
   const ALL_NAMES = ['You', 'Jilna', 'Ravi', 'Sana'];
   const players = playerCount === 2
@@ -294,7 +320,11 @@
   // Which felt slot (opp-1/opp-2/opp-3) each non-you player index renders in.
   const SLOT_FOR_PLAYER = playerCount === 2 ? { 1: 'opp-2' } : { 1: 'opp-1', 2: 'opp-2', 3: 'opp-3' };
 
-  document.getElementById('table-sub').textContent = `₹${pointsValue} / point · ${playerCount} players`;
+  document.getElementById('game-title').textContent = MODE === 'pool' ? 'Pool Rummy' : 'Points Rummy';
+  document.getElementById('table-sub').textContent = MODE === 'pool'
+    ? `${poolLimit} Pool · ₹${entryFee} entry · ${playerCount} players`
+    : `₹${pointsValue} / point · ${playerCount} players`;
+  document.getElementById('pool-standings').style.display = MODE === 'pool' ? '' : 'none';
   ['opp-1', 'opp-2', 'opp-3'].forEach(slot => {
     const used = Object.values(SLOT_FOR_PLAYER).includes(slot);
     document.getElementById(slot).style.display = used ? '' : 'none';
@@ -309,7 +339,26 @@
   let phase = 'your-turn-draw'; // 'your-turn-draw' | 'your-turn-discard' | 'bot-turn' | 'round-over'
   let selectedCardId = null;
   let gameLog = [];
-  let turnToken = 0; // bumped on every new round to cancel any in-flight bot loop
+  let turnToken = 0; // bumped on every new hand to cancel any in-flight bot loop
+  // Pool Rummy only: cumulative score + elimination bookkeeping across
+  // several hands (see RummyRules' createPoolPlayers/applyPoolHandResult).
+  // Stays null in Points Rummy, where a "round" is just a single hand.
+  let poolPlayers = MODE === 'pool' ? RummyRules.createPoolPlayers(players.map(p => p.name)) : null;
+
+  function pickStarter() {
+    // Whoever's active at/after seat 0 opens the hand — in practice this
+    // means "you start every hand for as long as you're still in the pool"
+    // (a deliberate simplification, same as Points Rummy always starting
+    // with you; real Rummy rotates the dealer). Once you're eliminated,
+    // this naturally becomes the lowest-indexed still-active bot.
+    return MODE === 'pool' ? RummyRules.firstActiveFrom(0, playerCount, poolPlayers) : 0;
+  }
+
+  function advanceTurn() {
+    currentPlayerIdx = MODE === 'pool'
+      ? RummyRules.firstActiveFrom(currentPlayerIdx + 1, playerCount, poolPlayers)
+      : (currentPlayerIdx + 1) % playerCount;
+  }
 
   function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
@@ -435,18 +484,28 @@
   function renderOpponents() {
     Object.entries(SLOT_FOR_PLAYER).forEach(([playerIdxStr, slot]) => {
       const playerIdx = Number(playerIdxStr);
+      const eliminated = MODE === 'pool' && poolPlayers[playerIdx].eliminated;
       const n = state.hands[playerIdx].length;
       document.getElementById(`${slot}-cards`).innerHTML = backsHtml(n);
-      document.getElementById(`${slot}-count`).textContent = `${n} cards`;
-      const isActive = phase !== 'round-over' && currentPlayerIdx === playerIdx;
+      document.getElementById(`${slot}-count`).textContent = eliminated ? 'OUT' : `${n} cards`;
+      const isActive = !eliminated && phase !== 'round-over' && currentPlayerIdx === playerIdx;
       document.getElementById(slot).classList.toggle('active', isActive);
+      document.getElementById(slot).classList.toggle('eliminated', eliminated);
       document.getElementById(`${slot}-turn`).style.display = isActive ? '' : 'none';
     });
   }
 
+  function renderPoolStandings() {
+    if (MODE !== 'pool') return;
+    document.getElementById('pool-standings-rows').innerHTML = poolPlayers.map(p => {
+      const label = p.idx === 0 ? 'You' : p.name;
+      return `<div class="pool-row${p.eliminated ? ' eliminated' : ''}"><span>${label}</span><span>${p.cumulative} <span class="cap">/ ${poolLimit}</span></span></div>`;
+    }).join('');
+  }
+
   function renderStatusStrip() {
     const el = document.getElementById('status-strip');
-    if (phase === 'round-over') return; // left as whatever endRound set
+    if (phase === 'round-over') return; // left as whatever endHand set
     if (currentPlayerIdx === 0) {
       el.textContent = phase === 'your-turn-draw'
         ? 'Your turn — draw from the closed deck or the discard pile.'
@@ -466,12 +525,18 @@
   }
 
   function renderAll() {
-    const grouping = arrangeHand();
-    renderHand();
-    renderHint(grouping);
     renderDeckAndDiscard();
     renderOpponents();
     renderStatusStrip();
+
+    const youEliminated = MODE === 'pool' && poolPlayers[0].eliminated;
+    document.getElementById('hand-section-content').style.display = youEliminated ? 'none' : '';
+    document.getElementById('you-eliminated-banner').style.display = youEliminated ? '' : 'none';
+    if (youEliminated) return; // nothing of yours left to render or make clickable
+
+    const grouping = arrangeHand();
+    renderHand();
+    renderHint(grouping);
     renderTurnUi();
   }
 
@@ -484,19 +549,21 @@
       : `<span class="corner">${card.rank}<br>${card.suit}</span><span class="pip" style="font-size:15px;">${card.suit}</span>`;
   }
 
-  // --- Round lifecycle -----------------------------------------------------
+  // --- Hand lifecycle --------------------------------------------------
 
-  function startNewRound() {
+  function dealHand() {
     turnToken++;
     state = RummyRules.dealNewRound(playerCount);
-    currentPlayerIdx = 0;
-    phase = 'your-turn-draw';
+    currentPlayerIdx = pickStarter();
+    phase = currentPlayerIdx === 0 ? 'your-turn-draw' : 'bot-turn';
     selectedCardId = null;
     gameLog = [];
     document.getElementById('declare-modal').classList.remove('open');
-    logEvent(`New round dealt. Wild joker rank is ${state.wildRank} (any suit) — plus the printed joker cards.`);
+    logEvent(`New hand dealt. Wild joker rank is ${state.wildRank} (any suit) — plus the printed joker cards.`);
     renderWildIndicator();
+    renderPoolStandings();
     renderAll();
+    if (currentPlayerIdx !== 0) runBotTurnsUntilYourTurn();
   }
 
   function scoreLosers(excludeIdx) {
@@ -507,25 +574,51 @@
     });
   }
 
-  function endRound({ winnerIdx, invalidDeclareBy }) {
-    phase = 'round-over';
+  // Called whenever a hand concludes, for both game modes — a Points Rummy
+  // "round" is just this one hand (results are final immediately); a Pool
+  // Rummy round folds this hand's points into the running cumulative totals
+  // and only shows final results once every seat but one is eliminated.
+  function endHand({ winnerIdx, invalidDeclareBy }) {
     let scores, headline;
-
     if (invalidDeclareBy !== undefined) {
       scores = players.map((p, idx) => ({ idx, name: p.name, points: idx === invalidDeclareBy ? RummyRules.MAX_PENALTY : 0 }));
       headline = invalidDeclareBy === 0
         ? `❌ Invalid declare — that wasn't a valid Rummy hand. You take the ${RummyRules.MAX_PENALTY}-point penalty.`
         : `❌ ${players[invalidDeclareBy].name} declared invalidly and takes the ${RummyRules.MAX_PENALTY}-point penalty.`;
-      logEvent(headline);
     } else {
       scores = scoreLosers(winnerIdx);
-      headline = winnerIdx === 0 ? '🏆 You declare — you win this round!' : `🏆 ${players[winnerIdx].name} declares and wins this round.`;
-      logEvent(headline);
+      headline = winnerIdx === 0 ? '🏆 You declare — you win this hand!' : `🏆 ${players[winnerIdx].name} declares and wins this hand.`;
     }
-
+    logEvent(headline);
+    phase = 'round-over';
     document.getElementById('status-strip').textContent = headline;
     renderOpponents();
 
+    if (MODE === 'points') {
+      showPointsResultModal(scores, headline, invalidDeclareBy, winnerIdx);
+      return;
+    }
+
+    // Pool mode: an already-eliminated seat didn't play this hand (its
+    // dealt cards were never touched), so its contribution is forced to 0
+    // regardless of whatever computeBestGrouping happened to find in them —
+    // checked against the PRE-hand eliminated snapshot, since a player who
+    // crosses the cap on THIS hand must still count their real points for it.
+    const eliminatedBefore = poolPlayers.map(p => p.eliminated);
+    const handPoints = players.map((p, idx) => (eliminatedBefore[idx] ? 0 : scores[idx].points));
+    poolPlayers = RummyRules.applyPoolHandResult(poolPlayers, handPoints, poolLimit);
+    const newlyEliminated = poolPlayers.filter((p, i) => p.eliminated && !eliminatedBefore[i]).map(p => p.name);
+    renderOpponents();
+    renderPoolStandings();
+
+    if (RummyRules.isPoolOver(poolPlayers)) {
+      showPoolCompleteModal(RummyRules.activePoolPlayers(poolPlayers)[0], headline);
+    } else {
+      showHandResultModal(scores, newlyEliminated, headline);
+    }
+  }
+
+  function showPointsResultModal(scores, headline, invalidDeclareBy, winnerIdx) {
     const totalPot = scores.reduce((s, x) => s + x.points, 0) * pointsValue;
     const rows = scores.map(s => {
       const amount = s.points * pointsValue;
@@ -544,7 +637,75 @@
       <a href="rummy-lobby.html"><button class="btn btn-ghost" style="margin-top:8px;">Back to Rummy Lobby</button></a>
     `;
     document.getElementById('declare-modal').classList.add('open');
-    document.getElementById('btn-play-again').addEventListener('click', startNewRound);
+    document.getElementById('btn-play-again').addEventListener('click', dealHand);
+  }
+
+  // Pool mode, not yet resolved: shows this hand's result and either lets
+  // you trigger the next hand yourself, or — if you were just eliminated —
+  // auto-continues as a spectator after a readable pause, since there's
+  // nothing left for you to click.
+  function showHandResultModal(scores, newlyEliminated, headline) {
+    const rows = scores.map(s => {
+      const pp = poolPlayers[s.idx];
+      const elimTag = pp.eliminated ? ' <span style="color:var(--red); font-weight:800;">OUT</span>' : '';
+      return `<div class="score-row"><span>${s.idx === 0 ? 'You' : s.name}${elimTag}</span><span>${s.points} pts this hand · ${pp.cumulative}/${poolLimit} total</span></div>`;
+    }).join('');
+    const youEliminated = poolPlayers[0].eliminated;
+    const eliminatedNote = newlyEliminated.length
+      ? `<p style="font-size:12px; color:var(--red); font-weight:700; margin:8px 0 0;">${newlyEliminated.join(', ')} eliminated this hand.</p>`
+      : '';
+    const nextControl = youEliminated
+      ? `<p style="font-size:13px; font-weight:700; color:var(--text-dim); margin-top:14px;">You're out of the pool — watching the rest play out…</p>`
+      : `<button class="btn btn-primary" id="btn-next-hand" style="margin-top:16px;">Next Hand →</button>`;
+
+    document.getElementById('declare-card-content').innerHTML = `
+      <div class="tile-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">${headline.startsWith('❌') ? '❌' : '🏆'}</div>
+      <h1 style="font-size:18px; margin:0;">${headline}</h1>
+      ${eliminatedNote}
+      <div style="margin-top:10px; text-align:left;">${rows}</div>
+      ${nextControl}
+      <a href="rummy-lobby.html"><button class="btn btn-ghost" style="margin-top:8px;">Leave Pool</button></a>
+    `;
+    document.getElementById('declare-modal').classList.add('open');
+
+    if (youEliminated) {
+      setTimeout(() => {
+        document.getElementById('declare-modal').classList.remove('open');
+        dealHand();
+      }, FAST ? 30 : 1800);
+    } else {
+      document.getElementById('btn-next-hand').addEventListener('click', () => {
+        document.getElementById('declare-modal').classList.remove('open');
+        dealHand();
+      });
+    }
+  }
+
+  // Pool mode, resolved: exactly one player is left active — they take the
+  // whole entry-fee pot.
+  function showPoolCompleteModal(survivor, headline) {
+    const pot = entryFee * playerCount;
+    const rows = poolPlayers.map(p => {
+      const isSurvivor = p.idx === survivor.idx;
+      const amtText = isSurvivor ? `+₹${pot}` : `-₹${entryFee}`;
+      return `<div class="score-row"><span>${p.idx === 0 ? 'You' : p.name} — ${p.cumulative} pts</span><span class="${isSurvivor ? 'amt-pos' : 'amt-neg'}">${amtText}</span></div>`;
+    }).join('');
+    const title = survivor.idx === 0 ? '🏆 You win the pool!' : `🏆 ${survivor.name} wins the pool!`;
+
+    document.getElementById('declare-card-content').innerHTML = `
+      <div class="tile-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">🏆</div>
+      <h1 style="font-size:19px; margin:0;">${title}</h1>
+      <p style="font-size:12px; color:var(--text-dim); font-weight:600; margin:8px 0 4px;">Last hand: ${headline.replace(/^(🏆|❌)\s*/, '')}</p>
+      <p style="font-size:12px; color:var(--text-dim); font-weight:600; margin:0 0 4px;">Practice pool only — nothing here touches your real wallet.</p>
+      <div style="margin-top:10px; text-align:left;">${rows}</div>
+      <button class="btn btn-primary" id="btn-play-again" style="margin-top:16px;">New Pool</button>
+      <a href="rummy-lobby.html"><button class="btn btn-ghost" style="margin-top:8px;">Back to Rummy Lobby</button></a>
+    `;
+    document.getElementById('declare-modal').classList.add('open');
+    document.getElementById('btn-play-again').addEventListener('click', () => {
+      poolPlayers = RummyRules.createPoolPlayers(players.map(p => p.name));
+      dealHand();
+    });
   }
 
   // --- Your turn -------------------------------------------------------
@@ -584,7 +745,7 @@
     logEvent(`You discarded ${cardLabel(card)}.`);
     selectedCardId = null;
     phase = 'bot-turn';
-    currentPlayerIdx = (currentPlayerIdx + 1) % playerCount;
+    advanceTurn();
     renderAll();
     runBotTurnsUntilYourTurn();
   });
@@ -595,11 +756,11 @@
     const option = RummyRules.findDeclareOption(state.hands[0], state.wildRank, preferIdx);
     if (option) {
       state.hands[0] = option.hand13;
-      endRound({ winnerIdx: 0 });
+      endHand({ winnerIdx: 0 });
       return;
     }
     const proceed = confirm(`This isn't a valid Rummy hand yet — no arrangement of these 14 cards forms 2+ sequences with at least one pure. Declaring anyway costs you the ${RummyRules.MAX_PENALTY}-point penalty. Declare anyway?`);
-    if (proceed) endRound({ invalidDeclareBy: 0 });
+    if (proceed) endHand({ invalidDeclareBy: 0 });
   });
 
   // --- Bot turns ---------------------------------------------------------
@@ -630,7 +791,7 @@
     const declareOpt = RummyRules.findDeclareOption(hand, state.wildRank);
     if (declareOpt) {
       state.hands[idx] = declareOpt.hand13;
-      endRound({ winnerIdx: idx });
+      endHand({ winnerIdx: idx });
       return;
     }
 
@@ -649,7 +810,7 @@
       if (myToken !== turnToken) return; // a new round started meanwhile
       await playOneBotTurn(currentPlayerIdx);
       if (myToken !== turnToken || phase === 'round-over') return;
-      currentPlayerIdx = (currentPlayerIdx + 1) % playerCount;
+      advanceTurn();
       renderOpponents();
       renderStatusStrip();
     }
@@ -664,7 +825,7 @@
     document.getElementById('log-panel').classList.toggle('open');
   });
 
-  startNewRound();
+  dealHand();
 </script>
 </body>
 </html>

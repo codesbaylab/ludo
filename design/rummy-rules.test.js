@@ -267,5 +267,94 @@ function joker() { return { id: 'j' + uid++, rank: 'JOKER', suit: null }; }
   ok(`computeBestGrouping on a 14-card hand: 20 runs took ${elapsedMs}ms (want well under 2000ms)`, elapsedMs < 2000, elapsedMs);
 }
 
+// --- Pool Rummy: elimination bookkeeping --------------------------------
+{
+  const players = RummyRules.createPoolPlayers(['You', 'Jilna', 'Ravi', 'Sana']);
+  ok('createPoolPlayers starts everyone at 0, not eliminated', players.every(p => p.cumulative === 0 && !p.eliminated), players);
+}
+{
+  // Below the cap: accumulates but nobody's eliminated yet.
+  let players = RummyRules.createPoolPlayers(['You', 'Jilna', 'Ravi', 'Sana']);
+  players = RummyRules.applyPoolHandResult(players, [0, 40, 25, 10], 101);
+  ok('sub-cap points accumulate without eliminating anyone', players.every(p => !p.eliminated) && players[1].cumulative === 40, players);
+}
+{
+  // At or over the cap: eliminated. Real rule is >= the limit, not just >.
+  let players = RummyRules.createPoolPlayers(['You', 'Jilna', 'Ravi', 'Sana']);
+  players = RummyRules.applyPoolHandResult(players, [0, 101, 80, 50], 101);
+  ok('a score landing exactly on the cap eliminates (>=, not just >)', players[1].eliminated === true, players[1]);
+  ok('a score under the cap does not eliminate', players[3].eliminated === false, players[3]);
+}
+{
+  // Multi-hand accumulation across separate applyPoolHandResult calls.
+  let players = RummyRules.createPoolPlayers(['You', 'Jilna']);
+  players = RummyRules.applyPoolHandResult(players, [0, 60], 101);
+  players = RummyRules.applyPoolHandResult(players, [30, 0], 101);
+  players = RummyRules.applyPoolHandResult(players, [0, 45], 101);
+  ok('points accumulate correctly across multiple hands', players[1].cumulative === 105 && players[1].eliminated, players);
+  ok('a player who never crossed the cap keeps their own running total', players[0].cumulative === 30 && !players[0].eliminated, players[0]);
+}
+{
+  // Once eliminated, further hand results for that seat are ignored (they
+  // didn't play) rather than accumulating further or un-eliminating them.
+  let players = RummyRules.createPoolPlayers(['You', 'Jilna']);
+  players = RummyRules.applyPoolHandResult(players, [0, 101], 101);
+  players = RummyRules.applyPoolHandResult(players, [0, 999], 101); // should be ignored/impossible in practice, but must stay safe
+  ok('an eliminated player is frozen at their elimination score', players[1].cumulative === 101 && players[1].eliminated, players[1]);
+}
+{
+  const players = RummyRules.createPoolPlayers(['You', 'Jilna', 'Ravi']);
+  ok('a fresh pool with everyone active is not over', !RummyRules.isPoolOver(players));
+  const afterOneLeft = [
+    { idx: 0, name: 'You', cumulative: 0, eliminated: false },
+    { idx: 1, name: 'Jilna', cumulative: 120, eliminated: true },
+    { idx: 2, name: 'Ravi', cumulative: 150, eliminated: true },
+  ];
+  ok('a pool with only one active player left is over', RummyRules.isPoolOver(afterOneLeft));
+  ok('activePoolPlayers returns exactly the non-eliminated ones', RummyRules.activePoolPlayers(afterOneLeft).length === 1 && RummyRules.activePoolPlayers(afterOneLeft)[0].name === 'You');
+}
+{
+  // firstActiveFrom must skip eliminated seats and wrap around correctly.
+  const players = [
+    { idx: 0, name: 'A', cumulative: 0, eliminated: false },
+    { idx: 1, name: 'B', cumulative: 0, eliminated: true },
+    { idx: 2, name: 'C', cumulative: 0, eliminated: true },
+    { idx: 3, name: 'D', cumulative: 0, eliminated: false },
+  ];
+  ok('firstActiveFrom skips an eliminated seat', RummyRules.firstActiveFrom(1, 4, players) === 3, RummyRules.firstActiveFrom(1, 4, players));
+  ok('firstActiveFrom wraps around past the end', RummyRules.firstActiveFrom(2, 4, players) === 3, RummyRules.firstActiveFrom(2, 4, players));
+  ok('firstActiveFrom returns the seat itself when it is already active', RummyRules.firstActiveFrom(0, 4, players) === 0);
+  const allEliminatedButOne = [
+    { idx: 0, name: 'A', cumulative: 0, eliminated: true },
+    { idx: 1, name: 'B', cumulative: 0, eliminated: true },
+    { idx: 2, name: 'C', cumulative: 0, eliminated: false },
+  ];
+  ok('firstActiveFrom finds the sole survivor regardless of start position', RummyRules.firstActiveFrom(0, 3, allEliminatedButOne) === 2);
+}
+{
+  // Simulate a realistic short pool end-to-end using only the bookkeeping
+  // helpers (no card dealing needed) to confirm the whole lifecycle is
+  // internally consistent: accumulate -> eliminate -> continue among the
+  // rest -> stop at exactly one survivor. Hand data below is hand-verified
+  // arithmetic (each player's own running total), not just plausible-looking
+  // numbers.
+  let players = RummyRules.createPoolPlayers(['You', 'Jilna', 'Ravi', 'Sana']);
+  const hands = [
+    [20, 0, 15, 25],   // Jilna wins hand 1 -> cum: You20  Jilna0   Ravi15  Sana25
+    [30, 40, 0, 35],   // Ravi wins hand 2  -> cum: You50  Jilna40  Ravi15  Sana60
+    [0, 65, 20, 35],   // You win hand 3    -> cum: You50  Jilna105 Ravi35  Sana95   (Jilna eliminated, 3 active remain)
+    [60, 0, 0, 15],    // Ravi wins hand 4  -> cum: You110 Jilna—   Ravi35  Sana110  (You AND Sana eliminated, 1 active remains)
+  ];
+  let handsPlayed = 0;
+  while (!RummyRules.isPoolOver(players) && handsPlayed < hands.length) {
+    players = RummyRules.applyPoolHandResult(players, hands[handsPlayed], 101);
+    handsPlayed++;
+  }
+  ok('simulated pool played all 4 scripted hands before resolving', handsPlayed === 4, handsPlayed);
+  ok('simulated pool eliminates Jilna once her cumulative crosses 101 (hand 3)', players[1].eliminated && players[1].cumulative === 105, players[1]);
+  ok('simulated pool ends with exactly one survivor (Ravi)', RummyRules.isPoolOver(players) && RummyRules.activePoolPlayers(players).length === 1 && RummyRules.activePoolPlayers(players)[0].name === 'Ravi', players);
+  ok('the survivor\'s own cumulative score is preserved correctly', players[2].cumulative === 35, players[2]);
+}
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

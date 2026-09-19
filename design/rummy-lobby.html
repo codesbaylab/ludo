@@ -14,9 +14,11 @@
      other page in the app does. */
   .points-tile .tile-title { font-size:17px; }
   .points-tile .tile-sub { font-size:11px; }
-  .points-tile.selected { box-shadow: 0 0 0 3px var(--accent), var(--shadow); }
+  .points-tile.selected, .pool-size-tile.selected { box-shadow: 0 0 0 3px var(--accent), var(--shadow); }
   .size-picker { display:flex; gap:8px; }
   .size-btn { flex:1; }
+  .mode-picker { display:flex; gap:8px; margin: 4px 0 2px; }
+  .mode-btn { flex:1; }
   .rummy-hero { text-align:center; padding: 6px 0 4px; }
   .rummy-hero .emoji { font-size:34px; }
   .rummy-hero h2 { font-size:20px; margin-top:6px; }
@@ -45,32 +47,71 @@
 
     <div class="rummy-hero">
       <div class="emoji">🃏</div>
-      <h2>Points Rummy</h2>
-      <p>Classic 13-card draw &amp; discard · real-time with real opponents</p>
+      <h2 id="mode-title">Points Rummy</h2>
+      <p id="mode-sub">Classic 13-card draw &amp; discard · real-time with real opponents</p>
     </div>
 
-    <div class="section-title">Points Value</div>
-    <div class="action-grid" id="points-grid">
-      <a class="tile tile-quick points-tile" href="#" data-value="1">
-        <div class="tile-icon">🪙</div>
-        <div class="tile-title">₹1 / point</div>
-        <div class="tile-sub">Casual · low risk</div>
-      </a>
-      <a class="tile tile-create points-tile" href="#" data-value="2">
-        <div class="tile-icon">💠</div>
-        <div class="tile-title">₹2 / point</div>
-        <div class="tile-sub">Standard stakes</div>
-      </a>
-      <a class="tile tile-cash points-tile" href="#" data-value="5">
-        <div class="tile-icon">💎</div>
-        <div class="tile-title">₹5 / point</div>
-        <div class="tile-sub">High stakes</div>
-      </a>
-      <a class="tile tile-join points-tile" href="#join-box">
-        <div class="tile-icon">🔑</div>
-        <div class="tile-title">Join with code</div>
-        <div class="tile-sub">Have a table code?</div>
-      </a>
+    <div class="mode-picker" id="mode-picker">
+      <button type="button" class="btn btn-primary btn-sm mode-btn" data-mode="points">Points Rummy</button>
+      <button type="button" class="btn btn-secondary btn-sm mode-btn" data-mode="pool">Pool Rummy</button>
+    </div>
+
+    <div id="points-section">
+      <div class="section-title">Points Value</div>
+      <div class="action-grid" id="points-grid">
+        <a class="tile tile-quick points-tile" href="#" data-value="1">
+          <div class="tile-icon">🪙</div>
+          <div class="tile-title">₹1 / point</div>
+          <div class="tile-sub">Casual · low risk</div>
+        </a>
+        <a class="tile tile-create points-tile" href="#" data-value="2">
+          <div class="tile-icon">💠</div>
+          <div class="tile-title">₹2 / point</div>
+          <div class="tile-sub">Standard stakes</div>
+        </a>
+        <a class="tile tile-cash points-tile" href="#" data-value="5">
+          <div class="tile-icon">💎</div>
+          <div class="tile-title">₹5 / point</div>
+          <div class="tile-sub">High stakes</div>
+        </a>
+        <a class="tile tile-join points-tile" href="#join-box">
+          <div class="tile-icon">🔑</div>
+          <div class="tile-title">Join with code</div>
+          <div class="tile-sub">Have a table code?</div>
+        </a>
+      </div>
+    </div>
+
+    <div id="pool-section" style="display:none;">
+      <div class="section-title">Pool Size</div>
+      <div class="action-grid" id="pool-size-grid">
+        <a class="tile tile-quick pool-size-tile" href="#" data-pool="51">
+          <div class="tile-icon">🪙</div>
+          <div class="tile-title">51 Pool</div>
+          <div class="tile-sub">Shortest · fastest elimination</div>
+        </a>
+        <a class="tile tile-create pool-size-tile" href="#" data-pool="101">
+          <div class="tile-icon">💠</div>
+          <div class="tile-title">101 Pool</div>
+          <div class="tile-sub">Standard length</div>
+        </a>
+        <a class="tile tile-cash pool-size-tile tile-wide" href="#" data-pool="201">
+          <div>
+            <div class="tile-title">201 Pool</div>
+            <div class="tile-sub">Longest · most hands before elimination</div>
+          </div>
+          <div class="tile-icon">💎</div>
+        </a>
+      </div>
+
+      <div class="section-title">Entry Fee</div>
+      <div class="card">
+        <div class="size-picker" id="entry-picker">
+          <button type="button" class="btn btn-secondary btn-sm entry-btn" data-entry="50">₹50</button>
+          <button type="button" class="btn btn-primary btn-sm entry-btn" data-entry="100">₹100</button>
+          <button type="button" class="btn btn-secondary btn-sm entry-btn" data-entry="200">₹200</button>
+        </div>
+      </div>
     </div>
 
     <div class="card" id="join-box" style="margin-top:12px;">
@@ -88,7 +129,7 @@
       </div>
     </div>
 
-    <div class="card" style="margin-top:12px;">
+    <div class="card" style="margin-top:12px;" id="points-summary">
       <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
         <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Points Value</span>
         <span id="sum-value" style="font-size:14px; font-weight:800;">₹1 / point</span>
@@ -103,10 +144,29 @@
       </div>
     </div>
 
+    <div class="card" style="margin-top:12px; display:none;" id="pool-summary">
+      <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
+        <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Pool Size</span>
+        <span id="sum-pool" style="font-size:14px; font-weight:800;">101 Pool</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
+        <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Table Size</span>
+        <span id="sum-pool-players" style="font-size:14px; font-weight:800;">4 Players</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
+        <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Entry Fee (each)</span>
+        <span id="sum-entry" style="font-size:14px; font-weight:800;">₹100</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:14px 0 6px;">
+        <span style="font-size:14px; font-weight:800;">🏆 Winner Takes the Pot</span>
+        <span id="sum-pot" style="font-size:18px; font-weight:800; color:#178a4c;">₹400</span>
+      </div>
+    </div>
+
     <div style="margin-top:16px; display:flex; flex-direction:column; gap:10px;">
       <a id="start-link" href="rummy-board.html?players=2&value=1"><button class="btn btn-primary">Start Table (vs. computer players)</button></a>
       <a href="lobby.html"><button class="btn btn-ghost">← Back to Lobby</button></a>
-      <p class="hint" style="margin:0;">You'll play a full round against computer opponents with the real rules enforced — no real money changes hands, and table matchmaking with other people isn't wired up yet.</p>
+      <p class="hint" style="margin:0;" id="mode-hint">You'll play a full round against computer opponents with the real rules enforced — no real money changes hands, and table matchmaking with other people isn't wired up yet.</p>
     </div>
 
     <div class="section-title">Recent Rummy Games</div>
@@ -131,29 +191,90 @@
   </div>
 </div>
 <script>
-  const state = { value: 1, players: 4 };
+  const state = { mode: 'points', value: 1, players: 4, pool: 101, entry: 100 };
   const VALUE_LABEL = { 1: '₹1 / point', 2: '₹2 / point', 5: '₹5 / point' };
   const POINTS_CAP = 80;
 
   function render() {
+    const isPool = state.mode === 'pool';
+
+    document.querySelectorAll('.mode-btn').forEach((btn) => {
+      const selected = btn.dataset.mode === state.mode;
+      btn.classList.toggle('btn-primary', selected);
+      btn.classList.toggle('btn-secondary', !selected);
+    });
+    document.getElementById('points-section').style.display = isPool ? 'none' : '';
+    document.getElementById('pool-section').style.display = isPool ? '' : 'none';
+    document.getElementById('points-summary').style.display = isPool ? 'none' : '';
+    document.getElementById('pool-summary').style.display = isPool ? '' : 'none';
+
+    if (isPool) {
+      document.getElementById('mode-title').textContent = 'Pool Rummy';
+      document.getElementById('mode-sub').textContent = 'Several hands, running scores — cross the cap and you\'re out';
+      document.getElementById('mode-hint').textContent = 'You\'ll play hand after hand against computer opponents until only one player is left standing — real rules and real elimination math, no real money changes hands.';
+    } else {
+      document.getElementById('mode-title').textContent = 'Points Rummy';
+      document.getElementById('mode-sub').textContent = 'Classic 13-card draw & discard · one hand, settled immediately';
+      document.getElementById('mode-hint').textContent = 'You\'ll play a full round against computer opponents with the real rules enforced — no real money changes hands, and table matchmaking with other people isn\'t wired up yet.';
+    }
+
     document.querySelectorAll('.points-tile[data-value]').forEach((tile) => {
       tile.classList.toggle('selected', Number(tile.dataset.value) === state.value);
+    });
+    document.querySelectorAll('.pool-size-tile[data-pool]').forEach((tile) => {
+      tile.classList.toggle('selected', Number(tile.dataset.pool) === state.pool);
+    });
+    document.querySelectorAll('.entry-btn').forEach((btn) => {
+      const selected = Number(btn.dataset.entry) === state.entry;
+      btn.classList.toggle('btn-primary', selected);
+      btn.classList.toggle('btn-secondary', !selected);
     });
     document.querySelectorAll('.size-btn').forEach((btn) => {
       const selected = Number(btn.dataset.players) === state.players;
       btn.classList.toggle('btn-primary', selected);
       btn.classList.toggle('btn-secondary', !selected);
     });
+
     document.getElementById('sum-value').textContent = VALUE_LABEL[state.value];
     document.getElementById('sum-players').textContent = `${state.players} Players`;
     document.getElementById('sum-maxloss').textContent = `₹${state.value * POINTS_CAP}`;
-    document.getElementById('start-link').href = `rummy-board.html?players=${state.players}&value=${state.value}`;
+
+    document.getElementById('sum-pool').textContent = `${state.pool} Pool`;
+    document.getElementById('sum-pool-players').textContent = `${state.players} Players`;
+    document.getElementById('sum-entry').textContent = `₹${state.entry}`;
+    document.getElementById('sum-pot').textContent = `₹${state.entry * state.players}`;
+
+    document.getElementById('start-link').href = isPool
+      ? `rummy-board.html?mode=pool&players=${state.players}&pool=${state.pool}&entry=${state.entry}`
+      : `rummy-board.html?mode=points&players=${state.players}&value=${state.value}`;
   }
+
+  document.querySelectorAll('.mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.mode = btn.dataset.mode;
+      render();
+    });
+  });
 
   document.querySelectorAll('.points-tile[data-value]').forEach((tile) => {
     tile.addEventListener('click', (e) => {
       e.preventDefault();
       state.value = Number(tile.dataset.value);
+      render();
+    });
+  });
+
+  document.querySelectorAll('.pool-size-tile[data-pool]').forEach((tile) => {
+    tile.addEventListener('click', (e) => {
+      e.preventDefault();
+      state.pool = Number(tile.dataset.pool);
+      render();
+    });
+  });
+
+  document.querySelectorAll('.entry-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.entry = Number(btn.dataset.entry);
       render();
     });
   });
