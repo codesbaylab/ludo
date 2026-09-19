@@ -102,10 +102,13 @@ by a Supabase project for auth/wallet-ledger/match-history.
   backend/Colyseus/Supabase involved and no real money at stake — built this way specifically so
   the rules could be verified by actually playing a round, rather than trusting an unplayed mockup
   or a rules explanation. A yellow banner and the "Practice round only" note in the results modal
-  keep this honest on-page. Not linked from the real nav (`lobby.html`, `bottom-nav`, etc.) —
-  reachable only by direct URL, consistent with how these pages started as design mockups before
-  gameplay was added; the wallet chip stays a static demo figure (₹250.00) since no real balance
-  is touched. `rummy-lobby.html` reuses `lobby.html`'s `.tile`/`.action-grid`/`.player-chip` chrome
+  keep this honest on-page. Reachable from `lobby.html` via an "Other Games" section (a single
+  `tile-wide` linking to `rummy-lobby.html`, reusing the same `.tile`/`tile-join` pattern as the
+  "Join with code" tile above it) — this was missing for a while after gameplay was added (the
+  pages started as unlinked design mockups reachable only by direct URL, and stayed that way past
+  the point where that stopped making sense once they became a real playable feature); the wallet
+  chip stays a static demo figure (₹250.00) since no real balance is touched. `rummy-lobby.html`
+  reuses `lobby.html`'s `.tile`/`.action-grid`/`.player-chip` chrome
   for a points-value picker (₹1/₹2/₹5 per point) and a 2/4-player table-size picker (not 2/6 as
   originally mocked up — `rummy-board.html`'s felt template only has 3 opponent slots, so 4 total
   players is the real ceiling), with a live-updating summary card. Its "Start Table" button links
