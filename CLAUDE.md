@@ -437,6 +437,46 @@ by a Supabase project for auth/wallet-ledger/match-history.
   `getBoundingClientRect()`, so it never needed any changes itself). The full existing points/pool
   e2e regression suite (fixed at a tall 390×900 test viewport, so `max-height:520px` never matches)
   re-ran clean — confirms portrait is completely unaffected by any of this.
+  - **The felt and the hand read as one continuous green table**, not a green card with a separate
+    cream card stacked under it — a player asked for this specifically ("keeping my hands as well
+    into the green and make the green table more big"). `.felt` and `.hand-section` are still two
+    separate sibling elements (nothing moved in the DOM), but in the landscape media query
+    `.hand-section` picks up the same dark-green gradient `.felt` uses, the two share a flat 6px
+    seam where they meet with zero gap between them, and only the true outer corners (top of the
+    felt, bottom of the hand) keep the big rounded radius — so they read as one shape with a subtle
+    crease, not two. Every text color inside `#hand-section-content` (the "Your Hand" title, the
+    card count, the deadwood hint, the legend) flips from the portrait dark-on-cream colors to
+    light-on-green ones inside the same media query, since it's no longer sitting on the page's
+    cream background. Also tightened the outer chrome (`.rummy-page` padding, the header's margin)
+    further, so the merge isn't the only thing making the table read as bigger. Verified in real
+    Chromium (844×390 and a narrower 740×360 with a full 14-card hand, both Points and Pool mode):
+    zero overflow, the enabled Declare button's orange gradient still pops against the green, the
+    just-drawn highlight and manual drag both still visible/working at the merged layout, and the
+    full e2e regression suite (portrait-only test viewport) unaffected.
+  - **Landscape is the only playable mode for this table** — a player asked specifically for
+    landscape-*only*, not landscape-as-an-option: portrait now shows a full-screen "Rotate your
+    phone to play" block (`#rotate-block`) over literally everything, with a link back to
+    `rummy-lobby.html` so it's never a dead end. Deliberately a CSS `@media (orientation: portrait)
+    and (max-width: 900px)` block-and-ask, not the Screen Orientation API's `lock()`: that API only
+    works inside an already-fullscreen context (an installed PWA in `standalone`/`fullscreen`
+    display mode — a plain browser tab can never call it) and iOS Safari doesn't implement it at
+    all regardless of install state, so it can't be relied on to actually force anything
+    cross-platform — the block-and-ask works identically in a browser tab or an installed PWA, on
+    any platform, which a real orientation lock provably can't. Paired with `max-width` so a
+    portrait-*shaped* desktop window doesn't get a phone-only prompt, same reasoning as the
+    landscape table query's own `max-height` pairing. Skipped entirely under `?fast=1` (via a
+    `body.fast-test` class added in JS right next to where `FAST` itself is read, since the
+    automated test suite runs in a portrait 390×900 viewport and needs to actually click the
+    board) — CSS alone can't read a query-string flag, hence the class rather than folding this
+    into the media query itself. **A real bug caught while building this**: the overlay's first
+    z-index (100) sat *below* `.flying-card`'s (200), so a card mid-flight during the initial
+    auto-dealt hand visibly poked through the "rotate your phone" screen — caught by a real
+    screenshot taken mid-deal in portrait, not by the z-index numbers looking reasonable in
+    isolation; fixed by raising the overlay's z-index above the flight layer. Verified: the block
+    shows and fully covers in a real portrait viewport (including mid-deal, after the z-index fix),
+    stays hidden in landscape, stays hidden under `?fast=1` even in a portrait test viewport, and a
+    live viewport resize toggles it correctly in both directions with no reload — plus the full
+    e2e regression suite re-ran clean, confirming automated tests are genuinely unaffected.
 - `design/index.html` — no longer the design-mockup index (removed); a silent redirect stub to
   `login.html`, since GitHub Pages serves `index.html` for the bare site root regardless of what
   `manifest.json` says.

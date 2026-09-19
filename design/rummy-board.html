@@ -264,18 +264,24 @@
      browser window (wide AND tall) doesn't trigger phone-table styling
      meant for a rotated phone's short viewport. */
   @media (orientation: landscape) and (max-height: 520px) {
-    .rummy-page { max-width: 100%; padding: 6px 10px calc(6px + env(safe-area-inset-bottom)); }
+    .rummy-page { max-width: 100%; padding: 4px 8px calc(4px + env(safe-area-inset-bottom)); }
     .preview-banner { display: none; } /* reclaim vertical space; still shown in portrait */
-    .rummy-header { margin-bottom: 4px; }
+    .rummy-header { margin-bottom: 2px; }
     .rummy-title .name { font-size: 13px; }
     .rummy-title .sub { font-size: 9px; }
 
-    .pool-standings { padding: 4px 10px; margin-bottom: 4px; }
+    .pool-standings { padding: 4px 10px; margin-bottom: 3px; }
     .pool-standings-title { font-size: 9px; margin-bottom: 2px; }
     #pool-standings-rows { display: flex; flex-wrap: wrap; gap: 0 14px; }
     .pool-row { font-size: 10px; padding: 0; }
 
-    .felt { padding: 6px 8px 8px; }
+    /* The felt and the hand read as ONE continuous green table instead of
+       a green card with a separate cream card stacked under it — matching
+       corners only on the outer edges (top of the felt, bottom of the
+       hand), a flat seam where they actually meet, and zero gap between
+       them, plus the hand picking up the felt's own background so it's
+       not a color break, just a shape break. */
+    .felt { padding: 6px 8px 4px; border-radius: var(--radius-lg) var(--radius-lg) 6px 6px; }
     .opponent-row { margin-bottom: 4px; gap: 4px; }
     .opponent { padding: 2px 6px; gap: 2px; }
     .opponent .avatar { width: 24px; height: 24px; font-size: 11px; border-width: 1.5px; }
@@ -295,19 +301,33 @@
     .discard-pile .pcard, .discard-pile.empty { width: 40px; height: 56px; }
     .status-strip { position: absolute; bottom: 4px; right: 10px; margin-top: 0; font-size: 9px; padding: 3px 8px; }
 
-    .hand-section { margin-top: 4px; }
-    .hand-section.active-turn { padding: 5px; margin: 4px -5px 0; }
+    .hand-section {
+      margin-top: 0; border-radius: 6px 6px var(--radius-lg) var(--radius-lg);
+      background: linear-gradient(180deg, #0f6b47 0%, #0a5537 100%);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 10px 24px rgba(10,60,40,.3);
+      padding: 8px 12px;
+    }
+    .hand-section.active-turn {
+      box-shadow: 0 0 0 2px var(--accent), inset 0 0 0 1px rgba(255,255,255,.08), 0 10px 24px rgba(10,60,40,.3);
+      padding: 8px 12px; margin: 0;
+    }
+    .you-eliminated-banner { color: rgba(255,255,255,.85); }
     /* The hand + its head/hint/legend sit in a left column; the action
        buttons form their own column docked to the right, spanning that
        whole column's height — landscape's one asset (width) pays for its
-       scarcest one (height) here. */
+       scarcest one (height) here. Text colors flip to light since the
+       hand now sits on the same dark felt green as the rest of the
+       table, not the page's cream background. */
     #hand-section-content {
       display: grid; grid-template-columns: 1fr auto; column-gap: 10px; align-items: center;
       grid-template-areas: "head actions" "hint actions" "legend actions" "cards actions";
     }
     .hand-head { grid-area: head; margin-bottom: 0; }
-    .hand-hint { grid-area: hint; font-size: 10px; margin-bottom: 2px; }
-    .legend { grid-area: legend; gap: 6px; margin: 0 0 4px; font-size: 8px; }
+    .hand-head .htitle { color: #fff; }
+    .hand-head .hcount { color: rgba(255,255,255,.7); }
+    .hand-hint { grid-area: hint; font-size: 10px; margin-bottom: 2px; color: rgba(255,255,255,.85); }
+    .hand-hint.ready { color: #7effa8; }
+    .legend { grid-area: legend; gap: 6px; margin: 0 0 4px; font-size: 8px; color: rgba(255,255,255,.8); }
     .legend i { width: 7px; height: 7px; }
     .hand-row { grid-area: cards; padding: 2px 2px 0; }
     .action-bar { grid-area: actions; flex-direction: column; width: 92px; gap: 5px; margin-top: 0; }
@@ -322,9 +342,51 @@
 
     .log-panel { margin-top: 4px; }
   }
+
+  /* --- Landscape-only: block play entirely in portrait, rather than
+     rendering a squeezed portrait layout — real cards need real size to
+     read at a glance, and the whole point of landscape mode is defeated if
+     portrait quietly stays playable alongside it. A CSS media query, not
+     the Screen Orientation API's lock(): that API only works inside an
+     already-fullscreen context (an installed PWA in standalone/fullscreen
+     display mode, never a plain browser tab) and iOS Safari doesn't
+     implement it at all regardless — so it can't be relied on to actually
+     force anything cross-platform. This instead just covers the screen
+     and asks, which works identically in a browser tab or an installed
+     PWA, on any platform. Paired with max-width so a portrait-shaped
+     DESKTOP window doesn't get the same treatment meant for a phone (a
+     portrait phone is realistically well under this; a resized desktop
+     window rarely is) — same reasoning as the landscape table query's own
+     max-height pairing above. Skipped entirely under ?fast=1 (via
+     body.fast-test) so the automated test suite, which runs in a portrait
+     390x900 viewport, isn't blocked from clicking the board it needs to
+     test. */
+  .rotate-block { display: none; }
+  @media (orientation: portrait) and (max-width: 900px) {
+    .rotate-block { display: flex; }
+  }
+  body.fast-test .rotate-block { display: none !important; }
+  .rotate-block {
+    /* Above .flying-card's z-index:200 — the deal/draw/discard animation
+       otherwise pokes through this overlay while a hand is mid-deal at
+       page load, caught by an initial-load screenshot in portrait. */
+    position: fixed; inset: 0; z-index: 250; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px; text-align: center; padding: 24px;
+    background: linear-gradient(160deg, #141413, #0a5537);
+  }
+  .rotate-block .icon { font-size: 42px; color: #fff; }
+  .rotate-block .title { font-family: "Baloo 2"; font-weight: 800; font-size: 18px; color: #fff; }
+  .rotate-block .sub { font-size: 13px; color: rgba(255,255,255,.75); max-width: 280px; font-weight: 600; }
+  .rotate-block .back { margin-top: 10px; font-size: 12px; font-weight: 800; color: #fff; opacity: .8; text-decoration: none; }
 </style>
 </head>
 <body>
+<div class="rotate-block" id="rotate-block">
+  <div class="icon">↻</div>
+  <div class="title">Rotate your phone to play</div>
+  <div class="sub">Rummy is a landscape-only table — turn your phone sideways to see your hand and the felt at full size.</div>
+  <a class="back" href="rummy-lobby.html">← Back to Lobby</a>
+</div>
 <div class="app wide">
   <div class="rummy-page">
 
@@ -444,6 +506,11 @@
   // Pool Rummy:   ?mode=pool&players=2|4&pool=51|101|201&entry=50|100|200
   const params = new URLSearchParams(location.search);
   const FAST = params.get('fast') === '1'; // used by automated tests only
+  // Lets the portrait rotate-block CSS rule stand down for the automated
+  // test suite, which runs in a portrait 390x900 viewport and needs to
+  // actually click the board — see that rule's own comment for why this
+  // is a body class rather than a media-query-only mechanism.
+  if (FAST) document.body.classList.add('fast-test');
   const STEP_MS = FAST ? 15 : 650;
   const MODE = params.get('mode') === 'pool' ? 'pool' : 'points';
   const playerCount = [2, 4].includes(Number(params.get('players'))) ? Number(params.get('players')) : 4;
