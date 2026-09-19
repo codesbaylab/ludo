@@ -511,6 +511,16 @@ by a Supabase project for auth/wallet-ledger/match-history.
     every case, the log pill actually clickable and expanding into a real overlay without changing
     page height, the portrait rotate-block still fully covering this new full-bleed styling, and
     the full existing e2e regression suite re-ran clean throughout.
+    - Reported right after shipping the full-bleed layout: the hand's bottom card row was visibly
+      overlapping the floating Game Log pill. Cause: `#hand-section-content`'s grid rows were
+      being stretched/centered to fill whatever leftover height `.hand-section`'s `flex:1 1 auto`
+      gave it (the CSS grid default, `align-content:normal`, effectively stretches auto-height
+      rows into unused container space rather than leaving it at the bottom) — pushing the card
+      row low enough to reach the pill's fixed corner position. Fixed with `align-content: start`
+      (pins all rows to the top, leaving any leftover height harmlessly below the cards instead)
+      plus a `padding-bottom: 44px` safety clearance on the grid itself. Verified with a real
+      geometry check (`cardBottom < logTop`, not just a screenshot) confirming zero overlap, and
+      the full e2e regression suite re-ran clean.
 - `design/index.html` — no longer the design-mockup index (removed); a silent redirect stub to
   `login.html`, since GitHub Pages serves `index.html` for the bare site root regardless of what
   `manifest.json` says.
