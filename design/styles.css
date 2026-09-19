@@ -32,6 +32,14 @@ html, body {
   font-family: "Baloo 2", "Nunito", -apple-system, "Segoe UI", sans-serif;
   color: var(--text);
   -webkit-font-smoothing: antialiased;
+  /* Belt-and-suspenders with the viewport meta tag's maximum-scale=1/
+     user-scalable=no on every page: modern iOS Safari deliberately ignores
+     that meta tag for accessibility reasons, so pinch-zoom still works
+     there without this. touch-action (pan-x pan-y, deliberately omitting
+     pinch-zoom) is a standard CSS property enforced at the touch-input
+     level, not a page-requestable hint, so it's still honored on current
+     iOS — normal scrolling stays intact, only the zoom gesture is blocked. */
+  touch-action: pan-x pan-y;
 }
 
 body {
