@@ -72,26 +72,91 @@ by a Supabase project for auth/wallet-ledger/match-history.
   leave before the resume attempt lands (a bare single attempt measurably races and fails).
 - `design/board.html` — the actual game; loads `game.js`, `supabase-client.js`, and the
   `colyseus.js` client SDK from CDN.
-- `design/rummy-lobby.html` + `design/rummy-board.html` — **design previews only, explicitly
-  labeled as such on-page** (a yellow banner, plus a modal on Declare spelling out what isn't
-  real yet) — for a possible second game (Indian/Points Rummy), not wired to any backend, Colyseus
-  room, or Supabase call. Static demo data throughout (hardcoded hand/opponents/wallet balance,
-  no auth check). Not linked from anywhere in the real nav (`lobby.html`, `bottom-nav`, etc.) —
-  reachable only by direct URL, same as how a design mockup would normally live outside the real
-  app shell, just as real files in `design/` per an explicit instruction to build these as
-  actual GitHub Pages files rather than a claude.ai Design Canvas artifact. `rummy-lobby.html`
-  reuses `lobby.html`'s `.tile`/`.action-grid`/`.player-chip` chrome for a points-value picker
-  (₹1/₹2/₹5 per point) and a 2/6-player table-size picker, with a live-updating summary card
-  (max-loss = points value × an 80-point cap) — all client-side state, no persistence. Its "Start
-  Table" button links straight to `rummy-board.html`. `rummy-board.html` is the game-table mockup:
-  a felt table with 3 opponents (one shown mid-turn), a closed deck + discard pile + wild-joker
-  indicator, and a 13-card hand (pre-arranged into example groups: a pure sequence, a
-  joker-completed sequence, two sets, and one deliberately-ungrouped "deadwood" card with a red
-  outline) that supports tap-to-lift/select, Sort, Discard, Draw (from either the closed deck or
-  the discard pile, capped at 14 cards), and a Declare button that opens a modal explicitly
-  stating hand validation isn't implemented. Page-scoped CSS for the card/felt rendering lives in
-  each file's own `<style>` block rather than `styles.css`, since a playing-card table shares
-  little visually with the Ludo board grid. **Fixed while building this**: `.rummy-page`
+- `design/rummy-rules.js` — a standalone, dependency-free Rummy rules engine (UMD-wrapped: a
+  `window.RummyRules` global in the browser, `module.exports` under Node, so it's unit-testable
+  outside a browser too). Implements real Indian/Points Rummy: a 2-deck + 4-printed-joker 108-card
+  pack, a randomly-drawn wild-joker rank each round (any suit, plus the printed jokers), meld
+  detection (pure sequences, wild-completed sequences, sets — with Ace-low **and** Ace-high
+  sequences supported, e.g. both `A-2-3` and `Q-K-A`, but never the `K-A-2` wrap-around), full
+  13-card declare validation (exact-cover backtracking requiring the real rule: all cards grouped
+  with zero leftover, ≥2 sequences, ≥1 of them pure), and loser scoring via a bitmask DP
+  (`computeBestGrouping`) that maximizes points removed subject to needing a pure sequence to
+  count for anything — a hand with no achievable pure sequence takes the flat 80-point "full
+  count" penalty regardless of what its cards actually add up to (a real rule, and a bug this
+  session's own tests caught: an early draft capped the penalty at the hand's own total instead of
+  the flat 80). Also caps deadwood at 80 even *with* a pure sequence secured (a cheap pure
+  sequence can still leave 80+ points of expensive cards ungrouped — another bug the randomized
+  stress test below caught). Since a card matching the wild rank is ambiguous — usable at face
+  value *or* as a substitute — meld detection branches over every such card's two interpretations
+  rather than assuming one. **Verified with 30 automated tests** (`node` — no browser needed):
+  known pure/impure/Ace-edge sequences and sets, a full valid 13-card winning hand, hands that
+  fail for each real reason (only 1 sequence, zero sequences, two sequences neither pure, an
+  ungroupable leftover card), deadwood math against hand-computed expected values, `dealNewRound`
+  accounting for all 108 cards, and a 25-round (100-hand) randomized stress test asserting every
+  grouping partitions its hand exactly once with no gaps/overlaps and deadwood always lands in
+  `[0, 80]` — this test is what caught both scoring bugs above. Performance: ~7ms per
+  `computeBestGrouping` call on a 14-card hand in Node, comfortably fast enough to run on every
+  hand change in the browser.
+- `design/rummy-lobby.html` + `design/rummy-board.html` — a **playable practice table**: real
+  Rummy rules (via `rummy-rules.js`) against simple computer opponents, entirely client-side, no
+  backend/Colyseus/Supabase involved and no real money at stake — built this way specifically so
+  the rules could be verified by actually playing a round, rather than trusting an unplayed mockup
+  or a rules explanation. A yellow banner and the "Practice round only" note in the results modal
+  keep this honest on-page. Not linked from the real nav (`lobby.html`, `bottom-nav`, etc.) —
+  reachable only by direct URL, consistent with how these pages started as design mockups before
+  gameplay was added; the wallet chip stays a static demo figure (₹250.00) since no real balance
+  is touched. `rummy-lobby.html` reuses `lobby.html`'s `.tile`/`.action-grid`/`.player-chip` chrome
+  for a points-value picker (₹1/₹2/₹5 per point) and a 2/4-player table-size picker (not 2/6 as
+  originally mocked up — `rummy-board.html`'s felt template only has 3 opponent slots, so 4 total
+  players is the real ceiling), with a live-updating summary card. Its "Start Table" button links
+  to `rummy-board.html?players=&value=`, carrying the picker's state through via query params
+  (`rummy-board.html` defaults to 4 players / ₹1 if loaded without them). `rummy-board.html`:
+  - **Real turn loop**: `RummyRules.dealNewRound(playerCount)` deals 13 cards each; you draw
+    (closed deck or discard pile), then Discard or Declare; bots (`Jilna`/`Ravi`/`Sana`, or just
+    `Ravi` in 2-player mode) take their turns automatically on a short delay (`?fast=1` collapses
+    this to ~15ms, used only by automated tests) using `botChooseDrawSource`/
+    `botChooseDiscardIndex`/`findDeclareOption` from the rules engine, looping until control
+    returns to you or someone declares. A `turnToken` counter is bumped on every new round and
+    checked inside the async bot loop so starting a fresh round (via "Play Again") cancels any
+    still-running bot-turn loop from the previous one instead of two rounds' timers racing.
+  - **Your hand is always auto-arranged, not just sorted**: every hand mutation (draw, discard, a
+    fresh deal) calls `arrangeHand()`, which runs `computeBestGrouping` and reorders the hand into
+    its best-found groups — pure sequences first, then other sequences, then sets, then deadwood
+    — with a colored border per card (green/blue/purple/red respectively) and a small legend, plus
+    a gold ring + ★ badge on any card matching the wild rank (it can be played at face value *or*
+    as a substitute). This turns the hand display into a rules trainer: a player who doesn't know
+    the rules can still see which of their cards go together without being told. A hint line above
+    the hand reports the live deadwood total or "✓ Ready to declare!". Card selection is tracked
+    by the card's own `id` (not its array index), specifically because re-arranging after every
+    mutation would otherwise silently move whatever the player had selected onto a different card
+    at the same index.
+  - **Declare is forgiving but honest**: clicking Declare searches all 14 cards (preferring to
+    keep whichever card the player tapped, if any) for a removal that makes the remaining 13 a
+    valid declare (`findDeclareOption`) — the player doesn't have to manually figure out which
+    card to discard to win. If no such arrangement exists, a `confirm()` dialog states plainly
+    that this isn't a valid hand yet and declaring anyway costs the 80-point penalty, rather than
+    silently blocking the button or silently declaring wrong.
+  - **Scoring or an invalid declare both end the round** via a shared `endRound()` that renders a
+    real per-player points/₹ breakdown (`computeBestGrouping` on every other player's live hand)
+    into the existing modal, with "Practice round only — nothing here touches your real wallet"
+    stated directly in it, plus Play Again / Back to Rummy Lobby.
+  - **Deck exhaustion**: `ensureClosedDeckNotEmpty` reshuffles the discard pile (minus its top
+    card) back into the closed deck whenever the closed deck runs dry — never a hard crash, since
+    closed-deck-count + discard-pile-count is a fixed invariant (the 108-card pack minus the 52
+    cards currently in hands and the 1 wild indicator) that can only be zero on *both* sides
+    simultaneously if the whole pack were gone, which the game's flow makes impossible (every turn
+    always nets exactly one card into the discard pile).
+  - **Verified end-to-end in real headless Chromium**, not just unit-tested: scripted full
+    playthroughs (`?fast=1`) in both 4-player and 2-player mode, each running until the round-end
+    modal opens, checking the score-row math sums correctly against the displayed payout and that
+    "Play Again" deals a genuinely fresh round (reset deck count, hand size); a dedicated run
+    forcing the "declare anyway?" invalid-declare path end-to-end including the confirm() dialog;
+    repeated runs (10+) with zero console/page errors and turn counts varying naturally (4 to 70+)
+    confirming the bots aren't stuck in a fixed pattern; no horizontal overflow at 390/420px in
+    either player-count mode. Page-scoped CSS for the card/felt rendering lives in each file's own
+    `<style>` block rather than `styles.css`, since a playing-card table shares little visually
+    with the Ludo board grid. **Fixed while building this** (from the earlier mockup phase, still
+    true): `.rummy-page`
   (`rummy-board.html`) originally had only `max-width:720px; margin:0 auto;` with no explicit
   `width` — since it's a flex item of `.app` (`display:flex; flex-direction:column`), the auto
   side-margins disable flexbox's default cross-axis stretch (per spec, auto margins on a flex

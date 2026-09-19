@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
-<title>Ludo Online — Rummy (Design Preview)</title>
+<title>Ludo Online — Rummy (Practice)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
@@ -92,6 +92,15 @@
   .pcard.joker { color:#b8860b; background: linear-gradient(160deg, #fff8e1, #fff1c2); }
   .pcard.joker .pip { font-size:18px; }
 
+  /* A "wild-rank" card (not a printed joker, but matches this round's wild
+     rank) can be used at face value OR as a joker substitute — the star +
+     gold ring calls that out, since it's the single most important thing
+     to notice about a hand and easy to miss without rules knowledge. */
+  .pcard.wild-rank { box-shadow: 0 0 0 2px #d4a017, 0 2px 5px rgba(0,0,0,.25); }
+  .pcard.wild-rank::after {
+    content: '★'; position:absolute; top:2px; right:3px; font-size:9px; color:#d4a017;
+  }
+
   .discard-pile .pcard { box-shadow: 0 3px 8px rgba(0,0,0,.35); }
   .discard-pile.empty { width:46px; height:64px; border-radius:7px; border:2px dashed rgba(255,255,255,.4); }
 
@@ -101,10 +110,13 @@
   }
 
   /* Hand */
-  .hand-section { margin-top: 14px; }
+  .hand-section { margin-top: 14px; border-radius: var(--radius-md); transition: box-shadow .2s ease; }
+  .hand-section.active-turn { box-shadow: 0 0 0 2px var(--accent); padding: 8px; margin: 14px -8px 0; }
   .hand-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
   .hand-head .htitle { font-family:"Baloo 2"; font-weight:800; font-size:14px; }
   .hand-head .hcount { font-size:12px; color:var(--text-dim); font-weight:700; }
+  .hand-hint { font-size:12px; font-weight:700; margin-bottom:6px; color: var(--text-dim); }
+  .hand-hint.ready { color: #178a4c; }
 
   /* Two explicit rows instead of one horizontally-scrolling row — the whole
      hand stays visible at once instead of needing a scroll-right gesture to
@@ -115,11 +127,31 @@
   .hand-row { padding: 10px 4px 14px; }
   .hand-line { display:flex; align-items:flex-end; justify-content:center; }
   .hand-line + .hand-line { margin-top:10px; }
-  .hand-line .pcard { margin-left:-14px; cursor:pointer; }
+  .hand-line .pcard { margin-left:-14px; }
+  .hand-line .pcard.clickable { cursor:pointer; }
   .hand-line .pcard:first-child { margin-left:0; }
   .hand-line .group-gap { width:10px; flex-shrink:0; }
   .pcard.lifted { transform: translateY(-14px); box-shadow: 0 8px 14px rgba(0,0,0,.3); z-index:2; }
   .pcard.deadwood { box-shadow: 0 0 0 2px var(--red), 0 2px 5px rgba(0,0,0,.25); }
+
+  /* Meld coloring on top of the wild-rank gold ring — border colors chosen
+     to stay distinct from .deadwood's red and .wild-rank's gold. */
+  .pcard.meld-pure { box-shadow: 0 0 0 2px #178a4c, 0 2px 5px rgba(0,0,0,.25); }
+  .pcard.meld-seq { box-shadow: 0 0 0 2px #2e7ce0, 0 2px 5px rgba(0,0,0,.25); }
+  .pcard.meld-set { box-shadow: 0 0 0 2px #8a4fd4, 0 2px 5px rgba(0,0,0,.25); }
+  .pcard.lifted.meld-pure { box-shadow: 0 0 0 2px #178a4c, 0 8px 14px rgba(0,0,0,.3); }
+  .pcard.lifted.meld-seq { box-shadow: 0 0 0 2px #2e7ce0, 0 8px 14px rgba(0,0,0,.3); }
+  .pcard.lifted.meld-set { box-shadow: 0 0 0 2px #8a4fd4, 0 8px 14px rgba(0,0,0,.3); }
+  .pcard.lifted.deadwood { box-shadow: 0 0 0 2px var(--red), 0 8px 14px rgba(0,0,0,.3); }
+
+  .legend { display:flex; flex-wrap:wrap; gap:10px; font-size:10px; font-weight:700; color:var(--text-dim); margin: 2px 0 8px; }
+  .legend span { display:inline-flex; align-items:center; gap:4px; }
+  .legend i { width:10px; height:10px; border-radius:3px; display:inline-block; }
+  .legend .lg-pure { background:#178a4c; }
+  .legend .lg-seq { background:#2e7ce0; }
+  .legend .lg-set { background:#8a4fd4; }
+  .legend .lg-dead { background:var(--red); }
+  .legend .lg-wild { background:#d4a017; }
 
   .action-bar { display:flex; gap:8px; margin-top:6px; }
   .action-bar .btn { flex:1; padding:12px 8px; font-size:13px; }
@@ -132,24 +164,28 @@
 
   .declare-modal {
     position:fixed; inset:0; background:rgba(20,30,20,.55); display:none;
-    align-items:center; justify-content:center; z-index:50; padding:20px;
+    align-items:center; justify-content:center; z-index:50; padding:20px; overflow-y:auto;
   }
   .declare-modal.open { display:flex; }
-  .declare-card { max-width:340px; width:100%; text-align:center; animation: pop .2s ease; }
+  .declare-card { max-width:360px; width:100%; text-align:center; animation: pop .2s ease; }
   @keyframes pop { from { transform:scale(.85); opacity:0; } to { transform:scale(1); opacity:1; } }
+  .score-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; font-weight:700; }
+  .score-row:last-of-type { border-bottom:none; }
+  .score-row .amt-pos { color:#178a4c; }
+  .score-row .amt-neg { color:var(--red); }
 </style>
 </head>
 <body>
 <div class="app wide">
   <div class="rummy-page">
 
-    <div class="preview-banner">🎨 Design preview — layout &amp; interactions only, not wired to a real match yet</div>
+    <div class="preview-banner">🎲 Practice mode — real rules enforced, playing against computer opponents. No real money or other players yet.</div>
 
     <div class="rummy-header">
-      <a href="lobby.html" class="back-link">← Exit</a>
+      <a href="rummy-lobby.html" class="back-link">← Exit</a>
       <div class="rummy-title">
         <div class="name">Points Rummy</div>
-        <div class="sub">₹1 / point · 4 players</div>
+        <div class="sub" id="table-sub">₹1 / point · 4 players</div>
       </div>
       <a href="wallet.html" class="wallet-chip">💰 ₹250.00</a>
     </div>
@@ -158,22 +194,24 @@
       <div class="opponent-row">
         <div class="opponent" id="opp-1">
           <div class="avatar">J</div>
-          <div class="oname">Jilna</div>
+          <div class="oname" id="opp-1-name">Jilna</div>
           <div class="ocards" id="opp-1-cards"></div>
-          <div class="ocount">13 cards</div>
+          <div class="ocount" id="opp-1-count">13 cards</div>
+          <div class="oturn-label" id="opp-1-turn" style="display:none;">Their turn</div>
         </div>
-        <div class="opponent active" id="opp-2">
+        <div class="opponent" id="opp-2">
           <div class="avatar" style="background:linear-gradient(135deg,#4da3ff,#2e7ce0);">R</div>
-          <div class="oname">Ravi</div>
+          <div class="oname" id="opp-2-name">Ravi</div>
           <div class="ocards" id="opp-2-cards"></div>
-          <div class="ocount">12 cards</div>
-          <div class="oturn-label">Their turn</div>
+          <div class="ocount" id="opp-2-count">13 cards</div>
+          <div class="oturn-label" id="opp-2-turn" style="display:none;">Their turn</div>
         </div>
         <div class="opponent" id="opp-3">
           <div class="avatar" style="background:linear-gradient(135deg,#2ecc71,#178a4c);">S</div>
-          <div class="oname">Sana</div>
+          <div class="oname" id="opp-3-name">Sana</div>
           <div class="ocards" id="opp-3-cards"></div>
-          <div class="ocount">13 cards</div>
+          <div class="ocount" id="opp-3-count">13 cards</div>
+          <div class="oturn-label" id="opp-3-turn" style="display:none;">Their turn</div>
         </div>
       </div>
 
@@ -189,7 +227,7 @@
         </div>
 
         <div class="joker-chip">
-          <div class="pcard red" style="width:32px; height:44px;"><span class="corner">9<br>♦</span><span class="pip" style="font-size:15px;">♦</span></div>
+          <div class="pcard red" id="wild-indicator-card" style="width:32px; height:44px;"><span class="corner">9<br>♦</span><span class="pip" style="font-size:15px;">♦</span></div>
           <div class="jlabel">Wild<br>Joker</div>
         </div>
 
@@ -199,20 +237,28 @@
         </div>
       </div>
 
-      <div class="status-strip" id="status-strip">Ravi's turn — waiting for them to discard…</div>
+      <div class="status-strip" id="status-strip">Dealing…</div>
     </div>
 
-    <div class="hand-section">
+    <div class="hand-section" id="hand-section">
       <div class="hand-head">
         <div class="htitle">Your Hand</div>
         <div class="hcount"><span id="hand-count">13</span> cards · tap to select</div>
       </div>
+      <div class="hand-hint" id="hand-hint">—</div>
+      <div class="legend">
+        <span><i class="lg-pure"></i>Pure sequence</span>
+        <span><i class="lg-seq"></i>Sequence</span>
+        <span><i class="lg-set"></i>Set</span>
+        <span><i class="lg-dead"></i>Deadwood</span>
+        <span><i class="lg-wild"></i>Wild card</span>
+      </div>
       <div class="hand-row" id="hand-row"></div>
 
       <div class="action-bar">
-        <button class="btn btn-secondary" id="btn-sort">↕ Sort</button>
+        <button class="btn btn-secondary" id="btn-sort">↕ Arrange</button>
         <button class="btn btn-secondary" id="btn-discard" disabled>Discard</button>
-        <button class="btn btn-declare" id="btn-declare">Declare</button>
+        <button class="btn btn-declare" id="btn-declare" disabled>Declare</button>
       </div>
     </div>
 
@@ -221,76 +267,126 @@
         <span>📜 Game Log</span>
         <span class="chev">▾</span>
       </button>
-      <div class="log-body">
-        <div>Sana discarded 3♣.</div>
-        <div>Ravi drew from closed deck.</div>
-        <div>You discarded 2♥.</div>
-        <div>Jilna drew from discard pile.</div>
-        <div>Game started — wild joker is 9♦.</div>
+      <div class="log-body" id="log-body">
+        <div>Dealing a new round…</div>
       </div>
     </div>
   </div>
 </div>
 
 <div class="declare-modal" id="declare-modal">
-  <div class="card declare-card">
-    <div class="tile-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">🏆</div>
-    <h1 style="font-size:20px; margin:0;">Declare Preview</h1>
-    <p style="font-size:13px; color:var(--text-dim); font-weight:600; margin-top:8px;">
-      This is a design preview — hand validation (pure sequence check, scoring) isn't wired up yet.
-      In the real game this is where a valid declare would end the round and show payouts.
-    </p>
-    <button class="btn btn-primary" id="btn-close-modal" style="margin-top:16px;">Close</button>
-  </div>
+  <div class="card declare-card" id="declare-card-content"></div>
 </div>
 
+<script src="rummy-rules.js"></script>
 <script>
-  const SUITS = [
-    { sym: '♠', color: 'black' },
-    { sym: '♥', color: 'red' },
-    { sym: '♦', color: 'red' },
-    { sym: '♣', color: 'black' },
-  ];
-  const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
-  const DEMO_POOL = [];
-  SUITS.forEach(s => RANKS.forEach(r => DEMO_POOL.push({ rank: r, suit: s.sym, color: s.color })));
+  // --- Setup from the lobby's picker (?players=2|4, ?value=1|2|5) --------
+  const params = new URLSearchParams(location.search);
+  const FAST = params.get('fast') === '1'; // used by automated tests only
+  const STEP_MS = FAST ? 15 : 650;
+  const playerCount = [2, 4].includes(Number(params.get('players'))) ? Number(params.get('players')) : 4;
+  const pointsValue = [1, 2, 5].includes(Number(params.get('value'))) ? Number(params.get('value')) : 1;
 
-  // A starting hand deliberately arranged into the groups a real player would
-  // aim for, so the layout demonstrates grouping — not shuffled randomly.
-  let hand = [
-    { rank:'4', suit:'♠', color:'black', group:0 },
-    { rank:'5', suit:'♠', color:'black', group:0 },
-    { rank:'6', suit:'♠', color:'black', group:0 },
-    { rank:'9', suit:'♥', color:'red', group:1 },
-    { rank:'10', suit:'♥', color:'red', group:1 },
-    { rank:'', suit:'', color:'', joker:true, group:1 },
-    { rank:'7', suit:'♦', color:'red', group:2 },
-    { rank:'7', suit:'♣', color:'black', group:2 },
-    { rank:'7', suit:'♠', color:'black', group:2 },
-    { rank:'Q', suit:'♥', color:'red', group:3 },
-    { rank:'Q', suit:'♦', color:'red', group:3 },
-    { rank:'Q', suit:'♣', color:'black', group:3 },
-    { rank:'K', suit:'♠', color:'black', group:4, deadwood:true },
-  ];
-  let discardTop = { rank:'3', suit:'♣', color:'black' };
-  let selectedIdx = null;
+  const ALL_NAMES = ['You', 'Jilna', 'Ravi', 'Sana'];
+  const players = playerCount === 2
+    ? [{ name: 'You' }, { name: 'Ravi' }]
+    : ALL_NAMES.map(name => ({ name }));
+  // Which felt slot (opp-1/opp-2/opp-3) each non-you player index renders in.
+  const SLOT_FOR_PLAYER = playerCount === 2 ? { 1: 'opp-2' } : { 1: 'opp-1', 2: 'opp-2', 3: 'opp-3' };
 
-  function cardHtml(c, extraClass) {
-    if (c.joker) {
-      return `<div class="pcard joker ${extraClass||''}"><span class="pip">🃏</span></div>`;
+  document.getElementById('table-sub').textContent = `₹${pointsValue} / point · ${playerCount} players`;
+  ['opp-1', 'opp-2', 'opp-3'].forEach(slot => {
+    const used = Object.values(SLOT_FOR_PLAYER).includes(slot);
+    document.getElementById(slot).style.display = used ? '' : 'none';
+  });
+  Object.entries(SLOT_FOR_PLAYER).forEach(([playerIdx, slot]) => {
+    document.getElementById(`${slot}-name`).textContent = players[playerIdx].name;
+  });
+
+  // --- Game state ----------------------------------------------------------
+  let state = null; // { hands, wildRank, wildIndicator, closedDeck, discardPile }
+  let currentPlayerIdx = 0;
+  let phase = 'your-turn-draw'; // 'your-turn-draw' | 'your-turn-discard' | 'bot-turn' | 'round-over'
+  let selectedCardId = null;
+  let gameLog = [];
+  let turnToken = 0; // bumped on every new round to cancel any in-flight bot loop
+
+  function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+  function cardLabel(card) {
+    return card.rank === 'JOKER' ? 'a joker' : `${card.rank}${card.suit}`;
+  }
+
+  function cardHtml(card, extraClass) {
+    if (card.rank === 'JOKER') {
+      return `<div class="pcard joker ${extraClass || ''}"><span class="pip">🃏</span></div>`;
     }
-    return `<div class="pcard ${c.color} ${extraClass||''}"><span class="corner">${c.rank}<br>${c.suit}</span><span class="pip">${c.suit}</span></div>`;
+    const color = RummyRules.SUIT_COLOR[card.suit];
+    const wildClass = card.rank === state.wildRank ? 'wild-rank' : '';
+    return `<div class="pcard ${color} ${wildClass} ${extraClass || ''}"><span class="corner">${card.rank}<br>${card.suit}</span><span class="pip">${card.suit}</span></div>`;
+  }
+
+  function logEvent(text) {
+    gameLog.unshift(text);
+    const body = document.getElementById('log-body');
+    body.innerHTML = gameLog.slice(0, 30).map(t => `<div>${t}</div>`).join('');
+  }
+
+  // --- Hand arrangement: reorders `state.hands[0]` into its best-found
+  // groups (pure sequences first, then other sequences, then sets, then
+  // deadwood) so the player can literally see which cards belong together
+  // without knowing the rules. Recomputed after every hand mutation. ------
+  let handGroupTags = []; // parallel to state.hands[0]: {kind: 'pure'|'seq'|'set'|'dead', groupIdx}
+
+  function arrangeHand() {
+    const hand = state.hands[0];
+    const g = RummyRules.computeBestGrouping(hand, state.wildRank);
+    const meldsSorted = g.chosenMelds.slice().sort((a, b) => {
+      const rank = m => (m.kind === 'sequence' ? (m.pure ? 0 : 1) : 2);
+      return rank(a) - rank(b);
+    });
+    const order = [];
+    meldsSorted.forEach((m, gi) => {
+      const kind = m.kind === 'sequence' ? (m.pure ? 'pure' : 'seq') : 'set';
+      m.indices.slice().sort((a, b) => a - b).forEach(i => order.push({ idx: i, kind, groupIdx: gi }));
+    });
+    const deadwood = g.ungroupedIndices.slice().sort((a, b) => {
+      const ca = hand[a], cb = hand[b];
+      const suitRank = c => (c.rank === 'JOKER' ? 99 : RummyRules.SUITS.indexOf(c.suit));
+      const rankRank = c => (c.rank === 'JOKER' ? 99 : RummyRules.RANKS.indexOf(c.rank));
+      return suitRank(ca) - suitRank(cb) || rankRank(ca) - rankRank(cb);
+    });
+    deadwood.forEach(i => order.push({ idx: i, kind: 'dead', groupIdx: meldsSorted.length }));
+
+    state.hands[0] = order.map(o => hand[o.idx]);
+    handGroupTags = order.map(o => ({ kind: o.kind, groupIdx: o.groupIdx }));
+    return g;
+  }
+
+  function renderHint(grouping) {
+    const el = document.getElementById('hand-hint');
+    if (!grouping.pureAchieved) {
+      el.textContent = 'No pure sequence yet — you need at least one unbroken run with no wild cards to have any valid hand.';
+      el.className = 'hand-hint';
+    } else if (grouping.deadwood === 0) {
+      el.textContent = '✓ Ready to declare!';
+      el.className = 'hand-hint ready';
+    } else {
+      el.textContent = `${grouping.deadwood} point${grouping.deadwood === 1 ? '' : 's'} of deadwood left — keep improving your hand.`;
+      el.className = 'hand-hint';
+    }
   }
 
   function renderHand() {
+    const hand = state.hands[0];
     const container = document.getElementById('hand-row');
     container.innerHTML = '';
 
-    // Split into two rows of roughly equal length rather than scrolling —
-    // ceil so a 13-card hand is 7/6, not 6/7 (top row never looks lighter
-    // than the bottom one).
+    // Two explicit rows so the whole hand is visible without scrolling —
+    // each row resets its own card-overlap margin.
     const splitAt = Math.ceil(hand.length / 2);
     const lines = [hand.slice(0, splitAt), hand.slice(splitAt)];
+    const interactive = phase === 'your-turn-discard';
 
     lines.forEach((lineCards, lineIdx) => {
       const lineOffset = lineIdx === 0 ? 0 : splitAt;
@@ -298,20 +394,24 @@
       line.className = 'hand-line';
       lineCards.forEach((c, j) => {
         const i = lineOffset + j;
-        if (j > 0 && c.group !== lineCards[j - 1].group) {
+        const tag = handGroupTags[i] || { kind: 'dead', groupIdx: -1 };
+        if (j > 0 && tag.groupIdx !== (handGroupTags[i - 1] || {}).groupIdx) {
           const gap = document.createElement('div');
           gap.className = 'group-gap';
           line.appendChild(gap);
         }
+        const meldClass = tag.kind === 'pure' ? 'meld-pure' : tag.kind === 'seq' ? 'meld-seq' : tag.kind === 'set' ? 'meld-set' : 'deadwood';
+        const classes = [selectedCardId === c.id ? 'lifted' : '', meldClass, interactive ? 'clickable' : ''].join(' ');
         const wrap = document.createElement('div');
-        const classes = [selectedIdx === i ? 'lifted' : '', c.deadwood ? 'deadwood' : ''].join(' ');
         wrap.innerHTML = cardHtml(c, classes);
         const el = wrap.firstElementChild;
-        el.addEventListener('click', () => {
-          selectedIdx = selectedIdx === i ? null : i;
-          renderHand();
-          document.getElementById('btn-discard').disabled = selectedIdx === null;
-        });
+        if (interactive) {
+          el.addEventListener('click', () => {
+            selectedCardId = selectedCardId === c.id ? null : c.id;
+            renderHand();
+            document.getElementById('btn-discard').disabled = !selectedCardId;
+          });
+        }
         line.appendChild(el);
       });
       container.appendChild(line);
@@ -320,60 +420,251 @@
     document.getElementById('hand-count').textContent = hand.length;
   }
 
-  function renderDiscard() {
+  function renderDeckAndDiscard() {
+    document.getElementById('deck-count').textContent = state.closedDeck.length;
+    const top = state.discardPile[state.discardPile.length - 1];
     const el = document.getElementById('discard-pile');
-    el.innerHTML = discardTop ? cardHtml(discardTop) : '';
-    el.className = 'discard-pile' + (discardTop ? '' : ' empty');
+    el.innerHTML = top ? cardHtml(top) : '';
+    el.className = 'discard-pile' + (top ? '' : ' empty');
   }
 
   function backsHtml(n) {
     return Array.from({ length: Math.min(n, 3) }).map(() => '<div class="card-back"></div>').join('');
   }
-  document.getElementById('opp-1-cards').innerHTML = backsHtml(13);
-  document.getElementById('opp-2-cards').innerHTML = backsHtml(12);
-  document.getElementById('opp-3-cards').innerHTML = backsHtml(13);
+
+  function renderOpponents() {
+    Object.entries(SLOT_FOR_PLAYER).forEach(([playerIdxStr, slot]) => {
+      const playerIdx = Number(playerIdxStr);
+      const n = state.hands[playerIdx].length;
+      document.getElementById(`${slot}-cards`).innerHTML = backsHtml(n);
+      document.getElementById(`${slot}-count`).textContent = `${n} cards`;
+      const isActive = phase !== 'round-over' && currentPlayerIdx === playerIdx;
+      document.getElementById(slot).classList.toggle('active', isActive);
+      document.getElementById(`${slot}-turn`).style.display = isActive ? '' : 'none';
+    });
+  }
+
+  function renderStatusStrip() {
+    const el = document.getElementById('status-strip');
+    if (phase === 'round-over') return; // left as whatever endRound set
+    if (currentPlayerIdx === 0) {
+      el.textContent = phase === 'your-turn-draw'
+        ? 'Your turn — draw from the closed deck or the discard pile.'
+        : 'Your turn — select a card to discard, or Declare.';
+    } else {
+      el.textContent = `${players[currentPlayerIdx].name}'s turn…`;
+    }
+  }
+
+  function renderTurnUi() {
+    document.getElementById('hand-section').classList.toggle('active-turn', currentPlayerIdx === 0 && phase !== 'round-over');
+    document.getElementById('closed-deck').style.pointerEvents = phase === 'your-turn-draw' ? 'auto' : 'none';
+    document.getElementById('closed-deck').style.opacity = phase === 'your-turn-draw' ? '1' : '.6';
+    document.getElementById('discard-pile').style.pointerEvents = phase === 'your-turn-draw' ? 'auto' : 'none';
+    document.getElementById('btn-discard').disabled = !selectedCardId || phase !== 'your-turn-discard';
+    document.getElementById('btn-declare').disabled = phase !== 'your-turn-discard' || state.hands[0].length !== 14;
+  }
+
+  function renderAll() {
+    const grouping = arrangeHand();
+    renderHand();
+    renderHint(grouping);
+    renderDeckAndDiscard();
+    renderOpponents();
+    renderStatusStrip();
+    renderTurnUi();
+  }
+
+  function renderWildIndicator() {
+    const card = state.wildIndicator;
+    const el = document.getElementById('wild-indicator-card');
+    el.className = 'pcard' + (card.rank === 'JOKER' ? ' joker' : ' ' + RummyRules.SUIT_COLOR[card.suit]);
+    el.innerHTML = card.rank === 'JOKER'
+      ? '<span class="pip">🃏</span>'
+      : `<span class="corner">${card.rank}<br>${card.suit}</span><span class="pip" style="font-size:15px;">${card.suit}</span>`;
+  }
+
+  // --- Round lifecycle -----------------------------------------------------
+
+  function startNewRound() {
+    turnToken++;
+    state = RummyRules.dealNewRound(playerCount);
+    currentPlayerIdx = 0;
+    phase = 'your-turn-draw';
+    selectedCardId = null;
+    gameLog = [];
+    document.getElementById('declare-modal').classList.remove('open');
+    logEvent(`New round dealt. Wild joker rank is ${state.wildRank} (any suit) — plus the printed joker cards.`);
+    renderWildIndicator();
+    renderAll();
+  }
+
+  function scoreLosers(excludeIdx) {
+    return players.map((p, idx) => {
+      if (idx === excludeIdx) return { idx, name: p.name, points: 0 };
+      const g = RummyRules.computeBestGrouping(state.hands[idx], state.wildRank);
+      return { idx, name: p.name, points: g.deadwood };
+    });
+  }
+
+  function endRound({ winnerIdx, invalidDeclareBy }) {
+    phase = 'round-over';
+    let scores, headline;
+
+    if (invalidDeclareBy !== undefined) {
+      scores = players.map((p, idx) => ({ idx, name: p.name, points: idx === invalidDeclareBy ? RummyRules.MAX_PENALTY : 0 }));
+      headline = invalidDeclareBy === 0
+        ? `❌ Invalid declare — that wasn't a valid Rummy hand. You take the ${RummyRules.MAX_PENALTY}-point penalty.`
+        : `❌ ${players[invalidDeclareBy].name} declared invalidly and takes the ${RummyRules.MAX_PENALTY}-point penalty.`;
+      logEvent(headline);
+    } else {
+      scores = scoreLosers(winnerIdx);
+      headline = winnerIdx === 0 ? '🏆 You declare — you win this round!' : `🏆 ${players[winnerIdx].name} declares and wins this round.`;
+      logEvent(headline);
+    }
+
+    document.getElementById('status-strip').textContent = headline;
+    renderOpponents();
+
+    const totalPot = scores.reduce((s, x) => s + x.points, 0) * pointsValue;
+    const rows = scores.map(s => {
+      const amount = s.points * pointsValue;
+      const isWinnerRow = invalidDeclareBy === undefined && s.idx === winnerIdx;
+      const amtText = isWinnerRow ? `+₹${totalPot}` : amount > 0 ? `-₹${amount}` : '₹0';
+      const amtClass = isWinnerRow || amount === 0 ? 'amt-pos' : 'amt-neg';
+      return `<div class="score-row"><span>${s.idx === 0 ? 'You' : s.name}</span><span class="${amtClass}">${s.points} pts · ${amtText}</span></div>`;
+    }).join('');
+
+    document.getElementById('declare-card-content').innerHTML = `
+      <div class="tile-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">${invalidDeclareBy !== undefined ? '❌' : '🏆'}</div>
+      <h1 style="font-size:19px; margin:0;">${headline}</h1>
+      <p style="font-size:12px; color:var(--text-dim); font-weight:600; margin:8px 0 4px;">Practice round only — nothing here touches your real wallet.</p>
+      <div style="margin-top:10px; text-align:left;">${rows}</div>
+      <button class="btn btn-primary" id="btn-play-again" style="margin-top:16px;">Play Again</button>
+      <a href="rummy-lobby.html"><button class="btn btn-ghost" style="margin-top:8px;">Back to Rummy Lobby</button></a>
+    `;
+    document.getElementById('declare-modal').classList.add('open');
+    document.getElementById('btn-play-again').addEventListener('click', startNewRound);
+  }
+
+  // --- Your turn -------------------------------------------------------
+
+  function drawFor0(fromDiscard) {
+    if (phase !== 'your-turn-draw') return;
+    RummyRules.ensureClosedDeckNotEmpty(state);
+    if (fromDiscard) {
+      if (!state.discardPile.length) return;
+      const card = state.discardPile.pop();
+      state.hands[0].push(card);
+      logEvent(`You drew ${cardLabel(card)} from the discard pile.`);
+    } else {
+      const card = state.closedDeck.pop();
+      state.hands[0].push(card);
+      logEvent('You drew from the closed deck.');
+    }
+    phase = 'your-turn-discard';
+    selectedCardId = null;
+    renderAll();
+  }
+
+  document.getElementById('closed-deck').addEventListener('click', () => drawFor0(false));
+  document.getElementById('discard-pile').addEventListener('click', () => drawFor0(true));
 
   document.getElementById('btn-sort').addEventListener('click', () => {
-    hand.sort((a, b) => (a.joker ? 99 : SUITS.findIndex(s => s.sym === a.suit)) - (b.joker ? 99 : SUITS.findIndex(s => s.sym === b.suit))
-      || (a.joker ? 99 : RANKS.indexOf(a.rank)) - (b.joker ? 99 : RANKS.indexOf(b.rank)));
-    selectedIdx = null;
-    renderHand();
-    document.getElementById('btn-discard').disabled = true;
+    if (phase === 'round-over') return;
+    renderAll();
   });
 
   document.getElementById('btn-discard').addEventListener('click', () => {
-    if (selectedIdx === null) return;
-    const [card] = hand.splice(selectedIdx, 1);
-    discardTop = card.joker ? discardTop : card;
-    selectedIdx = null;
-    renderHand();
-    renderDiscard();
-    document.getElementById('btn-discard').disabled = true;
-    document.getElementById('status-strip').textContent = `You discarded ${card.joker ? 'a joker' : card.rank + card.suit}. Ravi's turn.`;
+    if (phase !== 'your-turn-discard' || !selectedCardId) return;
+    const idx = state.hands[0].findIndex(c => c.id === selectedCardId);
+    if (idx === -1) return;
+    const [card] = state.hands[0].splice(idx, 1);
+    state.discardPile.push(card);
+    logEvent(`You discarded ${cardLabel(card)}.`);
+    selectedCardId = null;
+    phase = 'bot-turn';
+    currentPlayerIdx = (currentPlayerIdx + 1) % playerCount;
+    renderAll();
+    runBotTurnsUntilYourTurn();
   });
 
-  function drawCard() {
-    if (hand.length >= 14) return; // demo cap — a real turn is draw-then-discard back to 13
-    const pick = DEMO_POOL[Math.floor(Math.random() * DEMO_POOL.length)];
-    hand.push({ ...pick, group: 5 });
-    renderHand();
+  document.getElementById('btn-declare').addEventListener('click', () => {
+    if (phase !== 'your-turn-discard' || state.hands[0].length !== 14) return;
+    const preferIdx = selectedCardId ? state.hands[0].findIndex(c => c.id === selectedCardId) : null;
+    const option = RummyRules.findDeclareOption(state.hands[0], state.wildRank, preferIdx);
+    if (option) {
+      state.hands[0] = option.hand13;
+      endRound({ winnerIdx: 0 });
+      return;
+    }
+    const proceed = confirm(`This isn't a valid Rummy hand yet — no arrangement of these 14 cards forms 2+ sequences with at least one pure. Declaring anyway costs you the ${RummyRules.MAX_PENALTY}-point penalty. Declare anyway?`);
+    if (proceed) endRound({ invalidDeclareBy: 0 });
+  });
+
+  // --- Bot turns ---------------------------------------------------------
+
+  async function playOneBotTurn(idx) {
+    // closedDeck + discardPile always sum to a fixed total (the 108-card
+    // pack minus the 52 cards in hands and the 1 wild indicator), so
+    // ensureClosedDeckNotEmpty always has cards to reshuffle from — a full
+    // exhaustion of both piles at once can't happen.
+    RummyRules.ensureClosedDeckNotEmpty(state);
+    const hand = state.hands[idx];
+    const discardTop = state.discardPile[state.discardPile.length - 1];
+    const src = discardTop ? RummyRules.botChooseDrawSource(hand, discardTop, state.wildRank) : 'closed';
+
+    if (src === 'discard') {
+      const card = state.discardPile.pop();
+      hand.push(card);
+      logEvent(`${players[idx].name} drew from the discard pile.`);
+    } else {
+      const card = state.closedDeck.pop();
+      hand.push(card);
+      logEvent(`${players[idx].name} drew from the closed deck.`);
+    }
+    renderOpponents();
+    renderDeckAndDiscard();
+    await sleep(STEP_MS);
+
+    const declareOpt = RummyRules.findDeclareOption(hand, state.wildRank);
+    if (declareOpt) {
+      state.hands[idx] = declareOpt.hand13;
+      endRound({ winnerIdx: idx });
+      return;
+    }
+
+    const discardIdx = RummyRules.botChooseDiscardIndex(hand, state.wildRank);
+    const [discarded] = hand.splice(discardIdx, 1);
+    state.discardPile.push(discarded);
+    logEvent(`${players[idx].name} discarded ${cardLabel(discarded)}.`);
+    renderOpponents();
+    renderDeckAndDiscard();
   }
-  document.getElementById('closed-deck').addEventListener('click', drawCard);
-  document.getElementById('discard-pile').addEventListener('click', drawCard);
+
+  async function runBotTurnsUntilYourTurn() {
+    const myToken = turnToken;
+    while (phase !== 'round-over' && currentPlayerIdx !== 0) {
+      await sleep(STEP_MS);
+      if (myToken !== turnToken) return; // a new round started meanwhile
+      await playOneBotTurn(currentPlayerIdx);
+      if (myToken !== turnToken || phase === 'round-over') return;
+      currentPlayerIdx = (currentPlayerIdx + 1) % playerCount;
+      renderOpponents();
+      renderStatusStrip();
+    }
+    if (myToken !== turnToken) return;
+    if (phase !== 'round-over') {
+      phase = 'your-turn-draw';
+      renderAll();
+    }
+  }
 
   document.getElementById('log-toggle').addEventListener('click', () => {
     document.getElementById('log-panel').classList.toggle('open');
   });
 
-  document.getElementById('btn-declare').addEventListener('click', () => {
-    document.getElementById('declare-modal').classList.add('open');
-  });
-  document.getElementById('btn-close-modal').addEventListener('click', () => {
-    document.getElementById('declare-modal').classList.remove('open');
-  });
-
-  renderHand();
-  renderDiscard();
+  startNewRound();
 </script>
 </body>
 </html>
