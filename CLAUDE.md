@@ -4,6 +4,16 @@ A Ludo (board game) PWA with a real multiplayer backend. `design/` is the client
 HTML/CSS/JS, deployed to GitHub Pages); `server/` is an authoritative Colyseus match server backed
 by a Supabase project for auth/wallet-ledger/match-history.
 
+## Working conventions
+
+- **Never use the Artifact tool for anything in this project — including design mockups meant
+  only for discussion, before any real change.** Explicit user preference. A mockup/prototype is a
+  real file committed to `design/` (a standalone page, not wired into the app's navigation or
+  data — the same pattern `rummy-lobby.html`/`rummy-board.html` themselves started as, per their
+  entry below) and shipped through the normal branch → PR → merge → GitHub Pages flow like
+  everything else, so it's reachable by a real URL the user can open on their own phone, not a
+  claude.ai artifact link.
+
 ## Structure
 
 - `design/styles.css` — shared stylesheet for every page. `html, body` sets
@@ -390,6 +400,23 @@ by a Supabase project for auth/wallet-ledger/match-history.
   drawing a 14th card rebalances to 7/7 rather than leaving a lopsided 7/7-turned-8/6. Verified in
   a real headless-Chromium run: no horizontal overflow at 390px, correct 7/6 → 7/7 split across a
   draw, and selecting a card in the second row still lifts the right one.
+- `design/rummy-board-landscape-mockup.html` — a **standalone visual mockup**, not wired into the
+  app (no `game.js`/`rummy-rules.js`/real state — hardcoded example hand/opponents/deck), proposing
+  a landscape-orientation table layout (a player suggested something closer to how RummyCircle's
+  own landscape table looks) for discussion before touching `rummy-board.html` for real. Reuses
+  `styles.css`'s color tokens and the existing `.pcard`/`.card-back` visual language so it reads as
+  a real variant of this app rather than a generic wireframe, but is otherwise self-contained.
+  Shows a phone-frame preview at any viewport size, and a "rotate your phone" prompt in an actual
+  portrait viewport (`@media (orientation: portrait)`) so the layout it's proposing is only ever
+  seen the way it's meant to be seen. Key layout decisions it's proposing, for discussion: opponents
+  move from a `players-panel` scroll-strip (portrait) to a slim always-visible row across the top;
+  the hand renders as a single row of large cards instead of the portrait two-row split (landscape
+  width easily fits all 13-14 overlapped big cards without wrapping); and the action buttons
+  (Arrange/Discard/Declare) move from a full-width bar under the hand to a slim column docked
+  beside it, since landscape has width to spare but very little height. Deliberately not linked
+  from anywhere in the live app's navigation — reachable only by direct URL, the same way
+  `rummy-lobby.html`/`rummy-board.html` themselves started out (see their own entries above) —
+  since it's a conversation piece, not a shipped feature.
 - `design/index.html` — no longer the design-mockup index (removed); a silent redirect stub to
   `login.html`, since GitHub Pages serves `index.html` for the bare site root regardless of what
   `manifest.json` says.
