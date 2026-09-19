@@ -106,13 +106,18 @@
   .hand-head .htitle { font-family:"Baloo 2"; font-weight:800; font-size:14px; }
   .hand-head .hcount { font-size:12px; color:var(--text-dim); font-weight:700; }
 
-  .hand-row {
-    display:flex; align-items:flex-end; overflow-x:auto; padding: 10px 4px 14px;
-    -webkit-overflow-scrolling: touch;
-  }
-  .hand-row .pcard { margin-left:-14px; cursor:pointer; }
-  .hand-row .pcard:first-child { margin-left:0; }
-  .hand-row .group-gap { width:10px; flex-shrink:0; }
+  /* Two explicit rows instead of one horizontally-scrolling row — the whole
+     hand stays visible at once instead of needing a scroll-right gesture to
+     see the back half of it. Each row resets its own overlap (first card of
+     row 2 shouldn't hang off the last card of row 1), so the hand is split
+     into two flex rows in JS rather than left to CSS wrapping, which would
+     overlap across the row break. */
+  .hand-row { padding: 10px 4px 14px; }
+  .hand-line { display:flex; align-items:flex-end; justify-content:center; }
+  .hand-line + .hand-line { margin-top:10px; }
+  .hand-line .pcard { margin-left:-14px; cursor:pointer; }
+  .hand-line .pcard:first-child { margin-left:0; }
+  .hand-line .group-gap { width:10px; flex-shrink:0; }
   .pcard.lifted { transform: translateY(-14px); box-shadow: 0 8px 14px rgba(0,0,0,.3); z-index:2; }
   .pcard.deadwood { box-shadow: 0 0 0 2px var(--red), 0 2px 5px rgba(0,0,0,.25); }
 
@@ -278,25 +283,40 @@
   }
 
   function renderHand() {
-    const row = document.getElementById('hand-row');
-    row.innerHTML = '';
-    hand.forEach((c, i) => {
-      if (i > 0 && c.group !== hand[i - 1].group) {
-        const gap = document.createElement('div');
-        gap.className = 'group-gap';
-        row.appendChild(gap);
-      }
-      const wrap = document.createElement('div');
-      const classes = [selectedIdx === i ? 'lifted' : '', c.deadwood ? 'deadwood' : ''].join(' ');
-      wrap.innerHTML = cardHtml(c, classes);
-      const el = wrap.firstElementChild;
-      el.addEventListener('click', () => {
-        selectedIdx = selectedIdx === i ? null : i;
-        renderHand();
-        document.getElementById('btn-discard').disabled = selectedIdx === null;
+    const container = document.getElementById('hand-row');
+    container.innerHTML = '';
+
+    // Split into two rows of roughly equal length rather than scrolling —
+    // ceil so a 13-card hand is 7/6, not 6/7 (top row never looks lighter
+    // than the bottom one).
+    const splitAt = Math.ceil(hand.length / 2);
+    const lines = [hand.slice(0, splitAt), hand.slice(splitAt)];
+
+    lines.forEach((lineCards, lineIdx) => {
+      const lineOffset = lineIdx === 0 ? 0 : splitAt;
+      const line = document.createElement('div');
+      line.className = 'hand-line';
+      lineCards.forEach((c, j) => {
+        const i = lineOffset + j;
+        if (j > 0 && c.group !== lineCards[j - 1].group) {
+          const gap = document.createElement('div');
+          gap.className = 'group-gap';
+          line.appendChild(gap);
+        }
+        const wrap = document.createElement('div');
+        const classes = [selectedIdx === i ? 'lifted' : '', c.deadwood ? 'deadwood' : ''].join(' ');
+        wrap.innerHTML = cardHtml(c, classes);
+        const el = wrap.firstElementChild;
+        el.addEventListener('click', () => {
+          selectedIdx = selectedIdx === i ? null : i;
+          renderHand();
+          document.getElementById('btn-discard').disabled = selectedIdx === null;
+        });
+        line.appendChild(el);
       });
-      row.appendChild(el);
+      container.appendChild(line);
     });
+
     document.getElementById('hand-count').textContent = hand.length;
   }
 
