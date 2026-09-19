@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Ludo Online — Rummy (Design Preview)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<meta name="theme-color" content="#ff8a3d">
+<style>
+  /* Rummy-specific bits only — everything else reuses styles.css's shared
+     chrome (topbar, tile/action-grid, card, player-chip) the same way every
+     other page in the app does. */
+  .points-tile .tile-title { font-size:17px; }
+  .points-tile .tile-sub { font-size:11px; }
+  .points-tile.selected { box-shadow: 0 0 0 3px var(--accent), var(--shadow); }
+  .size-picker { display:flex; gap:8px; }
+  .size-btn { flex:1; }
+  .rummy-hero { text-align:center; padding: 6px 0 4px; }
+  .rummy-hero .emoji { font-size:34px; }
+  .rummy-hero h2 { font-size:20px; margin-top:6px; }
+  .rummy-hero p { font-size:13px; color:var(--text-dim); font-weight:600; margin-top:2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="dice">🃏</div>
+      <h1 style="font-size:20px;">Ludo Online</h1>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <a href="wallet.html" class="wallet-chip">💰 ₹250.00</a>
+      <div class="avatar">A</div>
+    </div>
+  </div>
+
+  <div style="padding: 8px 20px;">
+    <div class="preview-banner-outer">
+      <div style="background: var(--yellow-soft); border: 1px solid var(--yellow); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12px; font-weight: 700; color: #8a6d00; text-align: center;">
+        🎨 Design preview — layout &amp; interactions only, not wired to a real table yet
+      </div>
+    </div>
+
+    <div class="rummy-hero">
+      <div class="emoji">🃏</div>
+      <h2>Points Rummy</h2>
+      <p>Classic 13-card draw &amp; discard · real-time with real opponents</p>
+    </div>
+
+    <div class="section-title">Points Value</div>
+    <div class="action-grid" id="points-grid">
+      <a class="tile tile-quick points-tile" href="#" data-value="1">
+        <div class="tile-icon">🪙</div>
+        <div class="tile-title">₹1 / point</div>
+        <div class="tile-sub">Casual · low risk</div>
+      </a>
+      <a class="tile tile-create points-tile" href="#" data-value="2">
+        <div class="tile-icon">💠</div>
+        <div class="tile-title">₹2 / point</div>
+        <div class="tile-sub">Standard stakes</div>
+      </a>
+      <a class="tile tile-cash points-tile" href="#" data-value="5">
+        <div class="tile-icon">💎</div>
+        <div class="tile-title">₹5 / point</div>
+        <div class="tile-sub">High stakes</div>
+      </a>
+      <a class="tile tile-join points-tile" href="#join-box">
+        <div class="tile-icon">🔑</div>
+        <div class="tile-title">Join with code</div>
+        <div class="tile-sub">Have a table code?</div>
+      </a>
+    </div>
+
+    <div class="card" id="join-box" style="margin-top:12px;">
+      <div class="field" style="margin-bottom:12px;">
+        <input class="input input-code" maxlength="6" placeholder="ABC123" />
+      </div>
+      <button class="btn btn-secondary" disabled>Join Table (preview only)</button>
+    </div>
+
+    <div class="section-title">Table Size</div>
+    <div class="card">
+      <div class="size-picker" id="size-picker">
+        <button type="button" class="btn btn-primary btn-sm size-btn" data-players="2">2 Players</button>
+        <button type="button" class="btn btn-secondary btn-sm size-btn" data-players="6">6 Players</button>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:12px;">
+      <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
+        <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Points Value</span>
+        <span id="sum-value" style="font-size:14px; font-weight:800;">₹1 / point</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
+        <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Table Size</span>
+        <span id="sum-players" style="font-size:14px; font-weight:800;">2 Players</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; padding:14px 0 6px;">
+        <span style="font-size:14px; font-weight:800;">🏆 Max Loss (80 pts cap)</span>
+        <span id="sum-maxloss" style="font-size:18px; font-weight:800; color:#178a4c;">₹80</span>
+      </div>
+    </div>
+
+    <div style="margin-top:16px; display:flex; flex-direction:column; gap:10px;">
+      <a href="rummy-board.html"><button class="btn btn-primary">Start Table (preview)</button></a>
+      <a href="lobby.html"><button class="btn btn-ghost">← Back to Lobby</button></a>
+      <p class="hint" style="margin:0;">Full points-value math, table matchmaking and wallet locking aren't wired up yet — this screen is layout &amp; flow only.</p>
+    </div>
+
+    <div class="section-title">Recent Rummy Games</div>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <div class="player-chip">
+        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:var(--green);">J</div>
+        <div>
+          <div class="name">Won · 82 points</div>
+          <div class="status">₹2/point table · 2h ago</div>
+        </div>
+        <span class="badge badge-ready">Win</span>
+      </div>
+      <div class="player-chip">
+        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:var(--red);">R</div>
+        <div>
+          <div class="name">Lost · 46 points</div>
+          <div class="status">₹1/point table · yesterday</div>
+        </div>
+        <span class="badge badge-waiting">Loss</span>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  const state = { value: 1, players: 2 };
+  const VALUE_LABEL = { 1: '₹1 / point', 2: '₹2 / point', 5: '₹5 / point' };
+  const POINTS_CAP = 80;
+
+  function render() {
+    document.querySelectorAll('.points-tile[data-value]').forEach((tile) => {
+      tile.classList.toggle('selected', Number(tile.dataset.value) === state.value);
+    });
+    document.querySelectorAll('.size-btn').forEach((btn) => {
+      const selected = Number(btn.dataset.players) === state.players;
+      btn.classList.toggle('btn-primary', selected);
+      btn.classList.toggle('btn-secondary', !selected);
+    });
+    document.getElementById('sum-value').textContent = VALUE_LABEL[state.value];
+    document.getElementById('sum-players').textContent = `${state.players} Players`;
+    document.getElementById('sum-maxloss').textContent = `₹${state.value * POINTS_CAP}`;
+  }
+
+  document.querySelectorAll('.points-tile[data-value]').forEach((tile) => {
+    tile.addEventListener('click', (e) => {
+      e.preventDefault();
+      state.value = Number(tile.dataset.value);
+      render();
+    });
+  });
+
+  document.querySelectorAll('.size-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.players = Number(btn.dataset.players);
+      render();
+    });
+  });
+
+  render();
+</script>
+</body>
+</html>

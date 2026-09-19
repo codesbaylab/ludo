@@ -72,6 +72,37 @@ by a Supabase project for auth/wallet-ledger/match-history.
   leave before the resume attempt lands (a bare single attempt measurably races and fails).
 - `design/board.html` — the actual game; loads `game.js`, `supabase-client.js`, and the
   `colyseus.js` client SDK from CDN.
+- `design/rummy-lobby.html` + `design/rummy-board.html` — **design previews only, explicitly
+  labeled as such on-page** (a yellow banner, plus a modal on Declare spelling out what isn't
+  real yet) — for a possible second game (Indian/Points Rummy), not wired to any backend, Colyseus
+  room, or Supabase call. Static demo data throughout (hardcoded hand/opponents/wallet balance,
+  no auth check). Not linked from anywhere in the real nav (`lobby.html`, `bottom-nav`, etc.) —
+  reachable only by direct URL, same as how a design mockup would normally live outside the real
+  app shell, just as real files in `design/` per an explicit instruction to build these as
+  actual GitHub Pages files rather than a claude.ai Design Canvas artifact. `rummy-lobby.html`
+  reuses `lobby.html`'s `.tile`/`.action-grid`/`.player-chip` chrome for a points-value picker
+  (₹1/₹2/₹5 per point) and a 2/6-player table-size picker, with a live-updating summary card
+  (max-loss = points value × an 80-point cap) — all client-side state, no persistence. Its "Start
+  Table" button links straight to `rummy-board.html`. `rummy-board.html` is the game-table mockup:
+  a felt table with 3 opponents (one shown mid-turn), a closed deck + discard pile + wild-joker
+  indicator, and a 13-card hand row (pre-arranged into example groups: a pure sequence, a
+  joker-completed sequence, two sets, and one deliberately-ungrouped "deadwood" card with a red
+  outline) that supports tap-to-lift/select, Sort, Discard, Draw (from either the closed deck or
+  the discard pile, capped at 14 cards), and a Declare button that opens a modal explicitly
+  stating hand validation isn't implemented. Page-scoped CSS for the card/felt rendering lives in
+  each file's own `<style>` block rather than `styles.css`, since a playing-card table shares
+  little visually with the Ludo board grid. **Fixed while building this**: `.rummy-page`
+  (`rummy-board.html`) originally had only `max-width:720px; margin:0 auto;` with no explicit
+  `width` — since it's a flex item of `.app` (`display:flex; flex-direction:column`), the auto
+  side-margins disable flexbox's default cross-axis stretch (per spec, auto margins on a flex
+  item's cross axis override `align-items:stretch`), so it was shrink-to-fitting to its widest
+  child's content (the hand's card row, ~478px) instead of the viewport — overflowing the page
+  horizontally on mobile despite `.hand-row` itself having `overflow-x:auto`. Fixed by adding an
+  explicit `width:100%` (plus `box-sizing:border-box` for the padding), verified by measuring
+  `document.body.scrollWidth` against `window.innerWidth` before/after in a real headless-Chromium
+  run at 390px and 420px widths (390/420 clean after the fix, was 502 before) — this exact
+  shrink-to-fit trap doesn't affect any other page in the app, since no other page combines a flex
+  `.app` ancestor with an unconstrained-width block using `margin:0 auto` centering.
 - `design/index.html` — no longer the design-mockup index (removed); a silent redirect stub to
   `login.html`, since GitHub Pages serves `index.html` for the bare site root regardless of what
   `manifest.json` says.
