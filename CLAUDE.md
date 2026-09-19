@@ -157,6 +157,21 @@ by a Supabase project for auth/wallet-ledger/match-history.
     by the card's own `id` (not its array index), specifically because re-arranging after every
     mutation would otherwise silently move whatever the player had selected onto a different card
     at the same index.
+  - **The card you just drew gets its own highlight**, separate from the meld-color rings and the
+    selected/`lifted` state — reported as confusing ("which card did I just get?") since a draw
+    immediately re-arranges the whole hand into its best grouping, so the new card can land
+    anywhere and visually blend into whichever group it joined. `lastDrawnCardId` (tracked by id,
+    same reasoning as `selectedCardId` above) is set in `drawFor0()` right when the card is pushed
+    into `state.hands[0]`, and `renderHand()` adds a `.just-drawn` class to that card wherever
+    `arrangeHand()` placed it. Deliberately an `outline` rather than another `box-shadow` variant:
+    every meld-color ring (`.meld-pure`/`.meld-seq`/`.meld-set`/`.deadwood`/`.wild-rank`) already
+    works by fully replacing `box-shadow` on that shared class combo, so a same-mechanism
+    "just drawn" ring would just get overridden by whichever meld color also applies — `outline`
+    is a separate rendering layer that always shows regardless. Cleared (`lastDrawnCardId = null`)
+    on discard and on a fresh deal, so it only lingers for the actual window it's useful: after a
+    draw, until you've decided what to do with it — clicking around to inspect other cards first
+    doesn't clear it. A brief `outline-width` pulse (2 iterations, ~2s) draws the eye to it, then
+    it settles into a steady ring rather than fading away while the player's still deciding.
   - **Declare is forgiving but honest**: clicking Declare searches all 14 cards (preferring to
     keep whichever card the player tapped, if any) for a removal that makes the remaining 13 a
     valid declare (`findDeclareOption`) — the player doesn't have to manually figure out which

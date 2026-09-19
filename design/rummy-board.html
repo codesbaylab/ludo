@@ -168,6 +168,20 @@
   .pcard.lifted.meld-set { box-shadow: 0 0 0 2px #8a4fd4, 0 8px 14px rgba(0,0,0,.3); }
   .pcard.lifted.deadwood { box-shadow: 0 0 0 2px var(--red), 0 8px 14px rgba(0,0,0,.3); }
 
+  /* The card you just drew (from the deck or the discard pile) — an outline
+     rather than another box-shadow, deliberately, so it stays visible no
+     matter which meld color (or none) that card also has; box-shadow rules
+     above replace each other entirely on a shared class combo, but outline
+     is a separate layer that always renders on top. Stays on the card
+     (after a brief width pulse to draw the eye) until you discard or a new
+     hand deals — exactly the window where "which card did I just pick up?"
+     is actually a question. */
+  .pcard.just-drawn { outline: 3px solid #ffb100; outline-offset: 2px; animation: just-drawn-pulse 1s ease-in-out 2; }
+  @keyframes just-drawn-pulse {
+    0%, 100% { outline-width: 3px; }
+    50% { outline-width: 6px; }
+  }
+
   .legend { display:flex; flex-wrap:wrap; gap:10px; font-size:10px; font-weight:700; color:var(--text-dim); margin: 2px 0 8px; }
   .legend span { display:inline-flex; align-items:center; gap:4px; }
   .legend i { width:10px; height:10px; border-radius:3px; display:inline-block; }
@@ -548,6 +562,12 @@
   // deadwood) so the player can literally see which cards belong together
   // without knowing the rules. Recomputed after every hand mutation. ------
   let handGroupTags = []; // parallel to state.hands[0]: {kind: 'pure'|'seq'|'set'|'dead', groupIdx}
+  // The id of the card you most recently drew (deck or discard pile) — kept
+  // separate from `selectedCardId` (which is for choosing what to discard)
+  // so the two highlights never fight over the same card. Cleared once you
+  // discard/declare or a new hand deals, since that's the window a freshly
+  // arranged hand actually makes it hard to spot which card just arrived.
+  let lastDrawnCardId = null;
 
   function arrangeHand() {
     const hand = state.hands[0];
@@ -612,7 +632,7 @@
           line.appendChild(gap);
         }
         const meldClass = tag.kind === 'pure' ? 'meld-pure' : tag.kind === 'seq' ? 'meld-seq' : tag.kind === 'set' ? 'meld-set' : 'deadwood';
-        const classes = [selectedCardId === c.id ? 'lifted' : '', meldClass, interactive ? 'clickable' : ''].join(' ');
+        const classes = [selectedCardId === c.id ? 'lifted' : '', meldClass, interactive ? 'clickable' : '', c.id === lastDrawnCardId ? 'just-drawn' : ''].join(' ');
         const wrap = document.createElement('div');
         wrap.innerHTML = cardHtml(c, classes);
         const el = wrap.firstElementChild;
@@ -731,6 +751,7 @@
     currentPlayerIdx = pickStarter();
     phase = currentPlayerIdx === 0 ? 'your-turn-draw' : 'bot-turn';
     selectedCardId = null;
+    lastDrawnCardId = null;
     gameLog = [];
     logEvent(`New hand dealt. Wild joker rank is ${state.wildRank} (any suit) — plus the printed joker cards.`);
     renderWildIndicator();
@@ -934,10 +955,12 @@
     if (fromDiscard) {
       const card = state.discardPile.pop();
       state.hands[0].push(card);
+      lastDrawnCardId = card.id;
       logEvent(`You drew ${cardLabel(card)} from the discard pile.`);
     } else {
       const card = state.closedDeck.pop();
       state.hands[0].push(card);
+      lastDrawnCardId = card.id;
       logEvent('You drew from the closed deck.');
     }
     phase = 'your-turn-discard';
@@ -971,6 +994,7 @@
     state.discardPile.push(card);
     logEvent(`You discarded ${cardLabel(card)}.`);
     selectedCardId = null;
+    lastDrawnCardId = null;
     phase = 'bot-turn';
     advanceTurn();
     renderAll();
