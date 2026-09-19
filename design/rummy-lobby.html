@@ -39,7 +39,7 @@
   <div style="padding: 8px 20px;">
     <div class="preview-banner-outer">
       <div style="background: var(--yellow-soft); border: 1px solid var(--yellow); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12px; font-weight: 700; color: #8a6d00; text-align: center;">
-        🎨 Design preview — layout &amp; interactions only, not wired to a real table yet
+        🎲 Practice table — real rules, computer opponents, no real money or other players yet
       </div>
     </div>
 
@@ -83,8 +83,8 @@
     <div class="section-title">Table Size</div>
     <div class="card">
       <div class="size-picker" id="size-picker">
-        <button type="button" class="btn btn-primary btn-sm size-btn" data-players="2">2 Players</button>
-        <button type="button" class="btn btn-secondary btn-sm size-btn" data-players="6">6 Players</button>
+        <button type="button" class="btn btn-secondary btn-sm size-btn" data-players="2">2 Players</button>
+        <button type="button" class="btn btn-primary btn-sm size-btn" data-players="4">4 Players</button>
       </div>
     </div>
 
@@ -104,9 +104,9 @@
     </div>
 
     <div style="margin-top:16px; display:flex; flex-direction:column; gap:10px;">
-      <a href="rummy-board.html"><button class="btn btn-primary">Start Table (preview)</button></a>
+      <a id="start-link" href="rummy-board.html?players=2&value=1"><button class="btn btn-primary">Start Table (vs. computer players)</button></a>
       <a href="lobby.html"><button class="btn btn-ghost">← Back to Lobby</button></a>
-      <p class="hint" style="margin:0;">Full points-value math, table matchmaking and wallet locking aren't wired up yet — this screen is layout &amp; flow only.</p>
+      <p class="hint" style="margin:0;">You'll play a full round against computer opponents with the real rules enforced — no real money changes hands, and table matchmaking with other people isn't wired up yet.</p>
     </div>
 
     <div class="section-title">Recent Rummy Games</div>
@@ -131,7 +131,7 @@
   </div>
 </div>
 <script>
-  const state = { value: 1, players: 2 };
+  const state = { value: 1, players: 4 };
   const VALUE_LABEL = { 1: '₹1 / point', 2: '₹2 / point', 5: '₹5 / point' };
   const POINTS_CAP = 80;
 
@@ -147,6 +147,7 @@
     document.getElementById('sum-value').textContent = VALUE_LABEL[state.value];
     document.getElementById('sum-players').textContent = `${state.players} Players`;
     document.getElementById('sum-maxloss').textContent = `₹${state.value * POINTS_CAP}`;
+    document.getElementById('start-link').href = `rummy-board.html?players=${state.players}&value=${state.value}`;
   }
 
   document.querySelectorAll('.points-tile[data-value]').forEach((tile) => {
