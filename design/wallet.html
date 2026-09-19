@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase-client.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#ff8a3d">
 <link rel="icon" href="icons/icon-192.png">
@@ -39,23 +40,23 @@
 
     <!-- Deposit panel -->
     <div class="card" id="panel-deposit" style="margin-top:16px; display:none;">
-      <div class="section-title" style="margin-top:0;">Deposit Money</div>
-      <div class="field">
-        <label>Amount (₹)</label>
-        <input class="input" type="number" placeholder="e.g. 100" value="100" />
+      <div class="section-title" style="margin-top:0;">Deposit USDT</div>
+      <div class="card" style="background:var(--yellow-soft); border:none; padding:12px 14px; margin-bottom:14px;">
+        <div style="font-size:12px; font-weight:700; color:#a36a00;">⚠️ Send USDT on the Tron (TRC-20) network only. Funds sent on any other network (Ethereum, BSC, etc.) cannot be recovered.</div>
       </div>
-      <div style="display:flex; gap:8px; margin-bottom:16px;">
-        <span class="badge badge-waiting" style="cursor:pointer;">₹50</span>
-        <span class="badge badge-waiting" style="cursor:pointer;">₹100</span>
-        <span class="badge badge-waiting" style="cursor:pointer;">₹500</span>
-        <span class="badge badge-waiting" style="cursor:pointer;">₹1000</span>
+      <p class="hint" id="deposit-status" style="margin-top:0;">Loading your deposit address…</p>
+      <div id="deposit-address-block" style="display:none; text-align:center;">
+        <div id="deposit-qr" style="width:180px; margin:0 auto 14px; background:#fff; padding:10px; border-radius:12px; display:inline-block;"></div>
+        <div class="field" style="text-align:left;">
+          <label>Your permanent USDT (TRC-20) address</label>
+          <div style="display:flex; gap:8px;">
+            <input class="input" id="deposit-address-input" readonly style="font-family:monospace; font-size:12px;" />
+            <button class="btn btn-secondary" id="btn-copy-address" style="white-space:nowrap;">Copy</button>
+          </div>
+        </div>
+        <p class="hint" id="deposit-rate-hint"></p>
+        <p class="hint">This address is yours permanently — reuse it for every deposit. Credited automatically, usually within a few minutes of the transfer confirming on-chain.</p>
       </div>
-      <div class="field">
-        <label>Payment Method</label>
-        <input class="input" value="UPI — test@mockpay" readonly style="color:var(--text-dim);" />
-      </div>
-      <button class="btn btn-primary">Confirm Deposit</button>
-      <p class="hint">Mock gateway — instantly confirmed in this demo.</p>
     </div>
 
     <!-- Withdraw panel -->
@@ -95,52 +96,143 @@
   const withdrawBtn = document.getElementById('btn-withdraw');
   const depositPanel = document.getElementById('panel-deposit');
   const withdrawPanel = document.getElementById('panel-withdraw');
+  let depositAddressLoaded = false;
+
   depositBtn.addEventListener('click', () => {
     depositPanel.style.display = depositPanel.style.display === 'none' ? 'block' : 'none';
     withdrawPanel.style.display = 'none';
+    // Fetched lazily (only once the panel is actually opened) rather than on
+    // page load — it's a network round trip to the game server, which can
+    // have a Render cold-start delay, so no need to pay that cost for a
+    // wallet visit that never opens this panel.
+    if (depositPanel.style.display === 'block' && !depositAddressLoaded) {
+      depositAddressLoaded = true;
+      loadDepositAddress();
+    }
   });
   withdrawBtn.addEventListener('click', () => {
     withdrawPanel.style.display = withdrawPanel.style.display === 'none' ? 'block' : 'none';
     depositPanel.style.display = 'none';
   });
 
+  // Same override pattern as board.html/game.js's ?server= — lets local dev
+  // point this at `npm run dev`'s ws://localhost:2567 instead of the live
+  // Render deployment. The deposit-address endpoint is plain HTTPS (not a
+  // Colyseus room), served by the same Express app, hence the scheme swap.
+  const GAME_SERVER_HTTP = (new URLSearchParams(location.search).get('server') || 'wss://ludo-x96u.onrender.com')
+    .replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
+
+  async function loadDepositAddress() {
+    const statusEl = document.getElementById('deposit-status');
+    const blockEl = document.getElementById('deposit-address-block');
+    try {
+      const { data: { session } } = await ludoSupabase.auth.getSession();
+      const [addressRes, rateRes] = await Promise.all([
+        fetch(`${GAME_SERVER_HTTP}/api/crypto/deposit-address`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        }),
+        ludoSupabase.from('crypto_settings').select('usdt_inr_rate').eq('id', true).single(),
+      ]);
+      if (!addressRes.ok) {
+        const body = await addressRes.json().catch(() => ({}));
+        throw new Error(body.error || `server returned ${addressRes.status}`);
+      }
+      const { address } = await addressRes.json();
+      const rate = Number(rateRes.data?.usdt_inr_rate ?? 90);
+
+      document.getElementById('deposit-address-input').value = address;
+      document.getElementById('deposit-rate-hint').textContent = `Current rate: 1 USDT ≈ ₹${rate.toFixed(2)}`;
+
+      const qr = qrcode(0, 'M');
+      qr.addData(address);
+      qr.make();
+      document.getElementById('deposit-qr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2 });
+
+      statusEl.style.display = 'none';
+      blockEl.style.display = 'block';
+    } catch (err) {
+      console.error('[ludo] failed to load deposit address:', err);
+      statusEl.textContent = 'Could not reach the game server to get your deposit address — the server may be waking up from idle (~30-60s on the first try), or crypto deposits may not be enabled yet. Try again in a moment.';
+      depositAddressLoaded = false; // allow retrying on the next panel open
+    }
+  }
+
+  document.getElementById('btn-copy-address').addEventListener('click', async () => {
+    const input = document.getElementById('deposit-address-input');
+    try {
+      await navigator.clipboard.writeText(input.value);
+      const btn = document.getElementById('btn-copy-address');
+      const original = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    } catch {
+      input.select();
+    }
+  });
+
   (async () => {
     const { data: { session } } = await ludoSupabase.auth.getSession();
     if (!session) { location.href = 'login.html'; return; }
 
-    const [{ data: wallet }, matches] = await Promise.all([
+    const [{ data: wallet }, matches, cryptoDeposits] = await Promise.all([
       ludoSupabase.from('wallets').select('balance').eq('user_id', session.user.id).single(),
       ludoFetchMatches(session.user.id, 20),
+      ludoFetchCryptoDeposits(session.user.id, 20),
     ]);
     document.getElementById('wallet-balance').textContent = `₹${Number(wallet?.balance ?? 0).toFixed(2)}`;
 
     const stakedMatches = matches.filter(m => m.matches.stake > 0);
     const counts = await ludoFetchPlayerCounts(stakedMatches.map(m => m.matches.id));
 
+    // Two different sources (match results, USDT deposits) merged into one
+    // time-ordered feed so "Transaction History" is actually complete now —
+    // no more mock/fabricated entries in this list.
+    const entries = [];
+    stakedMatches.forEach(m => {
+      const won = m.result === 'win';
+      const stake = m.matches.stake;
+      const playerCount = counts[m.matches.id] || 2;
+      const pot = stake * playerCount;
+      const fee = Math.round(pot * 0.1);
+      const payout = pot - fee;
+      const delta = won ? payout - stake : -stake;
+      entries.push({
+        time: m.matches.finished_at,
+        icon: won ? '🏆' : '🎲',
+        iconBg: won ? 'linear-gradient(135deg, var(--accent), var(--accent-2))' : 'linear-gradient(135deg, var(--red), #c93a3a)',
+        title: won ? 'Match Winnings' : 'Table Stake',
+        subtitle: `${ludoTimeAgo(m.matches.finished_at)} · ₹${stake} table`,
+        delta,
+      });
+    });
+    cryptoDeposits.forEach(d => {
+      entries.push({
+        time: d.detected_at,
+        icon: '💵',
+        iconBg: 'linear-gradient(135deg, #26a17b, #178a4c)', // Tether green
+        title: 'USDT Deposit',
+        subtitle: `${ludoTimeAgo(d.detected_at)} · ${Number(d.amount_usdt).toFixed(2)} USDT (TRC-20)`,
+        delta: Number(d.inr_credited),
+      });
+    });
+    entries.sort((a, b) => new Date(b.time) - new Date(a.time));
+
     const list = document.getElementById('transactions-list');
     list.innerHTML = '';
-    if (stakedMatches.length === 0) {
-      // Deposits/withdrawals aren't real transactions yet (see the mock
-      // gateway above) and there are no cash-table results to derive from.
+    if (entries.length === 0) {
       list.innerHTML = '<p class="hint" style="margin:0;">No transactions yet.</p>';
     } else {
-      stakedMatches.forEach(m => {
-        const won = m.result === 'win';
-        const stake = m.matches.stake;
-        const playerCount = counts[m.matches.id] || 2;
-        const pot = stake * playerCount;
-        const fee = Math.round(pot * 0.1);
-        const payout = pot - fee;
-        const delta = won ? payout - stake : -stake;
+      entries.forEach(e => {
         const row = document.createElement('div');
         row.className = 'player-chip';
         row.innerHTML = `
-          <div class="avatar" style="width:34px; height:34px; font-size:15px; background:${won ? 'linear-gradient(135deg, var(--accent), var(--accent-2))' : 'linear-gradient(135deg, var(--red), #c93a3a)'};">${won ? '🏆' : '🎲'}</div>
+          <div class="avatar" style="width:34px; height:34px; font-size:15px; background:${e.iconBg};">${e.icon}</div>
           <div>
-            <div class="name">${won ? 'Match Winnings' : 'Table Stake'}</div>
-            <div class="status">${ludoTimeAgo(m.matches.finished_at)} · ₹${stake} table</div>
+            <div class="name">${e.title}</div>
+            <div class="status">${e.subtitle}</div>
           </div>
-          <span class="badge ${delta >= 0 ? 'badge-ready' : 'badge-waiting'}">${delta >= 0 ? '+' : ''}₹${delta}</span>
+          <span class="badge ${e.delta >= 0 ? 'badge-ready' : 'badge-waiting'}">${e.delta >= 0 ? '+' : ''}₹${e.delta}</span>
         `;
         list.appendChild(row);
       });

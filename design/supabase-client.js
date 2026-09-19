@@ -71,6 +71,21 @@
     return counts;
   };
 
+  // A user's own confirmed USDT deposits, newest first — wallet.html's
+  // deposit history. RLS on crypto_deposits only allows reading your own
+  // rows (same pattern as match_players), so this is exactly what actually
+  // got credited to this user's wallet, not a claim/pending list.
+  window.ludoFetchCryptoDeposits = async function (userId, limit) {
+    const { data, error } = await window.ludoSupabase
+      .from('crypto_deposits')
+      .select('tx_hash, amount_usdt, inr_credited, detected_at')
+      .eq('user_id', userId)
+      .order('detected_at', { ascending: false })
+      .limit(limit || 20);
+    if (error) { console.error('[ludo] failed to fetch crypto deposits:', error); return []; }
+    return data;
+  };
+
   // Is this user an admin? Used by login.html to route to admin.html instead
   // of lobby.html, and by admin.html itself to bounce non-admins away.
   window.ludoIsAdmin = async function (userId) {

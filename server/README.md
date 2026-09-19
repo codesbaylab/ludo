@@ -85,10 +85,51 @@ guarantee that the server's processed that handoff leave before the resume
 attempt lands, so `board.html` retries the reconnect a few times rather than
 treating a single failure as final.
 
+## Crypto deposits (USDT / TRC-20)
+
+Custodial USDT deposits, no third-party payment gateway — see `CLAUDE.md`'s
+"Crypto deposits" section for the full design rationale. In short:
+
+- One permanent Tron address per user, deterministically derived from a
+  single server-side master seed (`TRON_MASTER_SEED`, a BIP39 mnemonic) plus
+  a per-user index — `src/crypto/tron.ts`. No private key is ever stored
+  anywhere; every one is re-derivable on demand from the seed + index alone.
+- `src/crypto/depositAddress.ts` + the `POST /api/crypto/deposit-address`
+  route in `index.ts` hand out (creating on first call) a user's address,
+  authenticated via their Supabase session token.
+- `src/crypto/depositWatcher.ts` polls TronGrid every 30s for confirmed
+  USDT transfers to known addresses and credits them atomically via the
+  `credit_crypto_deposit` Postgres RPC (idempotent on the transaction hash —
+  see the migration `add_crypto_usdt_deposits`).
+- Both env-gated the same way `SUPABASE_SERVICE_ROLE_KEY` already is: unset
+  `TRON_MASTER_SEED` and the server logs one warning and runs everything
+  else completely normally.
+
+**To generate a master seed** (do this once, keep the output somewhere safe,
+set it as `TRON_MASTER_SEED` in Render's dashboard — never in `.env`, never
+committed, never logged):
+```
+node -e "console.log(require('tronweb').TronWeb.createRandom().mnemonic.phrase)"
+```
+
+**Important, unverified from this repo's dev environment:** the TronGrid API
+calls in `depositWatcher.ts` could not be exercised against a real network
+response while building this — outbound requests to `api.trongrid.io` are
+blocked by that sandbox's network policy. The code is written against
+TronGrid's documented API shape and the database-level crediting/idempotency
+logic *has* been verified directly against the real Supabase project, but
+the TronGrid integration itself needs a real run before it's trusted with
+real funds. `USDT_CONTRACT_ADDRESS_OVERRIDE` + `TRONGRID_API_BASE` exist
+specifically to let this be rehearsed end-to-end against Tron's Shasta/Nile
+testnet (using a test TRC-20 token) first.
+
+**Not built yet, on purpose (see CLAUDE.md):** withdrawals, automated
+sweeping to cold storage (do this manually/periodically for now — funds sit
+in each user's own deposit address until swept), and live USD/INR pricing
+(`crypto_settings.usdt_inr_rate` is a plain admin-editable column, no
+price-feed dependency).
+
 ## What this does NOT do yet (known scope gaps)
 
 - **No spectator handling.** Every seat is a required active player;
   there's no read-only observer mode.
-- **No bot takeover / forfeit.** If a player never reconnects within the
-  grace window, the game just stays paused indefinitely — there's no
-  auto-forfeit or AI takeover for their seat.
