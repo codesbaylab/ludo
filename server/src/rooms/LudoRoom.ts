@@ -88,7 +88,23 @@ export class LudoRoom extends Room<LudoState> {
     this.onMessage('selectToken', (client, message) => this.handleSelectToken(client, message));
   }
 
-  onJoin(client: Client, options: JoinOptions = {}) {
+  async onJoin(client: Client, options: JoinOptions = {}) {
+    // Checked before reserving a slot — a banned user must never occupy a
+    // seat (even briefly), since the rest of onJoin assumes a reserved slot
+    // is a real, playing participant. Real-money stakes are on the line, so
+    // this is enforced here (the authoritative room), not just by hiding
+    // the "Play" buttons client-side.
+    if (options.userId) {
+      const supabase = getSupabase();
+      if (supabase) {
+        const { data } = await supabase.from('profiles').select('is_banned').eq('id', options.userId).single();
+        if (data?.is_banned) {
+          client.leave();
+          return;
+        }
+      }
+    }
+
     const slot = this.state.players.find((p) => !p.connected);
     if (!slot) {
       client.leave();

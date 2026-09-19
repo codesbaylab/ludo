@@ -201,23 +201,60 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   advisories/lints outstanding.
 - **Admin**: `profiles.is_admin` gates access — a `before update` trigger
   (`prevent_is_admin_self_update`) silently reverts any attempt to change it from a non-
-  `service_role` connection, so it can only be toggled via the dashboard/service role, never by a
-  client. `is_admin(uid)` is a `SECURITY DEFINER` helper (needed so the `profiles`/`wallets` RLS
-  policies checking "is the caller an admin" don't query `profiles` from within a `profiles`
-  policy — that recurses infinitely; caught by testing, not theoretical). Two admin-gated RPCs:
-  `admin_adjust_wallet_balance(user_id, delta)` (atomic, same single-`UPDATE` pattern as
-  `increment_wallet_balance`) and `get_platform_stats()` (total users/matches/fee revenue in one
-  query). All four new functions have `EXECUTE` revoked from `anon`/`public`, granted only to
-  `authenticated` — the linter still flags them as "callable by authenticated users" but that's
-  intentional, since the admin (an authenticated user) is who's supposed to call them; the
-  in-function `is_admin(auth.uid())` check is the real gate, not the grant. `design/admin.html` is
-  the only client of these. To make someone an admin: `update public.profiles set is_admin = true
-  where id = '<their auth.users id>';` via the Supabase SQL editor or MCP tools — there's no UI
-  for it by design.
+  `service_role` connection, so a plain client `.update()` can never touch it. `is_admin(uid)` is a
+  `SECURITY DEFINER` helper (needed so the `profiles`/`wallets` RLS policies checking "is the
+  caller an admin" don't query `profiles` from within a `profiles` policy — that recurses
+  infinitely; caught by testing, not theoretical). All admin RPCs have `EXECUTE` revoked from
+  `anon`/`public`, granted only to `authenticated` — the linter still flags them as "callable by
+  authenticated users" but that's intentional, since the admin (an authenticated user) is who's
+  supposed to call them; the in-function `is_admin(auth.uid())` check is the real gate, not the
+  grant. `design/admin.html` is the only client of any of these:
+  - `admin_adjust_wallet_balance(user_id, delta)` — atomic, same single-`UPDATE` pattern as
+    `increment_wallet_balance`.
+  - `get_platform_stats()` — total users/matches/fee revenue in one query.
+  - `admin_set_usdt_rate(rate)` — updates `crypto_settings.usdt_inr_rate` (which otherwise has no
+    UPDATE policy for anyone — this RPC is the only way to change it, on purpose, so it's never a
+    stray client `.update()` call).
+  - `admin_set_user_banned(user_id, banned)` — toggles `profiles.is_banned`. Enforced server-side
+    in `LudoRoom.onJoin` (see "Colyseus server" below), not just hidden client-side.
+  - `admin_set_is_admin(user_id, is_admin)` — the actual UI for promoting/demoting admins (the
+    dashboard/service-role path above still works too, just isn't the only way anymore). Getting
+    past `prevent_is_admin_self_update` from a real admin's own JWT needs one specific trick:
+    `auth.role()` reflects the *original caller's* JWT for the whole transaction regardless of the
+    function's own `SECURITY DEFINER` privileges, so the RPC does
+    `perform set_config('request.jwt.claim.role', 'service_role', true)` (transaction-scoped,
+    reverts automatically) right before the `UPDATE`, satisfying the trigger's check without
+    weakening it for any other caller or table. Also refuses to let an admin demote themselves
+    (avoids a last-admin lockout). Both the bypass and the self-demotion guard were verified
+    directly against the real database, inside a transaction rolled back afterward: promoting a
+    real test user actually stuck (not silently reverted by the trigger), a non-admin caller was
+    rejected, and a self-demotion attempt was rejected — all with zero persisted side effects.
+  - `crypto_deposit_addresses`/`crypto_deposits` also each got an `is_admin(auth.uid())` SELECT
+    policy (same pattern as `wallets_select_admin`) so `admin.html` can show every user's USDT
+    deposit history — neither table had any admin visibility before this.
+  `admin.html` itself now also has: a Crypto Deposits section (the current rate + an edit form
+  calling `admin_set_usdt_rate`, and every deposit across all users); a search box over Users &
+  Wallets plus Ban/Unban and Promote/Demote buttons per row (the promote/demote button is disabled
+  on the signed-in admin's own row, mirroring the RPC's own guard); and a tap-to-expand player
+  breakdown (color, name, win/lose) on each row in All Matches, reusing the `match_players` data
+  already fetched for the games/wins stats rather than a second query. Verified end-to-end in a
+  real Chromium browser with a mocked Supabase client (search filtering, rate update, ban/promote
+  state changes, match drill-down, and the self-row guard all confirmed rendering correctly).
 - **Colyseus server** (`server/`): an authoritative `LudoRoom` — see `server/README.md` for
   setup and `npm run test:sim` for the 4-client full-game regression check. Hosting: self-hosted
   via Docker on Render's free tier (`server/Dockerfile`, `render.yaml`) — chosen over Colyseus
   Cloud, which has no free tier.
+- **Ban enforcement**: `onJoin` is now `async` and checks `profiles.is_banned` for `options.userId`
+  (via `getSupabase()`) *before* reserving a seat — same `client.leave()` rejection the "room is
+  full" case already used, so a banned user can never occupy a slot even briefly. Deliberately
+  enforced here (the authoritative room), not only by hiding the "Play" buttons client-side, since
+  real stakes are on the line. `getSupabase()` returning `null` (no service role key configured)
+  no-ops this the same way it already no-ops `persistResult` — never crashes, just quietly doesn't
+  check. **Not verified against a live Supabase connection from this project's dev sandbox**: that
+  network path is blocked here the same way the crypto-deposit TronGrid calls are (see "Crypto
+  deposits" below) — `is_banned` and the `admin_set_user_banned` RPC that flips it *were* verified
+  directly against the real database, but the `onJoin` code path itself is a straightforward
+  `select` + boolean check reviewed rather than live-tested end-to-end.
 - **Reconnection & leaving mid-game**: `onLeave` gives a disconnected player a 60s grace window
   (`this.allowReconnection(client, reconnectGraceSeconds)`, overridable via the `reconnectGraceSeconds`
   create option for tests) before giving up. The game does **not** pause for everyone else while
