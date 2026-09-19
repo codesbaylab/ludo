@@ -88,40 +88,64 @@ by a Supabase project for auth/wallet-ledger/match-history.
   sequence can still leave 80+ points of expensive cards ungrouped — another bug the randomized
   stress test below caught). Since a card matching the wild rank is ambiguous — usable at face
   value *or* as a substitute — meld detection branches over every such card's two interpretations
-  rather than assuming one. **Verified with 30 automated tests** (`node` — no browser needed):
+  rather than assuming one. Also carries the **Pool Rummy** bookkeeping layer (see the
+  `rummy-board.html` entry below for the gameplay side): `POOL_SIZES` (`[51, 101, 201]`),
+  `createPoolPlayers`/`applyPoolHandResult`/`activePoolPlayers`/`isPoolOver` for cumulative
+  scoring and elimination across several hands (a loser's points accumulate hand over hand;
+  reaching/crossing the pool cap — `cumulative >= poolLimit`, not `>`, matching the real rule —
+  eliminates that seat; last one active takes the entry-fee pot), and `firstActiveFrom(start,
+  count, poolPlayers)` to pick the next non-eliminated seat both for who opens each hand and for
+  turn order, wrapping around and skipping eliminated seats without needing to resize/reindex the
+  players array mid-pool. Deliberately not modeled: real-platform re-entry/second-chance rules.
+  **Verified with 48 automated tests** (`node design/rummy-rules.test.js` — no browser needed):
   known pure/impure/Ace-edge sequences and sets, a full valid 13-card winning hand, hands that
   fail for each real reason (only 1 sequence, zero sequences, two sequences neither pure, an
   ungroupable leftover card), deadwood math against hand-computed expected values, `dealNewRound`
-  accounting for all 108 cards, and a 25-round (100-hand) randomized stress test asserting every
+  accounting for all 108 cards, a 25-round (100-hand) randomized stress test asserting every
   grouping partitions its hand exactly once with no gaps/overlaps and deadwood always lands in
-  `[0, 80]` — this test is what caught both scoring bugs above. Performance: ~7ms per
-  `computeBestGrouping` call on a 14-card hand in Node, comfortably fast enough to run on every
-  hand change in the browser.
-- `design/rummy-lobby.html` + `design/rummy-board.html` — a **playable practice table**: real
-  Rummy rules (via `rummy-rules.js`) against simple computer opponents, entirely client-side, no
+  `[0, 80]` — this test is what caught both scoring bugs above — and 18 Pool-specific tests
+  (accumulation, the `>=` elimination threshold, an eliminated seat's score freezing regardless of
+  further hand results, `firstActiveFrom` skipping/wrapping correctly including down to a sole
+  survivor, and a hand-verified 4-hand simulated pool lifecycle reaching exactly one survivor).
+  Performance: ~7ms per `computeBestGrouping` call on a 14-card hand in Node, comfortably fast
+  enough to run on every hand change in the browser.
+- `design/rummy-lobby.html` + `design/rummy-board.html` — a **playable practice table**, with
+  two selectable game modes (**Points Rummy** and **Pool Rummy**): real Rummy rules (via
+  `rummy-rules.js`) against simple computer opponents, entirely client-side, no
   backend/Colyseus/Supabase involved and no real money at stake — built this way specifically so
-  the rules could be verified by actually playing a round, rather than trusting an unplayed mockup
-  or a rules explanation. A yellow banner and the "Practice round only" note in the results modal
-  keep this honest on-page. Reachable from `lobby.html` via an "Other Games" section (a single
-  `tile-wide` linking to `rummy-lobby.html`, reusing the same `.tile`/`tile-join` pattern as the
-  "Join with code" tile above it) — this was missing for a while after gameplay was added (the
-  pages started as unlinked design mockups reachable only by direct URL, and stayed that way past
-  the point where that stopped making sense once they became a real playable feature); the wallet
-  chip stays a static demo figure (₹250.00) since no real balance is touched. `rummy-lobby.html`
-  reuses `lobby.html`'s `.tile`/`.action-grid`/`.player-chip` chrome
-  for a points-value picker (₹1/₹2/₹5 per point) and a 2/4-player table-size picker (not 2/6 as
-  originally mocked up — `rummy-board.html`'s felt template only has 3 opponent slots, so 4 total
-  players is the real ceiling), with a live-updating summary card. Its "Start Table" button links
-  to `rummy-board.html?players=&value=`, carrying the picker's state through via query params
-  (`rummy-board.html` defaults to 4 players / ₹1 if loaded without them). `rummy-board.html`:
-  - **Real turn loop**: `RummyRules.dealNewRound(playerCount)` deals 13 cards each; you draw
-    (closed deck or discard pile), then Discard or Declare; bots (`Jilna`/`Ravi`/`Sana`, or just
-    `Ravi` in 2-player mode) take their turns automatically on a short delay (`?fast=1` collapses
-    this to ~15ms, used only by automated tests) using `botChooseDrawSource`/
+  the rules could be verified by actually playing, rather than trusting an unplayed mockup or a
+  rules explanation. A yellow banner and a "practice only, nothing touches your real wallet" note
+  in the results modal(s) keep this honest on-page. Reachable from `lobby.html` via an "Other
+  Games" section (a single `tile-wide` linking to `rummy-lobby.html`, reusing the same
+  `.tile`/`tile-join` pattern as the "Join with code" tile above it) — this was missing for a
+  while after gameplay was added (the pages started as unlinked design mockups reachable only by
+  direct URL, and stayed that way past the point where that stopped making sense once they became
+  a real playable feature); the wallet chip stays a static demo figure (₹250.00) since no real
+  balance is touched.
+  - `rummy-lobby.html`: a `.mode-picker` toggle switches between the two modes' pickers (only one
+    section visible at a time, both built from the same `.tile`/`.action-grid` chrome as the rest
+    of the app). **Points Rummy**: points-value picker (₹1/₹2/₹5 per point). **Pool Rummy**: a
+    pool-size picker (51/101/201 — `RummyRules.POOL_SIZES`) and an entry-fee picker (₹50/₹100/₹200
+    — each player's fixed buy-in into the pot, unrelated to per-hand scoring). Both modes share a
+    2/4-player table-size picker (not 2/6 as originally mocked up — `rummy-board.html`'s felt
+    template only has 3 opponent slots, so 4 total players is the real ceiling) and a live-updating
+    summary card (max-loss-per-round for Points; pool size/entry/total pot for Pool). "Start Table"
+    links to `rummy-board.html?mode=points&players=&value=` or
+    `rummy-board.html?mode=pool&players=&pool=&entry=` depending on the toggle (`rummy-board.html`
+    defaults to Points / 4 players / ₹1 if loaded without any params at all).
+  - `rummy-board.html`'s **shared turn loop** (identical for both modes — the mode only changes
+    what happens once a hand ends): `RummyRules.dealNewRound(playerCount)` deals 13 cards each;
+    you draw (closed deck or discard pile), then Discard or Declare; bots (`Jilna`/`Ravi`/`Sana`,
+    or just `Ravi` in 2-player mode) take their turns automatically on a short delay (`?fast=1`
+    collapses this to ~15ms, used only by automated tests) using `botChooseDrawSource`/
     `botChooseDiscardIndex`/`findDeclareOption` from the rules engine, looping until control
-    returns to you or someone declares. A `turnToken` counter is bumped on every new round and
-    checked inside the async bot loop so starting a fresh round (via "Play Again") cancels any
-    still-running bot-turn loop from the previous one instead of two rounds' timers racing.
+    returns to you or someone declares. A `turnToken` counter is bumped on every new hand and
+    checked inside the async bot loop so dealing a fresh hand cancels any still-running bot-turn
+    loop from the previous one instead of two hands' timers racing. `advanceTurn()`/`pickStarter()`
+    branch on mode: Points Rummy just does `(currentPlayerIdx + 1) % playerCount` and always starts
+    with you (a deliberate simplification — real Rummy rotates the dealer); Pool Rummy instead uses
+    `RummyRules.firstActiveFrom` so eliminated seats are transparently skipped in turn order — no
+    other turn-loop code needed to know or care that a seat is out.
   - **Your hand is always auto-arranged, not just sorted**: every hand mutation (draw, discard, a
     fresh deal) calls `arrangeHand()`, which runs `computeBestGrouping` and reorders the hand into
     its best-found groups — pure sequences first, then other sequences, then sets, then deadwood
@@ -139,24 +163,63 @@ by a Supabase project for auth/wallet-ledger/match-history.
     card to discard to win. If no such arrangement exists, a `confirm()` dialog states plainly
     that this isn't a valid hand yet and declaring anyway costs the 80-point penalty, rather than
     silently blocking the button or silently declaring wrong.
-  - **Scoring or an invalid declare both end the round** via a shared `endRound()` that renders a
-    real per-player points/₹ breakdown (`computeBestGrouping` on every other player's live hand)
-    into the existing modal, with "Practice round only — nothing here touches your real wallet"
-    stated directly in it, plus Play Again / Back to Rummy Lobby.
+  - **A shared `endHand()` handles every hand's conclusion** for both modes, computing
+    `scoreLosers()`/the invalid-declare penalty once. **Points Rummy**: this *is* the round —
+    `showPointsResultModal()` renders the final points/₹ breakdown immediately, with Play Again /
+    Back to Rummy Lobby. **Pool Rummy**: the hand's points fold into `poolPlayers` via
+    `RummyRules.applyPoolHandResult` (an already-eliminated seat's contribution is forced to 0,
+    checked against the *pre-hand* eliminated snapshot so a seat crossing the cap on this very
+    hand still counts its real points for it) and the match continues:
+    - A **Pool Standings panel** (`#pool-standings`, above the felt, visible for the whole match)
+      lists every player's running total and pool cap, with eliminated rows struck through — the
+      one piece of UI that makes Pool Rummy's defining mechanic (accumulation + elimination)
+      actually visible while playing, not just at the end.
+    - If `RummyRules.isPoolOver(poolPlayers)` (exactly one seat still active), `showPoolCompleteModal()`
+      shows the sole survivor, final per-player point totals, and the real payout (survivor
+      `+₹(entryFee × playerCount)`, everyone else `-₹entryFee` flat — pot-based, not proportional
+      to how badly they lost), with New Pool (resets `poolPlayers` fresh via
+      `createPoolPlayers` and deals) / Back to Rummy Lobby.
+    - Otherwise `showHandResultModal()` shows this hand's result and, if **you're** still active,
+      a "Next Hand →" button; if you were just eliminated, no button — a short readable pause
+      (`?fast=1`-aware, ~30ms in tests vs. 1800ms live) then auto-continues to the next hand as a
+      spectator, since bot-only hands need no input from you. Once you're eliminated,
+      `renderAll()` hides your entire hand/action-bar (`#hand-section-content`) behind a
+      `#you-eliminated-banner` ("watching the rest play out…") instead of showing a dead, unusable
+      hand — and opponent felt slots get an `.eliminated` (dimmed) treatment + an "OUT" label in
+      place of their card count, driven by the same `poolPlayers[i].eliminated` flag.
   - **Deck exhaustion**: `ensureClosedDeckNotEmpty` reshuffles the discard pile (minus its top
     card) back into the closed deck whenever the closed deck runs dry — never a hard crash, since
     closed-deck-count + discard-pile-count is a fixed invariant (the 108-card pack minus the 52
     cards currently in hands and the 1 wild indicator) that can only be zero on *both* sides
     simultaneously if the whole pack were gone, which the game's flow makes impossible (every turn
     always nets exactly one card into the discard pile).
-  - **Verified end-to-end in real headless Chromium**, not just unit-tested: scripted full
-    playthroughs (`?fast=1`) in both 4-player and 2-player mode, each running until the round-end
-    modal opens, checking the score-row math sums correctly against the displayed payout and that
-    "Play Again" deals a genuinely fresh round (reset deck count, hand size); a dedicated run
-    forcing the "declare anyway?" invalid-declare path end-to-end including the confirm() dialog;
-    repeated runs (10+) with zero console/page errors and turn counts varying naturally (4 to 70+)
-    confirming the bots aren't stuck in a fixed pattern; no horizontal overflow at 390/420px in
-    either player-count mode. Page-scoped CSS for the card/felt rendering lives in each file's own
+  - **Bug caught building Pool Rummy**: the "Last hand: …" line in the pool-complete modal stripped
+    the leading trophy/cross emoji with `headline.replace(/^[🏆❌]\s*/, '')` — a regex *character
+    class* containing multi-code-unit emoji without the `u` flag splits each into its separate
+    surrogate units, so the class only ever matched half of one, corrupting the string into `�` at
+    render time in every real browser run. Fixed by switching to an alternation
+    (`/^(🏆|❌)\s*/`), which matches each emoji as a whole literal substring regardless of the `u`
+    flag — caught by actually reading a real Chromium-rendered playthrough's text, not by the
+    regex looking reasonable in isolation.
+  - **Verified end-to-end in real headless Chromium**, not just unit-tested. Points Rummy: scripted
+    full playthroughs (`?fast=1`) in both 4-player and 2-player mode, each running until the
+    round-end modal opens, checking the score-row math sums correctly against the displayed payout
+    and that "Play Again" deals a genuinely fresh round (reset deck count, hand size); a dedicated
+    run forcing the "declare anyway?" invalid-declare path end-to-end including the confirm()
+    dialog; repeated runs (10+) with zero console/page errors and turn counts varying naturally (4
+    to 70+) confirming the bots aren't stuck in a fixed pattern. Pool Rummy: scripted full pools
+    (4-player and 2-player, 51-point cap for a fast-resolving test) played hand-by-hand to actual
+    completion multiple times — confirming the standings panel updates correctly each hand, a
+    seat's cumulative score freezes exactly at its elimination hand and matches the engine's own
+    unit-tested math, the "Next Hand"/spectator-auto-continue branching triggers correctly
+    depending on whether seat 0 is still active, the pool always resolves to exactly one survivor
+    with correct final pot payouts (verified 2p resolves in exactly 1 hand, as expected — the only
+    possible outcome once either seat is eliminated), and "New Pool" genuinely resets cumulative
+    scores/elimination state before dealing again; a dedicated repeated-seed run specifically to
+    capture the "you're eliminated, mid-pool" spectator banner and confirm the eliminated felt
+    slot's dimmed/"OUT" treatment renders correctly. No horizontal overflow at 390/420px in any
+    mode/player-count combination tested. Page-scoped CSS for the card/felt rendering lives in each
+    file's own
     `<style>` block rather than `styles.css`, since a playing-card table shares little visually
     with the Ludo board grid. **Fixed while building this** (from the earlier mockup phase, still
     true): `.rummy-page`

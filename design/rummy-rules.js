@@ -409,11 +409,63 @@
     return bestIdx;
   }
 
+  // --- Pool Rummy ---------------------------------------------------------
+  // Several hands played in sequence: a loser's points accumulate across
+  // hands (instead of being settled after just one), and reaching the
+  // pool's point cap eliminates that player. Play continues among whoever's
+  // still active until exactly one remains, who takes the whole entry pot.
+  // Deliberately not modeled: re-entry/second-chance rules some real
+  // platforms offer — out of scope here, same as this engine not modeling
+  // drop/middle-drop scoring.
+  var POOL_SIZES = [51, 101, 201];
+
+  function createPoolPlayers(names) {
+    return names.map(function (name, idx) {
+      return { idx: idx, name: name, cumulative: 0, eliminated: false };
+    });
+  }
+
+  // handPoints: an array parallel to poolPlayers with this hand's points
+  // for every player (0 for the hand's winner, deadwood/penalty for
+  // everyone else; 0 for any already-eliminated player, who didn't play).
+  // Returns a new array — doesn't mutate poolPlayers.
+  function applyPoolHandResult(poolPlayers, handPoints, poolLimit) {
+    return poolPlayers.map(function (p, i) {
+      if (p.eliminated) return p;
+      var cumulative = p.cumulative + (handPoints[i] || 0);
+      return { idx: p.idx, name: p.name, cumulative: cumulative, eliminated: cumulative >= poolLimit };
+    });
+  }
+
+  function activePoolPlayers(poolPlayers) {
+    return poolPlayers.filter(function (p) { return !p.eliminated; });
+  }
+
+  // A hand's winner always scores 0 that hand, so their cumulative can't
+  // cross the cap — at least one player is always still active after any
+  // hand, meaning this can never reach 0 (only <=1, i.e. the pool is over).
+  function isPoolOver(poolPlayers) {
+    return activePoolPlayers(poolPlayers).length <= 1;
+  }
+
+  // The first non-eliminated seat at or after `start` (wrapping around) —
+  // used both to pick who opens the next hand and to skip eliminated seats
+  // when advancing whose turn it is. Returns -1 if nobody is active (should
+  // never happen if isPoolOver is checked before calling this).
+  function firstActiveFrom(start, count, poolPlayers) {
+    for (var step = 0; step < count; step++) {
+      var candidate = (start + step) % count;
+      if (!poolPlayers[candidate].eliminated) return candidate;
+    }
+    return -1;
+  }
+
   return {
     SUITS: SUITS,
     RANKS: RANKS,
     SUIT_COLOR: SUIT_COLOR,
     MAX_PENALTY: MAX_PENALTY,
+    POOL_SIZES: POOL_SIZES,
     shuffle: shuffle,
     buildDoubleDeck: buildDoubleDeck,
     isWildCard: isWildCard,
@@ -427,5 +479,10 @@
     computeBestGrouping: computeBestGrouping,
     botChooseDrawSource: botChooseDrawSource,
     botChooseDiscardIndex: botChooseDiscardIndex,
+    createPoolPlayers: createPoolPlayers,
+    applyPoolHandResult: applyPoolHandResult,
+    activePoolPlayers: activePoolPlayers,
+    isPoolOver: isPoolOver,
+    firstActiveFrom: firstActiveFrom,
   };
 });
