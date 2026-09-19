@@ -336,10 +336,19 @@
        scarcest one (height) here. Text colors flip to light since the
        hand now sits on the same dark felt green as the rest of the
        table, not the page's cream background. */
+    /* align-content:start (not the grid default, which effectively
+       stretches auto-height rows to fill leftover space in the container)
+       is load-bearing here: without it, the grid's rows — including the
+       card row — stretch/center down into whatever extra height
+       #hand-section-content has available, pushing the hand low enough to
+       overlap the floating Game Log pill fixed at the bottom-left corner.
+       Pinning content to the top instead leaves any leftover space
+       harmlessly below the cards, clear of the pill. */
     #hand-section-content {
       display: grid; grid-template-columns: 1fr auto; column-gap: 10px; align-items: center;
+      align-content: start;
       grid-template-areas: "head actions" "hint actions" "legend actions" "cards actions";
-      flex: 1 1 auto; min-height: 0;
+      flex: 1 1 auto; min-height: 0; padding-bottom: 44px;
     }
     .hand-head { grid-area: head; margin-bottom: 0; }
     .hand-head .htitle { color: #fff; }
