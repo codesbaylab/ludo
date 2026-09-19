@@ -6,7 +6,12 @@ by a Supabase project for auth/wallet-ledger/match-history.
 
 ## Structure
 
-- `design/styles.css` — shared stylesheet for every page.
+- `design/styles.css` — shared stylesheet for every page. `html, body` sets
+  `touch-action: pan-x pan-y` to block pinch-zoom — deliberately in CSS, not just the viewport
+  meta tag every page also sets (`maximum-scale=1.0, minimum-scale=1.0, user-scalable=no`), since
+  modern iOS Safari ignores that meta tag for accessibility reasons and still allows pinch-zoom
+  without this; `touch-action` is enforced at the touch-input level regardless, and normal
+  scrolling is unaffected since pan-x/pan-y stay allowed, only the zoom gesture is excluded.
 - `design/game.js` — client rendering + the Colyseus connection (see "Client" below). No longer
   contains game rules — those live server-side now.
 - `design/supabase-client.js` — shared Supabase client (publishable key, safe to expose; RLS is
