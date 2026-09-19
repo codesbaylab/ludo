@@ -162,8 +162,16 @@
      the page's own pan-y scroll) — dragged via a live inline transform, not
      a DOM rebuild, so the same element keeps receiving pointer events for
      the whole gesture. .dragging's inline transform (set directly by JS)
-     naturally wins over .lifted's CSS transform for that duration. */
-  #hand-row .pcard { touch-action: none; cursor: grab; }
+     naturally wins over .lifted's CSS transform for that duration.
+     user-select/touch-callout:none stops the phone browser from treating a
+     press-and-hold-then-move as a text/element selection gesture, which
+     otherwise shows its own blue selection-highlight-and-handles overlay
+     right on top of the drag — that's the browser's UI, not this app's, and
+     has nothing to do with picking a card to discard. */
+  #hand-row .pcard {
+    touch-action: none; cursor: grab;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  }
   #hand-row .pcard.dragging { cursor: grabbing; z-index: 10; box-shadow: 0 10px 22px rgba(0,0,0,.35); transition: none; }
   .pcard.deadwood { box-shadow: 0 0 0 2px var(--red), 0 2px 5px rgba(0,0,0,.25); }
 
