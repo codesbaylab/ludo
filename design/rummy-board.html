@@ -156,6 +156,15 @@
   .hand-line .pcard:first-child { margin-left:0; }
   .hand-line .group-gap { width:10px; flex-shrink:0; }
   .pcard.lifted { transform: translateY(-14px); box-shadow: 0 8px 14px rgba(0,0,0,.3); z-index:2; }
+
+  /* Manual hand reordering: every card in your own hand is pointer-draggable
+     (touch-action:none so a drag gesture starting on a card isn't stolen by
+     the page's own pan-y scroll) — dragged via a live inline transform, not
+     a DOM rebuild, so the same element keeps receiving pointer events for
+     the whole gesture. .dragging's inline transform (set directly by JS)
+     naturally wins over .lifted's CSS transform for that duration. */
+  #hand-row .pcard { touch-action: none; cursor: grab; }
+  #hand-row .pcard.dragging { cursor: grabbing; z-index: 10; box-shadow: 0 10px 22px rgba(0,0,0,.35); transition: none; }
   .pcard.deadwood { box-shadow: 0 0 0 2px var(--red), 0 2px 5px rgba(0,0,0,.25); }
 
   /* Meld coloring on top of the wild-rank gold ring — border colors chosen
@@ -569,13 +578,22 @@
   // arranged hand actually makes it hard to spot which card just arrived.
   let lastDrawnCardId = null;
 
-  function arrangeHand() {
-    const hand = state.hands[0];
+  // Shared by both the auto-arranger and the post-drag retagger: runs the
+  // grouping search once and sorts its melds (pure sequences, then other
+  // sequences, then sets) — everything after this differs only in whether
+  // the hand's own array order gets rewritten to match.
+  function computeMeldsSorted(hand) {
     const g = RummyRules.computeBestGrouping(hand, state.wildRank);
     const meldsSorted = g.chosenMelds.slice().sort((a, b) => {
       const rank = m => (m.kind === 'sequence' ? (m.pure ? 0 : 1) : 2);
       return rank(a) - rank(b);
     });
+    return { g, meldsSorted };
+  }
+
+  function arrangeHand() {
+    const hand = state.hands[0];
+    const { g, meldsSorted } = computeMeldsSorted(hand);
     const order = [];
     meldsSorted.forEach((m, gi) => {
       const kind = m.kind === 'sequence' ? (m.pure ? 'pure' : 'seq') : 'set';
@@ -591,6 +609,23 @@
 
     state.hands[0] = order.map(o => hand[o.idx]);
     handGroupTags = order.map(o => ({ kind: o.kind, groupIdx: o.groupIdx }));
+    return g;
+  }
+
+  // After a manual drag-reorder, re-tags each card's meld coloring for
+  // WHATEVER order the player just put the hand in, without touching that
+  // order — a card's meld membership (and the hand's total deadwood) only
+  // depends on which cards are in the hand, not the order you hold them in,
+  // so this never disagrees with what arrangeHand() would have found.
+  function retagHandInPlace() {
+    const hand = state.hands[0];
+    const { g, meldsSorted } = computeMeldsSorted(hand);
+    const tagByIdx = hand.map(() => ({ kind: 'dead', groupIdx: meldsSorted.length }));
+    meldsSorted.forEach((m, gi) => {
+      const kind = m.kind === 'sequence' ? (m.pure ? 'pure' : 'seq') : 'set';
+      m.indices.forEach(i => { tagByIdx[i] = { kind, groupIdx: gi }; });
+    });
+    handGroupTags = tagByIdx;
     return g;
   }
 
@@ -618,6 +653,7 @@
     const splitAt = Math.ceil(hand.length / 2);
     const lines = [hand.slice(0, splitAt), hand.slice(splitAt)];
     const interactive = phase === 'your-turn-discard';
+    const draggable = phase !== 'round-over';
 
     lines.forEach((lineCards, lineIdx) => {
       const lineOffset = lineIdx === 0 ? 0 : splitAt;
@@ -636,8 +672,12 @@
         const wrap = document.createElement('div');
         wrap.innerHTML = cardHtml(c, classes);
         const el = wrap.firstElementChild;
+        if (draggable) {
+          el.addEventListener('pointerdown', (e) => onHandCardPointerDown(e, c.id, i));
+        }
         if (interactive) {
           el.addEventListener('click', () => {
+            if (suppressNextClick) { suppressNextClick = false; return; }
             selectedCardId = selectedCardId === c.id ? null : c.id;
             renderHand();
             document.getElementById('btn-discard').disabled = !selectedCardId;
@@ -649,6 +689,82 @@
     });
 
     document.getElementById('hand-count').textContent = hand.length;
+  }
+
+  // --- Manual hand reordering: pointer-based so it works with touch, not
+  // just a mouse, layered on top of the existing 'click' select-to-discard
+  // handler rather than replacing it — a real drag ends with the browser
+  // sometimes still synthesizing a trailing 'click' on release (which would
+  // otherwise also toggle selection right after a reorder), so
+  // `suppressNextClick` swallows exactly that one click if it comes. It's
+  // reset at the START of every new pointerdown, not on a timer — a timer
+  // would race: our own pointerup handler rebuilds the hand's DOM
+  // synchronously (removing the dragged element before the browser gets to
+  // dispatch its trailing click), so that click often never arrives at
+  // all, and a fixed-delay reset would then wrongly swallow the next
+  // *unrelated* tap if it happened to land inside that window. Resetting on
+  // pointerdown instead guarantees a genuinely new gesture is never
+  // affected by a leftover flag from a previous one, however long ago it
+  // was. No DOM rebuild happens mid-drag itself (the dragged card is just
+  // moved with a live CSS transform), so the element that received
+  // pointerdown keeps receiving move/up events for the whole gesture —
+  // only on release does the array actually get reordered and re-rendered.
+  const DRAG_THRESHOLD_PX = 8;
+  let dragCtx = null; // { cardId, fromIndex, startX, startY, moved, el, hoverIndex }
+  let suppressNextClick = false;
+
+  function onHandCardPointerDown(e, cardId, index) {
+    if (e.button !== undefined && e.button !== 0) return; // primary touch/left-click only
+    if (dragCtx) return; // a gesture is already in progress
+    suppressNextClick = false;
+    dragCtx = { cardId, fromIndex: index, startX: e.clientX, startY: e.clientY, moved: false, el: e.currentTarget, hoverIndex: index };
+    document.addEventListener('pointermove', onHandCardPointerMove);
+    document.addEventListener('pointerup', onHandCardPointerUp, { once: true });
+  }
+
+  function findHoverIndex(x, y, fromIndex) {
+    const cards = Array.from(document.querySelectorAll('#hand-row .pcard'));
+    let best = fromIndex;
+    let bestDist = Infinity;
+    cards.forEach((el, i) => {
+      if (i === fromIndex) return;
+      const r = el.getBoundingClientRect();
+      const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+      if (d < bestDist) { bestDist = d; best = i; }
+    });
+    return best;
+  }
+
+  function onHandCardPointerMove(e) {
+    if (!dragCtx) return;
+    const dx = e.clientX - dragCtx.startX;
+    const dy = e.clientY - dragCtx.startY;
+    if (!dragCtx.moved) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return; // still just a tap so far
+      dragCtx.moved = true;
+      dragCtx.el.classList.add('dragging');
+    }
+    dragCtx.el.style.transform = `translate(${dx}px, ${dy}px)`;
+    dragCtx.hoverIndex = findHoverIndex(e.clientX, e.clientY, dragCtx.fromIndex);
+  }
+
+  function onHandCardPointerUp() {
+    document.removeEventListener('pointermove', onHandCardPointerMove);
+    if (!dragCtx) return;
+    const { fromIndex, moved, hoverIndex, el } = dragCtx;
+    el.classList.remove('dragging');
+    el.style.transform = '';
+    dragCtx = null;
+    if (!moved) return; // a plain tap — let the ordinary 'click' handler select it
+
+    if (hoverIndex !== fromIndex) {
+      const hand = state.hands[0];
+      const [card] = hand.splice(fromIndex, 1);
+      hand.splice(hoverIndex, 0, card);
+      retagHandInPlace();
+      renderHand();
+    }
+    suppressNextClick = true;
   }
 
   function renderDeckAndDiscard() {
