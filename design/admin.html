@@ -40,12 +40,29 @@
       <div class="stat"><div class="num" id="stat-revenue">…</div><div class="lbl">Fee Revenue</div></div>
     </div>
 
+    <div class="section-title">Crypto Deposits (USDT / TRC-20)</div>
+    <div class="card" style="margin-bottom:10px;">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:160px;">
+          <div class="hint" style="margin:0;">Current rate</div>
+          <div style="font-size:18px; font-weight:800;" id="crypto-rate-display">…</div>
+        </div>
+        <input class="input" type="number" step="0.01" id="crypto-rate-input" placeholder="New rate (₹ per USDT)" style="width:180px;" />
+        <button class="btn btn-secondary btn-sm" id="btn-update-rate">Update Rate</button>
+      </div>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:10px;" id="crypto-deposits-list">
+      <p class="hint" style="margin:0;">Loading…</p>
+    </div>
+
     <div class="section-title">Users &amp; Wallets</div>
+    <input class="input" id="user-search" placeholder="Search by name…" style="margin-bottom:10px;" />
     <div style="display:flex; flex-direction:column; gap:10px;" id="users-list">
       <p class="hint" style="margin:0;">Loading…</p>
     </div>
 
     <div class="section-title">All Matches</div>
+    <p class="hint" style="margin-top:0;">Tap a match to see its players.</p>
     <div style="display:flex; flex-direction:column; gap:10px;" id="matches-list">
       <p class="hint" style="margin:0;">Loading…</p>
     </div>
@@ -54,26 +71,51 @@
 
 <script>
   const usersById = {};
+  let currentAdminId = null;
 
-  function renderUsers(profiles, wallets, statsByUser) {
+  // Cached raw data so the search box can re-render instantly without
+  // refetching — this list won't realistically be large enough to need
+  // server-side search for a long while.
+  let cachedProfiles = [];
+  let cachedWallets = [];
+  let cachedStatsByUser = {};
+
+  function renderUsers(profiles, wallets, statsByUser, filterText) {
     const walletByUser = {};
     wallets.forEach(w => { walletByUser[w.user_id] = w.balance; });
 
+    const needle = (filterText || '').trim().toLowerCase();
+    const filtered = needle
+      ? profiles.filter(p => (p.display_name || '').toLowerCase().includes(needle))
+      : profiles;
+
     const list = document.getElementById('users-list');
     list.innerHTML = '';
-    profiles.forEach(p => {
+    if (filtered.length === 0) {
+      list.innerHTML = '<p class="hint" style="margin:0;">No users match that search.</p>';
+      return;
+    }
+    filtered.forEach(p => {
       usersById[p.id] = p;
       const stats = statsByUser[p.id] || { games: 0, wins: 0 };
+      const isSelf = p.id === currentAdminId;
       const row = document.createElement('div');
       row.className = 'player-chip';
+      row.style.flexWrap = 'wrap';
       row.innerHTML = `
         <div class="avatar" style="width:34px; height:34px; font-size:13px;">${(p.display_name || '?')[0].toUpperCase()}</div>
-        <div style="flex:1; min-width:0;">
-          <div class="name">${p.display_name || 'Player'}${p.is_admin ? ' <span class="badge badge-host">Admin</span>' : ''}</div>
+        <div style="flex:1; min-width:120px;">
+          <div class="name">
+            ${p.display_name || 'Player'}
+            ${p.is_admin ? ' <span class="badge badge-host">Admin</span>' : ''}
+            ${p.is_banned ? ' <span class="badge" style="background:var(--red-soft); color:var(--red);">Banned</span>' : ''}
+          </div>
           <div class="status"><span data-balance>₹${Number(walletByUser[p.id] ?? 0).toFixed(2)}</span> · ${stats.games} games · ${stats.wins} wins</div>
         </div>
-        <input type="number" class="input" placeholder="±₹" style="width:80px; padding:8px;" data-adjust-input />
+        <input type="number" class="input" placeholder="±₹" style="width:70px; padding:8px;" data-adjust-input />
         <button class="btn btn-secondary btn-sm" data-adjust-btn>Apply</button>
+        <button class="btn btn-secondary btn-sm" data-ban-btn>${p.is_banned ? 'Unban' : 'Ban'}</button>
+        <button class="btn btn-secondary btn-sm" data-admin-btn ${isSelf ? 'disabled title="Cannot change your own admin access"' : ''}>${p.is_admin ? 'Demote' : 'Promote'}</button>
       `;
       row.querySelector('[data-adjust-btn]').addEventListener('click', async () => {
         const btn = row.querySelector('[data-adjust-btn]');
@@ -87,11 +129,57 @@
         input.value = '';
         row.querySelector('[data-balance]').textContent = `₹${Number(newBalance).toFixed(2)}`;
       });
+      row.querySelector('[data-ban-btn]').addEventListener('click', async () => {
+        const nextBanned = !p.is_banned;
+        if (!confirm(`${nextBanned ? 'Ban' : 'Unban'} ${p.display_name || 'this player'}?${nextBanned ? ' They will be blocked from joining any game.' : ''}`)) return;
+        const btn = row.querySelector('[data-ban-btn]');
+        btn.disabled = true;
+        const { error } = await ludoSupabase.rpc('admin_set_user_banned', { p_user_id: p.id, p_banned: nextBanned });
+        btn.disabled = false;
+        if (error) { alert('Failed: ' + error.message); return; }
+        p.is_banned = nextBanned;
+        renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, document.getElementById('user-search').value);
+      });
+      row.querySelector('[data-admin-btn]').addEventListener('click', async () => {
+        const nextAdmin = !p.is_admin;
+        if (!confirm(`${nextAdmin ? 'Grant' : 'Remove'} admin access ${nextAdmin ? 'to' : 'from'} ${p.display_name || 'this player'}?`)) return;
+        const btn = row.querySelector('[data-admin-btn]');
+        btn.disabled = true;
+        const { error } = await ludoSupabase.rpc('admin_set_is_admin', { p_user_id: p.id, p_is_admin: nextAdmin });
+        btn.disabled = false;
+        if (error) { alert('Failed: ' + error.message); return; }
+        p.is_admin = nextAdmin;
+        renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, document.getElementById('user-search').value);
+      });
       list.appendChild(row);
     });
   }
 
-  function renderMatches(matches) {
+  function renderCryptoDeposits(deposits) {
+    const list = document.getElementById('crypto-deposits-list');
+    list.innerHTML = '';
+    if (deposits.length === 0) {
+      list.innerHTML = '<p class="hint" style="margin:0;">No USDT deposits yet.</p>';
+      return;
+    }
+    deposits.forEach(d => {
+      const user = usersById[d.user_id];
+      const row = document.createElement('div');
+      row.className = 'player-chip';
+      const shortHash = d.tx_hash.length > 14 ? `${d.tx_hash.slice(0, 8)}…${d.tx_hash.slice(-6)}` : d.tx_hash;
+      row.innerHTML = `
+        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:linear-gradient(135deg, #26a17b, #178a4c);">${(user?.display_name || '?')[0].toUpperCase()}</div>
+        <div style="flex:1; min-width:0;">
+          <div class="name">${user?.display_name || 'Unknown user'} · ${Number(d.amount_usdt).toFixed(2)} USDT</div>
+          <div class="status" title="${d.tx_hash}">${shortHash} · ${ludoTimeAgo(d.detected_at)}</div>
+        </div>
+        <span class="badge badge-ready">+₹${Number(d.inr_credited).toFixed(2)}</span>
+      `;
+      list.appendChild(row);
+    });
+  }
+
+  function renderMatches(matches, matchPlayersByMatch) {
     const list = document.getElementById('matches-list');
     list.innerHTML = '';
     if (matches.length === 0) {
@@ -100,8 +188,10 @@
     }
     matches.forEach(m => {
       const winner = m.winner_id ? usersById[m.winner_id] : null;
+      const wrap = document.createElement('div');
       const row = document.createElement('div');
       row.className = 'player-chip';
+      row.style.cursor = 'pointer';
       const tableLabel = m.stake > 0 ? `₹${m.stake} table` : 'Free table';
       const winnerLabel = winner ? `Winner: ${winner.display_name || 'Player'}` : (m.status === 'finished' ? 'Winner: —' : m.status);
       row.innerHTML = `
@@ -112,9 +202,40 @@
         </div>
         <span class="badge ${m.status === 'finished' ? 'badge-ready' : 'badge-waiting'}">${m.status}</span>
       `;
-      list.appendChild(row);
+      const detail = document.createElement('div');
+      detail.style.cssText = 'display:none; padding:10px 14px 4px; margin-top:-6px;';
+      const players = matchPlayersByMatch[m.id] || [];
+      detail.innerHTML = players.length === 0
+        ? '<p class="hint" style="margin:0;">No player records for this match.</p>'
+        : players.map(mp => {
+            const u = usersById[mp.user_id];
+            return `<div class="status" style="padding:4px 0; display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:50%; flex-shrink:0; background:var(--${mp.color});"></span> ${u?.display_name || 'Unknown'} — ${mp.result === 'win' ? '🏆 won' : mp.result === 'lose' ? 'lost' : 'in progress'}</div>`;
+          }).join('');
+      row.addEventListener('click', () => {
+        detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
+      });
+      wrap.appendChild(row);
+      wrap.appendChild(detail);
+      list.appendChild(wrap);
     });
   }
+
+  document.getElementById('user-search').addEventListener('input', (e) => {
+    renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, e.target.value);
+  });
+
+  document.getElementById('btn-update-rate').addEventListener('click', async () => {
+    const input = document.getElementById('crypto-rate-input');
+    const rate = Number(input.value);
+    if (!rate || rate <= 0) { alert('Enter a positive rate.'); return; }
+    const btn = document.getElementById('btn-update-rate');
+    btn.disabled = true;
+    const { data: newRate, error } = await ludoSupabase.rpc('admin_set_usdt_rate', { p_rate: rate });
+    btn.disabled = false;
+    if (error) { alert('Failed: ' + error.message); return; }
+    document.getElementById('crypto-rate-display').textContent = `1 USDT ≈ ₹${Number(newRate).toFixed(2)}`;
+    input.value = '';
+  });
 
   (async () => {
     const { data: { session } } = await ludoSupabase.auth.getSession();
@@ -125,30 +246,45 @@
       setTimeout(() => { location.href = 'lobby.html'; }, 1200);
       return;
     }
+    currentAdminId = session.user.id;
 
     document.getElementById('admin-avatar').textContent = 'A';
 
-    const [stats, { data: profiles }, { data: wallets }, { data: allMatchPlayers }, { data: matches }] = await Promise.all([
+    const [stats, { data: profiles }, { data: wallets }, { data: allMatchPlayers }, { data: matches }, { data: cryptoSettings }, { data: cryptoDeposits }] = await Promise.all([
       ludoSupabase.rpc('get_platform_stats').then(r => r.data?.[0] || { total_users: 0, total_matches: 0, total_revenue: 0 }),
-      ludoSupabase.from('profiles').select('id, display_name, is_admin'),
+      ludoSupabase.from('profiles').select('id, display_name, is_admin, is_banned'),
       ludoSupabase.from('wallets').select('user_id, balance'),
-      ludoSupabase.from('match_players').select('user_id, result'),
+      ludoSupabase.from('match_players').select('match_id, user_id, color, result'),
       ludoSupabase.from('matches').select('id, stake, status, winner_id, finished_at').order('created_at', { ascending: false }),
+      ludoSupabase.from('crypto_settings').select('usdt_inr_rate').eq('id', true).single(),
+      ludoSupabase.from('crypto_deposits').select('user_id, tx_hash, amount_usdt, inr_credited, detected_at').order('detected_at', { ascending: false }),
     ]);
 
     document.getElementById('stat-users').textContent = stats.total_users;
     document.getElementById('stat-matches').textContent = stats.total_matches;
     document.getElementById('stat-revenue').textContent = `₹${Number(stats.total_revenue).toFixed(0)}`;
+    document.getElementById('crypto-rate-display').textContent = `1 USDT ≈ ₹${Number(cryptoSettings?.usdt_inr_rate ?? 90).toFixed(2)}`;
 
     const statsByUser = {};
+    const matchPlayersByMatch = {};
     (allMatchPlayers || []).forEach(row => {
       const s = statsByUser[row.user_id] || (statsByUser[row.user_id] = { games: 0, wins: 0 });
       s.games++;
       if (row.result === 'win') s.wins++;
+      (matchPlayersByMatch[row.match_id] = matchPlayersByMatch[row.match_id] || []).push(row);
     });
 
-    renderUsers(profiles || [], wallets || [], statsByUser);
-    renderMatches(matches || []);
+    cachedProfiles = profiles || [];
+    cachedWallets = wallets || [];
+    cachedStatsByUser = statsByUser;
+
+    // usersById needs to be populated before renderCryptoDeposits/renderMatches
+    // look user names up in it.
+    cachedProfiles.forEach(p => { usersById[p.id] = p; });
+
+    renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, '');
+    renderCryptoDeposits(cryptoDeposits || []);
+    renderMatches(matches || [], matchPlayersByMatch);
   })();
 
   document.getElementById('admin-avatar').addEventListener('click', async () => {
