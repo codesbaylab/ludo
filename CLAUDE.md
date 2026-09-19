@@ -85,7 +85,7 @@ by a Supabase project for auth/wallet-ledger/match-history.
   (max-loss = points value × an 80-point cap) — all client-side state, no persistence. Its "Start
   Table" button links straight to `rummy-board.html`. `rummy-board.html` is the game-table mockup:
   a felt table with 3 opponents (one shown mid-turn), a closed deck + discard pile + wild-joker
-  indicator, and a 13-card hand row (pre-arranged into example groups: a pure sequence, a
+  indicator, and a 13-card hand (pre-arranged into example groups: a pure sequence, a
   joker-completed sequence, two sets, and one deliberately-ungrouped "deadwood" card with a red
   outline) that supports tap-to-lift/select, Sort, Discard, Draw (from either the closed deck or
   the discard pile, capped at 14 cards), and a Declare button that opens a modal explicitly
@@ -96,13 +96,27 @@ by a Supabase project for auth/wallet-ledger/match-history.
   `width` — since it's a flex item of `.app` (`display:flex; flex-direction:column`), the auto
   side-margins disable flexbox's default cross-axis stretch (per spec, auto margins on a flex
   item's cross axis override `align-items:stretch`), so it was shrink-to-fitting to its widest
-  child's content (the hand's card row, ~478px) instead of the viewport — overflowing the page
-  horizontally on mobile despite `.hand-row` itself having `overflow-x:auto`. Fixed by adding an
-  explicit `width:100%` (plus `box-sizing:border-box` for the padding), verified by measuring
-  `document.body.scrollWidth` against `window.innerWidth` before/after in a real headless-Chromium
-  run at 390px and 420px widths (390/420 clean after the fix, was 502 before) — this exact
-  shrink-to-fit trap doesn't affect any other page in the app, since no other page combines a flex
-  `.app` ancestor with an unconstrained-width block using `margin:0 auto` centering.
+  child's content instead of the viewport — overflowing the page horizontally on mobile. Fixed by
+  adding an explicit `width:100%` (plus `box-sizing:border-box` for the padding), verified by
+  measuring `document.body.scrollWidth` against `window.innerWidth` before/after in a real
+  headless-Chromium run at 390px and 420px widths (390/420 clean after the fix, was 502 before) —
+  this exact shrink-to-fit trap doesn't affect any other page in the app, since no other page
+  combines a flex `.app` ancestor with an unconstrained-width block using `margin:0 auto`
+  centering. **The hand itself renders as two explicit rows, not one horizontally-scrolling
+  row**: it originally used a single `overflow-x:auto` flex row (matching `.players-panel`'s
+  established scroll-strip pattern elsewhere in the app), but for a 13-14 card rummy hand that
+  hid roughly half the hand off-screen behind a scroll gesture — fine for a strip of player
+  avatars, not for cards the player needs to see all of at once to plan a discard. `renderHand()`
+  now splits `hand` into two roughly-even halves (`Math.ceil(hand.length / 2)` so an odd count
+  puts the extra card on top, e.g. 7/6 for 13 cards) and renders each half as its own `.hand-line`
+  flex row with its own independent overlap (`margin-left:-14px`, reset to 0 on each line's own
+  first card — letting the CSS wrap a single flex row instead would overlap the first card of
+  row 2 under the last card of row 1, since the negative margin doesn't know a wrap happened).
+  Group gaps and click-to-select indices are computed per-line but still index into the flat
+  `hand` array correctly (`lineOffset + j`). Re-splits automatically on every re-render, so
+  drawing a 14th card rebalances to 7/7 rather than leaving a lopsided 7/7-turned-8/6. Verified in
+  a real headless-Chromium run: no horizontal overflow at 390px, correct 7/6 → 7/7 split across a
+  draw, and selecting a card in the second row still lifts the right one.
 - `design/index.html` — no longer the design-mockup index (removed); a silent redirect stub to
   `login.html`, since GitHub Pages serves `index.html` for the bare site root regardless of what
   `manifest.json` says.
