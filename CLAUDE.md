@@ -172,6 +172,43 @@ by a Supabase project for auth/wallet-ledger/match-history.
     draw, until you've decided what to do with it — clicking around to inspect other cards first
     doesn't clear it. A brief `outline-width` pulse (2 iterations, ~2s) draws the eye to it, then
     it settles into a steady ring rather than fading away while the player's still deciding.
+  - **The hand can also be manually reordered by drag**, on top of the auto-arrange — a player
+    asked for this specifically so cards they'd already mentally grouped (e.g. a natural low-high
+    run) could be laid out in their own preferred order rather than whatever `arrangeHand()`
+    picked. Implemented with pointer events (`pointerdown`/`pointermove`/`pointerup` on
+    `document`, not native HTML5 drag-and-drop, which doesn't support touch) so it works with a
+    finger on the phone-width layout this app targets, not just a mouse. A `DRAG_THRESHOLD_PX`
+    (8px) gate distinguishes a real drag from a plain tap — same pointerdown/up pair, decided only
+    once the pointer lifts by how far it actually moved — so tap-to-select-for-discard keeps
+    working unchanged as its own `click` listener; a real drag doesn't rebuild the DOM mid-gesture
+    (the dragged card just gets a live `transform: translate(...)`, tracked via `findHoverIndex`'s
+    nearest-card-center search over every `.pcard` on each `pointermove`), so the same element
+    keeps receiving events for the whole gesture, and only on release does `state.hands[0]`
+    actually get spliced into the new order. `retagHandInPlace()` (a sibling of `arrangeHand()`,
+    sharing its grouping search via `computeMeldsSorted()`) recomputes each card's meld-color tag
+    for whatever order the drop just produced, *without* re-sorting the array back into group
+    order — reordering never changes which cards are melded together or the hand's deadwood total
+    (`computeBestGrouping` works over the card set, not its order), so this can never disagree
+    with what `arrangeHand()` itself would have found. The "↕ Arrange" button still calls the
+    original `arrangeHand()` via `renderAll()` unchanged, so it now doubles as "reset to
+    auto-order" after a manual drag. **A real bug caught while wiring this up**: a drag's release
+    sometimes still triggers the browser's own trailing `click` event (which would otherwise
+    re-toggle discard-selection right after a reorder) — a `suppressNextClick` flag swallows that
+    one click, but a first version reset it on a fixed `setTimeout`, which raced: this drag's own
+    `pointerup` handler rebuilds the hand's DOM synchronously (removing the dragged element)
+    *before* the browser gets to dispatch that trailing click, so it often never arrives at all —
+    leaving the flag `true` for up to 300ms and silently swallowing the *next*, entirely unrelated
+    tap if it landed in that window. Caught by a scripted real-pointer-event test (drag, then
+    immediately tap a different card) rather than by reasoning about the timing on paper. Fixed by
+    resetting the flag at the start of every new `pointerdown` instead of on a timer — a truly new
+    gesture is then never affected by a leftover flag from a previous one, however long ago.
+    Verified with real `page.mouse` pointer sequences (not the FAST-mode `?fast=1` test suite,
+    which selects cards via a raw DOM `.click()` call and doesn't exercise the drag path at all):
+    dragging a card to a new position, a plain tap still selecting for discard afterward, and
+    dragging an already-selected card elsewhere not accidentally deselecting it. Confirmed the
+    full existing points/pool e2e regression suite (which does rely on that raw `.click()` path)
+    still passes unchanged, since the drag layer is additive to the existing `click` listener
+    rather than a replacement for it.
   - **Declare is forgiving but honest**: clicking Declare searches all 14 cards (preferring to
     keep whichever card the player tapped, if any) for a removal that makes the remaining 13 a
     valid declare (`findDeclareOption`) — the player doesn't have to manually figure out which
