@@ -107,7 +107,7 @@
     width: 46px; height: 64px; border-radius: 7px; background: #fff;
     border: 1px solid rgba(0,0,0,.12); box-shadow: 0 2px 5px rgba(0,0,0,.25);
     position: relative; flex-shrink: 0; display:flex; align-items:center; justify-content:center;
-    font-family: "Baloo 2"; font-weight:800; user-select:none; transition: transform .15s ease, box-shadow .15s ease;
+    font-family: "Baloo 2"; font-weight:800; user-select:none; transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
   }
   .pcard .corner { position:absolute; top:3px; left:4px; font-size:11px; line-height:1; text-align:left; }
   .pcard .pip { font-size:20px; }
@@ -173,6 +173,12 @@
     -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
   }
   #hand-row .pcard.dragging { cursor: grabbing; z-index: 10; box-shadow: 0 10px 22px rgba(0,0,0,.35); transition: none; }
+  /* The card whose spot you're currently hovering over mid-drag — a
+     filter:drop-shadow glow rather than another box-shadow/outline variant,
+     since those are both already spoken for (meld coloring uses box-shadow,
+     the just-drawn highlight uses outline) and filter is a fully separate
+     rendering layer, so this never gets silently overridden by either. */
+  #hand-row .pcard.drag-target { filter: drop-shadow(0 0 7px var(--accent)); }
   .pcard.deadwood { box-shadow: 0 0 0 2px var(--red), 0 2px 5px rgba(0,0,0,.25); }
 
   /* Meld coloring on top of the wild-rank gold ring — border colors chosen
@@ -718,14 +724,14 @@
   // pointerdown keeps receiving move/up events for the whole gesture —
   // only on release does the array actually get reordered and re-rendered.
   const DRAG_THRESHOLD_PX = 8;
-  let dragCtx = null; // { cardId, fromIndex, startX, startY, moved, el, hoverIndex }
+  let dragCtx = null; // { cardId, fromIndex, startX, startY, moved, el, hoverIndex, hoverEl }
   let suppressNextClick = false;
 
   function onHandCardPointerDown(e, cardId, index) {
     if (e.button !== undefined && e.button !== 0) return; // primary touch/left-click only
     if (dragCtx) return; // a gesture is already in progress
     suppressNextClick = false;
-    dragCtx = { cardId, fromIndex: index, startX: e.clientX, startY: e.clientY, moved: false, el: e.currentTarget, hoverIndex: index };
+    dragCtx = { cardId, fromIndex: index, startX: e.clientX, startY: e.clientY, moved: false, el: e.currentTarget, hoverIndex: index, hoverEl: null };
     document.addEventListener('pointermove', onHandCardPointerMove);
     document.addEventListener('pointerup', onHandCardPointerUp, { once: true });
   }
@@ -740,7 +746,7 @@
       const d = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
       if (d < bestDist) { bestDist = d; best = i; }
     });
-    return best;
+    return { index: best, el: cards[best] };
   }
 
   function onHandCardPointerMove(e) {
@@ -753,15 +759,26 @@
       dragCtx.el.classList.add('dragging');
     }
     dragCtx.el.style.transform = `translate(${dx}px, ${dy}px)`;
-    dragCtx.hoverIndex = findHoverIndex(e.clientX, e.clientY, dragCtx.fromIndex);
+
+    // Live-highlight whichever OTHER card's spot you're currently hovering
+    // over — updated only when it actually changes, so it doesn't fight the
+    // filter transition by re-adding the class on every single pointermove.
+    const { index, el: targetEl } = findHoverIndex(e.clientX, e.clientY, dragCtx.fromIndex);
+    if (index !== dragCtx.hoverIndex) {
+      if (dragCtx.hoverEl) dragCtx.hoverEl.classList.remove('drag-target');
+      dragCtx.hoverIndex = index;
+      dragCtx.hoverEl = index !== dragCtx.fromIndex ? targetEl : null;
+      if (dragCtx.hoverEl) dragCtx.hoverEl.classList.add('drag-target');
+    }
   }
 
   function onHandCardPointerUp() {
     document.removeEventListener('pointermove', onHandCardPointerMove);
     if (!dragCtx) return;
-    const { fromIndex, moved, hoverIndex, el } = dragCtx;
+    const { fromIndex, moved, hoverIndex, hoverEl, el } = dragCtx;
     el.classList.remove('dragging');
     el.style.transform = '';
+    if (hoverEl) hoverEl.classList.remove('drag-target');
     dragCtx = null;
     if (!moved) return; // a plain tap — let the ordinary 'click' handler select it
 
