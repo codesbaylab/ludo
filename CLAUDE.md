@@ -200,12 +200,16 @@ by a Supabase project for auth/wallet-ledger/match-history.
     Web Audio oscillators/noise bursts, no audio files.
     - `dealHand()` (now `async`) plays a ~650ms shuffle jitter (`.closed-deck.shuffling`, a CSS
       keyframe rotating/translating the card-back stack) with the shuffle sound, *then* deals —
-      13 generic card-back clones fly from the deck into the hand area, staggered (`~65ms` apart,
-      several in flight at once) with a deal-flick sound each, and only once they've all "landed"
-      does the real, fully-arranged hand get revealed in one shot. Opponents' card-back counts
-      aren't animated incrementally alongside this — they just appear at their final count when
-      the real hand reveals — a deliberate scope cut; animating 52 individual per-seat deals for a
-      realistic round-robin feel wasn't worth the added complexity here.
+      generic card-back clones fly from the deck **round-robin to every seat**, one card at a time
+      going around the table 13 times (`playerCount * 13` flights total, `~38ms` apart, several in
+      flight at once) with a deal-flick sound each — not just into your own hand while opponents'
+      piles silently jump to their final count. Each opponent's mini card-back stack/count grows
+      live as their cards land (`backsHtml(round + 1)` / `${round + 1} cards`, reset to 0 at the
+      start of the deal); only once every seat has all 13 does your own, fully-arranged hand get
+      revealed in one shot (still not animated card-by-card into its exact final post-arrangement
+      slot — that part stays a reveal, not a flight). An earlier version only flew cards into your
+      own hand and left opponents' piles snapping straight to their final count — reported as "the
+      shuffle only shows to me," fixed by this round-robin loop.
     - `flyCard(fromEl, toEl, innerHtml, durationMs)` is the shared primitive: a temporary
       `position:fixed`, `pointer-events:none` clone (`.flying-card`) transitions from one element's
       `getBoundingClientRect()` to another's, then removes itself. Your own discard flies the real,
@@ -228,6 +232,21 @@ by a Supabase project for auth/wallet-ledger/match-history.
       rerunning the standing test suite after adding animations (not by reasoning about the
       timings on paper) and fixed by making the FAST path skip the animation machinery outright
       rather than just shortening its duration.
+    - **Shuffle sound reliably plays now, not just card-move sounds**: `getAudioCtx()` lazily
+      creates and caches a single `AudioContext`, and browsers start any `AudioContext` in a
+      `suspended` state until a real user gesture has happened on the page. `dealHand()` fires
+      automatically on page load with no gesture behind it, so that very first shuffle's sound is
+      unavoidably silent (expected, harmless — one hand's worth of silence) — but because the
+      *same cached, still-suspended* context was being reused for every later shuffle too (Play
+      Again / Next Hand / New Pool), and nothing ever actually resumed it, shuffle sound stayed
+      silent for the rest of the session even though draw/discard sounds worked fine (those play
+      from click handlers that happen to also be the moment a browser *would* auto-resume a
+      context passed through `.resume()` — shuffle's own `sfxShuffle()` call had no such resume
+      anywhere near it). Fixed with a one-time `pointerdown` listener on `document` that resumes
+      the context on the page's first tap/click, so it's already `running` well before any
+      post-load shuffle plays. Also bumped the shuffle noise bursts' `peak` gain (0.06/0.05/0.04 →
+      0.09/0.08/0.07) so it's clearly audible against the (louder) card-move sounds rather than
+      easy to miss as "no sound" even once it was actually playing.
     - A `trophy-bounce` CSS keyframe (scale+rotate+fade-in, `.5s`) on the modal's icon runs on
       every result modal (win, invalid-declare, pool-complete) for a bit of impact on the moment a
       hand/pool concludes.
