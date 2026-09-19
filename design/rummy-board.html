@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Ludo Online — Rummy (Design Preview)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<meta name="theme-color" content="#0f6b47">
+<style>
+  /* Rummy-specific styles, scoped to this page — a real playing-card table
+     doesn't share much visually with the Ludo board grid, so this stays out
+     of the shared styles.css rather than adding rules nothing else uses. */
+
+  /* width:100% is load-bearing: .rummy-page is a flex item of .app (column
+     direction), and margin:0 auto sets auto cross-axis margins — which per
+     the flexbox spec disables stretch alignment, so without an explicit
+     width this shrinks to fit its content (the hand's card row) instead of
+     the viewport, overflowing the page horizontally on mobile. */
+  .rummy-page { width: 100%; box-sizing: border-box; padding: 12px 12px calc(16px + env(safe-area-inset-bottom)); max-width: 720px; margin: 0 auto; }
+
+  .preview-banner {
+    background: var(--yellow-soft); border: 1px solid var(--yellow);
+    border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12px; font-weight: 700;
+    color: #8a6d00; text-align: center; margin-bottom: 10px;
+  }
+
+  .rummy-header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+  .rummy-title { text-align:center; }
+  .rummy-title .name { font-family:"Baloo 2"; font-weight:800; font-size:15px; }
+  .rummy-title .sub { font-size:11px; color:var(--text-dim); font-weight:700; }
+
+  /* The felt table */
+  .felt {
+    background: radial-gradient(ellipse at center, #1a8558 0%, #0f6b47 70%, #0a5537 100%);
+    border-radius: var(--radius-lg);
+    padding: 14px 10px 18px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 12px 28px rgba(10,60,40,.35);
+    position: relative;
+  }
+
+  .opponent-row { display:flex; justify-content:space-around; gap:8px; margin-bottom: 14px; }
+  .opponent {
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    padding: 6px 8px; border-radius: var(--radius-sm); flex: 1; min-width:0;
+    transition: box-shadow .2s ease;
+  }
+  .opponent.active { box-shadow: 0 0 0 2px var(--accent), 0 0 16px rgba(255,138,61,.5); background: rgba(255,255,255,.06); }
+  .opponent .avatar { width:38px; height:38px; font-size:15px; border: 2px solid rgba(255,255,255,.5); }
+  .opponent .oname { color:#fff; font-size:12px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80px; }
+  .opponent .ocards { display:flex; margin-top:2px; }
+  .card-back {
+    width: 20px; height: 28px; border-radius: 4px; flex-shrink:0;
+    background: repeating-linear-gradient(135deg, #d94f70, #d94f70 3px, #c23a5c 3px, #c23a5c 6px);
+    border: 1.5px solid #fff; margin-left:-12px;
+  }
+  .opponent .ocards .card-back:first-child { margin-left:0; }
+  .ocount { color:#fff; font-size:10px; font-weight:800; opacity:.85; margin-top:1px; }
+  .oturn-label { font-size:10px; font-weight:800; color: var(--accent); background:#fff; border-radius:8px; padding:1px 7px; margin-top:2px; }
+
+  .center-row { display:flex; align-items:center; justify-content:center; gap:22px; padding: 10px 0 4px; }
+  .pile { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .pile-label { color:rgba(255,255,255,.85); font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; }
+  .closed-deck { position:relative; width:46px; height:64px; cursor:pointer; }
+  .closed-deck .card-back { position:absolute; width:46px; height:64px; margin:0; border-radius:7px; }
+  .closed-deck .card-back:nth-child(1) { top:4px; left:4px; }
+  .closed-deck .card-back:nth-child(2) { top:2px; left:2px; }
+  .closed-deck .card-back:nth-child(3) { top:0; left:0; }
+  .deck-count {
+    position:absolute; bottom:-9px; right:-9px; background:#fff; color:var(--text);
+    font-size:10px; font-weight:800; border-radius:10px; padding:2px 6px; box-shadow: var(--shadow);
+  }
+
+  .joker-chip {
+    display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.3); border-radius: 12px; padding: 6px 10px;
+  }
+  .joker-chip .jlabel { color:#fff; font-size:10px; font-weight:800; }
+
+  /* Playing cards */
+  .pcard {
+    width: 46px; height: 64px; border-radius: 7px; background: #fff;
+    border: 1px solid rgba(0,0,0,.12); box-shadow: 0 2px 5px rgba(0,0,0,.25);
+    position: relative; flex-shrink: 0; display:flex; align-items:center; justify-content:center;
+    font-family: "Baloo 2"; font-weight:800; user-select:none; transition: transform .15s ease, box-shadow .15s ease;
+  }
+  .pcard .corner { position:absolute; top:3px; left:4px; font-size:11px; line-height:1; text-align:left; }
+  .pcard .pip { font-size:20px; }
+  .pcard.red { color:#d32f2f; }
+  .pcard.black { color:#26282b; }
+  .pcard.joker { color:#b8860b; background: linear-gradient(160deg, #fff8e1, #fff1c2); }
+  .pcard.joker .pip { font-size:18px; }
+
+  .discard-pile .pcard { box-shadow: 0 3px 8px rgba(0,0,0,.35); }
+  .discard-pile.empty { width:46px; height:64px; border-radius:7px; border:2px dashed rgba(255,255,255,.4); }
+
+  .status-strip {
+    text-align:center; color:#fff; font-size:12px; font-weight:700; margin-top:4px;
+    background: rgba(0,0,0,.18); border-radius: 10px; padding: 6px 10px;
+  }
+
+  /* Hand */
+  .hand-section { margin-top: 14px; }
+  .hand-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+  .hand-head .htitle { font-family:"Baloo 2"; font-weight:800; font-size:14px; }
+  .hand-head .hcount { font-size:12px; color:var(--text-dim); font-weight:700; }
+
+  .hand-row {
+    display:flex; align-items:flex-end; overflow-x:auto; padding: 10px 4px 14px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .hand-row .pcard { margin-left:-14px; cursor:pointer; }
+  .hand-row .pcard:first-child { margin-left:0; }
+  .hand-row .group-gap { width:10px; flex-shrink:0; }
+  .pcard.lifted { transform: translateY(-14px); box-shadow: 0 8px 14px rgba(0,0,0,.3); z-index:2; }
+  .pcard.deadwood { box-shadow: 0 0 0 2px var(--red), 0 2px 5px rgba(0,0,0,.25); }
+
+  .action-bar { display:flex; gap:8px; margin-top:6px; }
+  .action-bar .btn { flex:1; padding:12px 8px; font-size:13px; }
+  .btn-declare {
+    background: linear-gradient(135deg, #ffd23c, #ff8a3d); color:#3a2c05;
+    font-weight:800; border:none; border-radius: var(--radius-md); box-shadow: var(--shadow);
+  }
+  .btn-declare:active { transform: scale(.97); }
+  .btn:disabled { opacity:.45; }
+
+  .declare-modal {
+    position:fixed; inset:0; background:rgba(20,30,20,.55); display:none;
+    align-items:center; justify-content:center; z-index:50; padding:20px;
+  }
+  .declare-modal.open { display:flex; }
+  .declare-card { max-width:340px; width:100%; text-align:center; animation: pop .2s ease; }
+  @keyframes pop { from { transform:scale(.85); opacity:0; } to { transform:scale(1); opacity:1; } }
+</style>
+</head>
+<body>
+<div class="app wide">
+  <div class="rummy-page">
+
+    <div class="preview-banner">🎨 Design preview — layout &amp; interactions only, not wired to a real match yet</div>
+
+    <div class="rummy-header">
+      <a href="lobby.html" class="back-link">← Exit</a>
+      <div class="rummy-title">
+        <div class="name">Points Rummy</div>
+        <div class="sub">₹1 / point · 4 players</div>
+      </div>
+      <a href="wallet.html" class="wallet-chip">💰 ₹250.00</a>
+    </div>
+
+    <div class="felt">
+      <div class="opponent-row">
+        <div class="opponent" id="opp-1">
+          <div class="avatar">J</div>
+          <div class="oname">Jilna</div>
+          <div class="ocards" id="opp-1-cards"></div>
+          <div class="ocount">13 cards</div>
+        </div>
+        <div class="opponent active" id="opp-2">
+          <div class="avatar" style="background:linear-gradient(135deg,#4da3ff,#2e7ce0);">R</div>
+          <div class="oname">Ravi</div>
+          <div class="ocards" id="opp-2-cards"></div>
+          <div class="ocount">12 cards</div>
+          <div class="oturn-label">Their turn</div>
+        </div>
+        <div class="opponent" id="opp-3">
+          <div class="avatar" style="background:linear-gradient(135deg,#2ecc71,#178a4c);">S</div>
+          <div class="oname">Sana</div>
+          <div class="ocards" id="opp-3-cards"></div>
+          <div class="ocount">13 cards</div>
+        </div>
+      </div>
+
+      <div class="center-row">
+        <div class="pile">
+          <div class="pile-label">Closed Deck</div>
+          <div class="closed-deck" id="closed-deck">
+            <div class="card-back"></div>
+            <div class="card-back"></div>
+            <div class="card-back"></div>
+            <div class="deck-count" id="deck-count">29</div>
+          </div>
+        </div>
+
+        <div class="joker-chip">
+          <div class="pcard red" style="width:32px; height:44px;"><span class="corner">9<br>♦</span><span class="pip" style="font-size:15px;">♦</span></div>
+          <div class="jlabel">Wild<br>Joker</div>
+        </div>
+
+        <div class="pile">
+          <div class="pile-label">Discard</div>
+          <div class="discard-pile" id="discard-pile"></div>
+        </div>
+      </div>
+
+      <div class="status-strip" id="status-strip">Ravi's turn — waiting for them to discard…</div>
+    </div>
+
+    <div class="hand-section">
+      <div class="hand-head">
+        <div class="htitle">Your Hand</div>
+        <div class="hcount"><span id="hand-count">13</span> cards · tap to select</div>
+      </div>
+      <div class="hand-row" id="hand-row"></div>
+
+      <div class="action-bar">
+        <button class="btn btn-secondary" id="btn-sort">↕ Sort</button>
+        <button class="btn btn-secondary" id="btn-discard" disabled>Discard</button>
+        <button class="btn btn-declare" id="btn-declare">Declare</button>
+      </div>
+    </div>
+
+    <div class="log-panel" id="log-panel" style="margin-top:12px;">
+      <button class="log-toggle" id="log-toggle">
+        <span>📜 Game Log</span>
+        <span class="chev">▾</span>
+      </button>
+      <div class="log-body">
+        <div>Sana discarded 3♣.</div>
+        <div>Ravi drew from closed deck.</div>
+        <div>You discarded 2♥.</div>
+        <div>Jilna drew from discard pile.</div>
+        <div>Game started — wild joker is 9♦.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="declare-modal" id="declare-modal">
+  <div class="card declare-card">
+    <div class="tile-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">🏆</div>
+    <h1 style="font-size:20px; margin:0;">Declare Preview</h1>
+    <p style="font-size:13px; color:var(--text-dim); font-weight:600; margin-top:8px;">
+      This is a design preview — hand validation (pure sequence check, scoring) isn't wired up yet.
+      In the real game this is where a valid declare would end the round and show payouts.
+    </p>
+    <button class="btn btn-primary" id="btn-close-modal" style="margin-top:16px;">Close</button>
+  </div>
+</div>
+
+<script>
+  const SUITS = [
+    { sym: '♠', color: 'black' },
+    { sym: '♥', color: 'red' },
+    { sym: '♦', color: 'red' },
+    { sym: '♣', color: 'black' },
+  ];
+  const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  const DEMO_POOL = [];
+  SUITS.forEach(s => RANKS.forEach(r => DEMO_POOL.push({ rank: r, suit: s.sym, color: s.color })));
+
+  // A starting hand deliberately arranged into the groups a real player would
+  // aim for, so the layout demonstrates grouping — not shuffled randomly.
+  let hand = [
+    { rank:'4', suit:'♠', color:'black', group:0 },
+    { rank:'5', suit:'♠', color:'black', group:0 },
+    { rank:'6', suit:'♠', color:'black', group:0 },
+    { rank:'9', suit:'♥', color:'red', group:1 },
+    { rank:'10', suit:'♥', color:'red', group:1 },
+    { rank:'', suit:'', color:'', joker:true, group:1 },
+    { rank:'7', suit:'♦', color:'red', group:2 },
+    { rank:'7', suit:'♣', color:'black', group:2 },
+    { rank:'7', suit:'♠', color:'black', group:2 },
+    { rank:'Q', suit:'♥', color:'red', group:3 },
+    { rank:'Q', suit:'♦', color:'red', group:3 },
+    { rank:'Q', suit:'♣', color:'black', group:3 },
+    { rank:'K', suit:'♠', color:'black', group:4, deadwood:true },
+  ];
+  let discardTop = { rank:'3', suit:'♣', color:'black' };
+  let selectedIdx = null;
+
+  function cardHtml(c, extraClass) {
+    if (c.joker) {
+      return `<div class="pcard joker ${extraClass||''}"><span class="pip">🃏</span></div>`;
+    }
+    return `<div class="pcard ${c.color} ${extraClass||''}"><span class="corner">${c.rank}<br>${c.suit}</span><span class="pip">${c.suit}</span></div>`;
+  }
+
+  function renderHand() {
+    const row = document.getElementById('hand-row');
+    row.innerHTML = '';
+    hand.forEach((c, i) => {
+      if (i > 0 && c.group !== hand[i - 1].group) {
+        const gap = document.createElement('div');
+        gap.className = 'group-gap';
+        row.appendChild(gap);
+      }
+      const wrap = document.createElement('div');
+      const classes = [selectedIdx === i ? 'lifted' : '', c.deadwood ? 'deadwood' : ''].join(' ');
+      wrap.innerHTML = cardHtml(c, classes);
+      const el = wrap.firstElementChild;
+      el.addEventListener('click', () => {
+        selectedIdx = selectedIdx === i ? null : i;
+        renderHand();
+        document.getElementById('btn-discard').disabled = selectedIdx === null;
+      });
+      row.appendChild(el);
+    });
+    document.getElementById('hand-count').textContent = hand.length;
+  }
+
+  function renderDiscard() {
+    const el = document.getElementById('discard-pile');
+    el.innerHTML = discardTop ? cardHtml(discardTop) : '';
+    el.className = 'discard-pile' + (discardTop ? '' : ' empty');
+  }
+
+  function backsHtml(n) {
+    return Array.from({ length: Math.min(n, 3) }).map(() => '<div class="card-back"></div>').join('');
+  }
+  document.getElementById('opp-1-cards').innerHTML = backsHtml(13);
+  document.getElementById('opp-2-cards').innerHTML = backsHtml(12);
+  document.getElementById('opp-3-cards').innerHTML = backsHtml(13);
+
+  document.getElementById('btn-sort').addEventListener('click', () => {
+    hand.sort((a, b) => (a.joker ? 99 : SUITS.findIndex(s => s.sym === a.suit)) - (b.joker ? 99 : SUITS.findIndex(s => s.sym === b.suit))
+      || (a.joker ? 99 : RANKS.indexOf(a.rank)) - (b.joker ? 99 : RANKS.indexOf(b.rank)));
+    selectedIdx = null;
+    renderHand();
+    document.getElementById('btn-discard').disabled = true;
+  });
+
+  document.getElementById('btn-discard').addEventListener('click', () => {
+    if (selectedIdx === null) return;
+    const [card] = hand.splice(selectedIdx, 1);
+    discardTop = card.joker ? discardTop : card;
+    selectedIdx = null;
+    renderHand();
+    renderDiscard();
+    document.getElementById('btn-discard').disabled = true;
+    document.getElementById('status-strip').textContent = `You discarded ${card.joker ? 'a joker' : card.rank + card.suit}. Ravi's turn.`;
+  });
+
+  function drawCard() {
+    if (hand.length >= 14) return; // demo cap — a real turn is draw-then-discard back to 13
+    const pick = DEMO_POOL[Math.floor(Math.random() * DEMO_POOL.length)];
+    hand.push({ ...pick, group: 5 });
+    renderHand();
+  }
+  document.getElementById('closed-deck').addEventListener('click', drawCard);
+  document.getElementById('discard-pile').addEventListener('click', drawCard);
+
+  document.getElementById('log-toggle').addEventListener('click', () => {
+    document.getElementById('log-panel').classList.toggle('open');
+  });
+
+  document.getElementById('btn-declare').addEventListener('click', () => {
+    document.getElementById('declare-modal').classList.add('open');
+  });
+  document.getElementById('btn-close-modal').addEventListener('click', () => {
+    document.getElementById('declare-modal').classList.remove('open');
+  });
+
+  renderHand();
+  renderDiscard();
+</script>
+</body>
+</html>
