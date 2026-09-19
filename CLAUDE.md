@@ -209,6 +209,25 @@ by a Supabase project for auth/wallet-ledger/match-history.
     full existing points/pool e2e regression suite (which does rely on that raw `.click()` path)
     still passes unchanged, since the drag layer is additive to the existing `click` listener
     rather than a replacement for it.
+  - **The drag also live-highlights whichever card's spot you're about to take**, not just
+    snapping into place on drop — reported as needed since dropping blind (no feedback until
+    release) made it hard to tell where a card would actually land mid-gesture.
+    `findHoverIndex()` (already computing `dragCtx.hoverIndex` every `pointermove` for the drop
+    itself) now also returns that index's element, and a `.drag-target` class is added/removed on
+    it as the hovered card changes — diffed against the *previous* hover index first, so the class
+    only actually toggles when the target genuinely changes, not on every single pixel of pointer
+    movement. Deliberately a `filter: drop-shadow(...)` glow rather than another `box-shadow` or
+    `outline` variant: `box-shadow` is already fully claimed by the meld-color rings (each class
+    combo replaces it outright, so a drag-target ring in that same mechanism would just get
+    overridden by whichever meld color a card also has) and `outline` is already claimed by the
+    just-drawn highlight — `filter` is a wholly separate rendering layer, so it always shows
+    regardless of what else is going on with that card. No native/two hand-drawn "gap" indicator
+    between cards — the glow on the target card itself is the whole indicator, kept simple since
+    other cards don't visually shift out of the way until the actual drop (mid-drag reordering of
+    the rest of the hand was scoped out as more complexity than the ask needed). Verified with a
+    scripted drag confirming the highlight appears on the correct card as the pointer moves near
+    it, moves to a new card as the pointer moves further, and clears entirely on drop — plus a
+    screenshot of a real mid-drag frame showing the glow.
   - **Declare is forgiving but honest**: clicking Declare searches all 14 cards (preferring to
     keep whichever card the player tapped, if any) for a removal that makes the remaining 13 a
     valid declare (`findDeclareOption`) — the player doesn't have to manually figure out which
