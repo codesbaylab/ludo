@@ -193,6 +193,53 @@ by a Supabase project for auth/wallet-ledger/match-history.
     cards currently in hands and the 1 wild indicator) that can only be zero on *both* sides
     simultaneously if the whole pack were gone, which the game's flow makes impossible (every turn
     always nets exactly one card into the discard pile).
+  - **Animation + sound**: shuffle/deal at the start of every hand, and every draw/discard
+    (yours and every bot's) fly a card between two on-screen points instead of the state just
+    snapping — plus a full synthesized sound set (shuffle riffle, deal flick, card-move flick, win
+    chime, elimination tone) built the same way `design/game.js`'s dice sounds already are: plain
+    Web Audio oscillators/noise bursts, no audio files.
+    - `dealHand()` (now `async`) plays a ~650ms shuffle jitter (`.closed-deck.shuffling`, a CSS
+      keyframe rotating/translating the card-back stack) with the shuffle sound, *then* deals —
+      13 generic card-back clones fly from the deck into the hand area, staggered (`~65ms` apart,
+      several in flight at once) with a deal-flick sound each, and only once they've all "landed"
+      does the real, fully-arranged hand get revealed in one shot. Opponents' card-back counts
+      aren't animated incrementally alongside this — they just appear at their final count when
+      the real hand reveals — a deliberate scope cut; animating 52 individual per-seat deals for a
+      realistic round-robin feel wasn't worth the added complexity here.
+    - `flyCard(fromEl, toEl, innerHtml, durationMs)` is the shared primitive: a temporary
+      `position:fixed`, `pointer-events:none` clone (`.flying-card`) transitions from one element's
+      `getBoundingClientRect()` to another's, then removes itself. Your own discard flies the real,
+      face-up selected card; every other flight (draws, bot discards) flies a generic card-back,
+      since the source/destination piles are already either hidden (opponents' hands) or already
+      visible (the deck/discard pile itself).
+    - A `uiBusy` lock guards your three action entry points (draw via deck/discard-pile click,
+      Discard, Declare) against a rapid double-click firing the same action twice while its flight
+      is still in progress — `phase` itself only flips *after* the animation resolves, so without
+      this a second click landing mid-flight would read the still-stale `phase` and race a second
+      draw/discard against the first.
+    - **Everything collapses to genuinely instant under `?fast=1`** (the flag the automated test
+      suite already used) — `flyCard` returns `Promise.resolve()` immediately with no DOM clone at
+      all, and every `sfx*()` call no-ops. This isn't just a nice-to-have: a first attempt kept a
+      fixed `durationMs + 20` `setTimeout` buffer (to let a CSS transition finish before removing
+      the clone) plus a `requestAnimationFrame` hop *even under FAST*, and that alone — several
+      real milliseconds of unavoidable wall-clock time per flight — was enough to break the
+      existing e2e test scripts' fixed short `sleep()`-after-click margins, intermittently
+      selecting/discarding a card before the draw's hand-mutation had actually landed. Caught by
+      rerunning the standing test suite after adding animations (not by reasoning about the
+      timings on paper) and fixed by making the FAST path skip the animation machinery outright
+      rather than just shortening its duration.
+    - A `trophy-bounce` CSS keyframe (scale+rotate+fade-in, `.5s`) on the modal's icon runs on
+      every result modal (win, invalid-declare, pool-complete) for a bit of impact on the moment a
+      hand/pool concludes.
+    - Verified in real (non-`?fast=1`) headless Chromium: screenshotted the shuffle jitter, the
+      deal (multiple card-backs genuinely mid-flight at once), a real face-up card mid-flight on
+      your own discard, a bot's flight to/from its felt slot, and the settled win modal with the
+      trophy-bounce class applied — zero page/console errors in every run. Also timed a bot's full
+      turn end-to-end in real mode (~1.8–2s: two `STEP_MS` pauses plus two ~280ms flights, matching
+      the constants exactly) to confirm consecutive bot turns were genuinely progressing and not
+      stalled — an earlier debugging pass mistook this for a stuck game purely because a test
+      script's own "unchanged status text" stall-detector fired before a bot's turn had had time to
+      naturally complete.
   - **Bug caught building Pool Rummy**: the "Last hand: …" line in the pool-complete modal stripped
     the leading trophy/cross emoji with `headline.replace(/^[🏆❌]\s*/, '')` — a regex *character
     class* containing multi-code-unit emoji without the `u` flag splits each into its separate
@@ -213,8 +260,13 @@ by a Supabase project for auth/wallet-ledger/match-history.
     seat's cumulative score freezes exactly at its elimination hand and matches the engine's own
     unit-tested math, the "Next Hand"/spectator-auto-continue branching triggers correctly
     depending on whether seat 0 is still active, the pool always resolves to exactly one survivor
-    with correct final pot payouts (verified 2p resolves in exactly 1 hand, as expected — the only
-    possible outcome once either seat is eliminated), and "New Pool" genuinely resets cumulative
+    with correct final pot payouts — 2-player pools always end the instant either seat crosses the
+    cap (the only possible outcome once one of two seats is eliminated), but *how many hands* that
+    takes varies with the actual scores and isn't always 1; an earlier version of this note
+    over-claimed "resolves in exactly 1 hand" from only having observed short runs — a later run
+    legitimately took 40+ hands without either side crossing 51, which turned out to be real
+    variance (confirmed by watching cumulative scores keep climbing over more hands, not a stuck
+    game) rather than a bug — and "New Pool" genuinely resets cumulative
     scores/elimination state before dealing again; a dedicated repeated-seed run specifically to
     capture the "you're eliminated, mid-pool" spectator banner and confirm the eliminated felt
     slot's dimmed/"OUT" treatment renders correctly. No horizontal overflow at 390/420px in any
