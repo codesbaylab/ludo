@@ -61,20 +61,20 @@
 
     <!-- Withdraw panel -->
     <div class="card" id="panel-withdraw" style="margin-top:16px; display:none;">
-      <div class="section-title" style="margin-top:0;">Withdraw Money</div>
+      <div class="section-title" style="margin-top:0;">Withdraw USDT</div>
+      <div class="card" style="background:var(--yellow-soft); border:none; padding:12px 14px; margin-bottom:14px;">
+        <div style="font-size:12px; font-weight:700; color:#a36a00;">⚠️ Send only to a Tron (TRC-20) address. Requests are reviewed and paid out manually, usually within 24 hours — the amount is deducted from your balance immediately and refunded if the request is rejected.</div>
+      </div>
       <div class="field">
         <label>Amount (₹)</label>
-        <input class="input" type="number" placeholder="e.g. 100" value="100" />
-      </div>
-      <div class="card" style="background:var(--yellow-soft); border:none; padding:12px 14px; margin-bottom:14px;">
-        <div style="font-size:12px; font-weight:700; color:#a36a00;">⚠️ Verify your identity to withdraw above ₹500</div>
+        <input class="input" type="number" id="withdraw-amount" placeholder="e.g. 100" min="1" step="1" />
       </div>
       <div class="field">
-        <label>Withdraw To</label>
-        <input class="input" value="UPI — test@mockpay" readonly style="color:var(--text-dim);" />
+        <label>Destination TRC-20 address</label>
+        <input class="input" id="withdraw-address" placeholder="T…" style="font-family:monospace;" />
       </div>
-      <button class="btn btn-primary">Request Withdrawal</button>
-      <p class="hint">Withdrawals are usually processed within 24 hours.</p>
+      <p id="withdraw-error" class="hint" style="display:none; color:var(--red);"></p>
+      <button class="btn btn-primary" id="btn-request-withdraw">Request Withdrawal</button>
     </div>
 
     <div class="section-title">Transaction History</div>
@@ -171,23 +171,23 @@
     }
   });
 
-  (async () => {
-    const { data: { session } } = await ludoSupabase.auth.getSession();
-    if (!session) { location.href = 'login.html'; return; }
+  let currentUserId = null;
 
-    const [{ data: wallet }, matches, cryptoDeposits] = await Promise.all([
-      ludoSupabase.from('wallets').select('balance').eq('user_id', session.user.id).single(),
-      ludoFetchMatches(session.user.id, 20),
-      ludoFetchCryptoDeposits(session.user.id, 20),
+  async function loadWalletAndTransactions() {
+    const [{ data: wallet }, matches, cryptoDeposits, { data: withdrawals }] = await Promise.all([
+      ludoSupabase.from('wallets').select('balance').eq('user_id', currentUserId).single(),
+      ludoFetchMatches(currentUserId, 20),
+      ludoFetchCryptoDeposits(currentUserId, 20),
+      ludoSupabase.from('crypto_withdrawals').select('amount_inr, destination_address, status, tx_hash, requested_at').eq('user_id', currentUserId).order('requested_at', { ascending: false }).limit(20),
     ]);
     document.getElementById('wallet-balance').textContent = `₹${Number(wallet?.balance ?? 0).toFixed(2)}`;
 
     const stakedMatches = matches.filter(m => m.matches.stake > 0);
     const counts = await ludoFetchPlayerCounts(stakedMatches.map(m => m.matches.id));
 
-    // Two different sources (match results, USDT deposits) merged into one
-    // time-ordered feed so "Transaction History" is actually complete now —
-    // no more mock/fabricated entries in this list.
+    // Three different sources (match results, USDT deposits, withdrawal
+    // requests) merged into one time-ordered feed so "Transaction History"
+    // is actually complete — no more mock/fabricated entries in this list.
     const entries = [];
     stakedMatches.forEach(m => {
       const won = m.result === 'win';
@@ -216,6 +216,18 @@
         delta: Number(d.inr_credited),
       });
     });
+    (withdrawals || []).forEach(w => {
+      const statusLabel = w.status === 'pending' ? '⏳ Pending' : w.status === 'paid' ? '✅ Paid' : '❌ Rejected (refunded)';
+      const shortAddr = w.destination_address.length > 14 ? `${w.destination_address.slice(0, 6)}…${w.destination_address.slice(-4)}` : w.destination_address;
+      entries.push({
+        time: w.requested_at,
+        icon: '⬆️',
+        iconBg: 'linear-gradient(135deg, #ff8a3d, #ff5c8a)',
+        title: 'USDT Withdrawal',
+        subtitle: `${ludoTimeAgo(w.requested_at)} · ${shortAddr} · ${statusLabel}`,
+        delta: -Number(w.amount_inr),
+      });
+    });
     entries.sort((a, b) => new Date(b.time) - new Date(a.time));
 
     const list = document.getElementById('transactions-list');
@@ -237,6 +249,36 @@
         list.appendChild(row);
       });
     }
+  }
+
+  document.getElementById('btn-request-withdraw').addEventListener('click', async () => {
+    const errorEl = document.getElementById('withdraw-error');
+    errorEl.style.display = 'none';
+    const amountInput = document.getElementById('withdraw-amount');
+    const addressInput = document.getElementById('withdraw-address');
+    const amount = Number(amountInput.value);
+    const address = addressInput.value.trim();
+
+    if (!amount || amount <= 0) { errorEl.textContent = 'Enter a valid amount.'; errorEl.style.display = 'block'; return; }
+    if (!address) { errorEl.textContent = 'Enter a destination address.'; errorEl.style.display = 'block'; return; }
+
+    const btn = document.getElementById('btn-request-withdraw');
+    btn.disabled = true;
+    const { error } = await ludoSupabase.rpc('request_withdrawal', { p_amount: amount, p_address: address });
+    btn.disabled = false;
+    if (error) { errorEl.textContent = error.message; errorEl.style.display = 'block'; return; }
+
+    amountInput.value = '';
+    addressInput.value = '';
+    withdrawPanel.style.display = 'none';
+    await loadWalletAndTransactions();
+  });
+
+  (async () => {
+    const { data: { session } } = await ludoSupabase.auth.getSession();
+    if (!session) { location.href = 'login.html'; return; }
+    currentUserId = session.user.id;
+    await loadWalletAndTransactions();
   })();
 </script>
 </body>

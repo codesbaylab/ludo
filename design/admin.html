@@ -55,6 +55,12 @@
       <p class="hint" style="margin:0;">Loading…</p>
     </div>
 
+    <div class="section-title">Withdrawal Requests</div>
+    <p class="hint" style="margin-top:0;">Payout is manual: send the USDT yourself from your own wallet, then mark it paid with the tx hash. Rejecting refunds the user automatically.</p>
+    <div style="display:flex; flex-direction:column; gap:10px;" id="withdrawals-list">
+      <p class="hint" style="margin:0;">Loading…</p>
+    </div>
+
     <div class="section-title">Users &amp; Wallets</div>
     <input class="input" id="user-search" placeholder="Search by name…" style="margin-bottom:10px;" />
     <div style="display:flex; flex-direction:column; gap:10px;" id="users-list">
@@ -79,6 +85,7 @@
   let cachedProfiles = [];
   let cachedWallets = [];
   let cachedStatsByUser = {};
+  let cachedWithdrawals = [];
 
   function renderUsers(profiles, wallets, statsByUser, filterText) {
     const walletByUser = {};
@@ -179,6 +186,57 @@
     });
   }
 
+  function renderWithdrawals(withdrawals) {
+    const list = document.getElementById('withdrawals-list');
+    list.innerHTML = '';
+    if (withdrawals.length === 0) {
+      list.innerHTML = '<p class="hint" style="margin:0;">No withdrawal requests.</p>';
+      return;
+    }
+    withdrawals.forEach(w => {
+      const user = usersById[w.user_id];
+      const row = document.createElement('div');
+      row.className = 'player-chip';
+      row.style.flexWrap = 'wrap';
+      const statusBadge = w.status === 'pending'
+        ? '<span class="badge badge-waiting">Pending</span>'
+        : w.status === 'paid'
+          ? '<span class="badge badge-ready">Paid</span>'
+          : '<span class="badge" style="background:var(--red-soft); color:var(--red);">Rejected</span>';
+      row.innerHTML = `
+        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:linear-gradient(135deg, #ff8a3d, #ff5c8a);">${(user?.display_name || '?')[0].toUpperCase()}</div>
+        <div style="flex:1; min-width:160px;">
+          <div class="name">${user?.display_name || 'Unknown user'} · ₹${Number(w.amount_inr).toFixed(2)} ${statusBadge}</div>
+          <div class="status" title="${w.destination_address}">${w.destination_address} · ${ludoTimeAgo(w.requested_at)}${w.tx_hash ? ` · tx: ${w.tx_hash}` : ''}${w.admin_note ? ` · note: ${w.admin_note}` : ''}</div>
+        </div>
+        ${w.status === 'pending' ? `
+          <input type="text" class="input" placeholder="tx hash" style="width:140px;" data-txhash-input />
+          <button class="btn btn-secondary btn-sm" data-paid-btn>Mark Paid</button>
+          <button class="btn btn-secondary btn-sm" data-reject-btn>Reject</button>
+        ` : ''}
+      `;
+      if (w.status === 'pending') {
+        row.querySelector('[data-paid-btn]').addEventListener('click', async () => {
+          const txHash = row.querySelector('[data-txhash-input]').value.trim();
+          if (!txHash) { alert('Enter the on-chain tx hash first.'); return; }
+          if (!confirm(`Confirm you already sent ₹${Number(w.amount_inr).toFixed(2)} worth of USDT to ${w.destination_address}?`)) return;
+          const { error } = await ludoSupabase.rpc('admin_mark_withdrawal_paid', { p_withdrawal_id: w.id, p_tx_hash: txHash });
+          if (error) { alert('Failed: ' + error.message); return; }
+          w.status = 'paid'; w.tx_hash = txHash;
+          renderWithdrawals(cachedWithdrawals);
+        });
+        row.querySelector('[data-reject-btn]').addEventListener('click', async () => {
+          const note = prompt('Reason for rejecting (optional, shown in the audit trail):') || null;
+          const { error } = await ludoSupabase.rpc('admin_reject_withdrawal', { p_withdrawal_id: w.id, p_note: note });
+          if (error) { alert('Failed: ' + error.message); return; }
+          w.status = 'rejected'; w.admin_note = note;
+          renderWithdrawals(cachedWithdrawals);
+        });
+      }
+      list.appendChild(row);
+    });
+  }
+
   function renderMatches(matches, matchPlayersByMatch) {
     const list = document.getElementById('matches-list');
     list.innerHTML = '';
@@ -250,7 +308,7 @@
 
     document.getElementById('admin-avatar').textContent = 'A';
 
-    const [stats, { data: profiles }, { data: wallets }, { data: allMatchPlayers }, { data: matches }, { data: cryptoSettings }, { data: cryptoDeposits }] = await Promise.all([
+    const [stats, { data: profiles }, { data: wallets }, { data: allMatchPlayers }, { data: matches }, { data: cryptoSettings }, { data: cryptoDeposits }, { data: withdrawals }] = await Promise.all([
       ludoSupabase.rpc('get_platform_stats').then(r => r.data?.[0] || { total_users: 0, total_matches: 0, total_revenue: 0 }),
       ludoSupabase.from('profiles').select('id, display_name, is_admin, is_banned'),
       ludoSupabase.from('wallets').select('user_id, balance'),
@@ -258,6 +316,7 @@
       ludoSupabase.from('matches').select('id, stake, status, winner_id, finished_at').order('created_at', { ascending: false }),
       ludoSupabase.from('crypto_settings').select('usdt_inr_rate').eq('id', true).single(),
       ludoSupabase.from('crypto_deposits').select('user_id, tx_hash, amount_usdt, inr_credited, detected_at').order('detected_at', { ascending: false }),
+      ludoSupabase.from('crypto_withdrawals').select('id, user_id, amount_inr, destination_address, status, tx_hash, admin_note, requested_at').order('requested_at', { ascending: false }),
     ]);
 
     document.getElementById('stat-users').textContent = stats.total_users;
@@ -282,8 +341,11 @@
     // look user names up in it.
     cachedProfiles.forEach(p => { usersById[p.id] = p; });
 
+    cachedWithdrawals = withdrawals || [];
+
     renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, '');
     renderCryptoDeposits(cryptoDeposits || []);
+    renderWithdrawals(cachedWithdrawals);
     renderMatches(matches || [], matchPlayersByMatch);
   })();
 

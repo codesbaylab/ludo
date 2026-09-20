@@ -790,8 +790,11 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
 - **Live server**: deployed on Render's free tier at `wss://ludo-x96u.onrender.com` (spins down
   after ~15 min idle; first connection after that has a ~30-60s cold start). `design/game.js`
   now defaults to this URL; `?server=` still overrides it for local dev.
-- **Not yet done**: no spectator handling; no real withdrawal path (deposits are real now — see
-  "Crypto deposits" below — but `wallet.html`'s Withdraw UI is still an explicitly-labeled mock).
+- **Withdrawal requests are real** (request/approve/reject/audit-trail), but payout itself is a
+  **manual v1 step by design** — see "Withdrawals" below. There is still no sweep/hot-wallet
+  system, so the admin sends USDT from their own wallet software; the app never signs or
+  broadcasts an on-chain transaction.
+- **Not yet done**: no spectator handling.
 - **Open decision, deferred**: match history doesn't show opponent names (just your own
   color/result/stake/time) because `profiles`' RLS only lets a client read its own row. Showing
   real opponent names would mean adding a policy that makes `display_name` readable by any
@@ -866,10 +869,10 @@ compromised server means a compromised hot wallet) accepted for v1, with mitigat
   "Transaction History" now merges two real sources — match results and `crypto_deposits` (via the
   new `ludoFetchCryptoDeposits` helper in `supabase-client.js`) — sorted together by time; no more
   mock/fabricated entries anywhere in that list.
-- **Not built yet, on purpose**: withdrawals (a separate, harder problem — sending funds back out);
-  automated sweeping of collected USDT out of per-user hot addresses into cold storage (do this as
-  a manual/periodic admin action for now, keeping v1 simpler and the blast radius of a server
-  compromise limited to whatever hasn't been swept out yet); live USD/INR pricing.
+- **Not built yet, on purpose**: automated sweeping of collected USDT out of per-user hot addresses
+  into cold storage (do this as a manual/periodic admin action for now, keeping v1 simpler and the
+  blast radius of a server compromise limited to whatever hasn't been swept out yet); live USD/INR
+  pricing. Withdrawal *requests* are built now — see "Withdrawals" below.
 - **Verification note**: `api.trongrid.io` is blocked by this project's own dev sandbox's network
   policy (only a handful of package registries are allowlisted there), so the TronGrid HTTP
   integration itself could only be written against its documented API shape and unit-tested with a
@@ -884,6 +887,45 @@ compromised server means a compromised hot wallet) accepted for v1, with mitigat
   duties under Section 194S) — a second, separate layer of legal exposure on top of the real-money
   Ludo question already flagged elsewhere in this file. Not something resolved here; flagged for
   whenever this goes further than internal testing.
+
+## Withdrawals
+
+Deliberately split into two halves with very different risk levels: the request/accounting side is
+fully automated; the actual outbound USDT transfer is a **manual v1 step**, not signed or
+broadcast by this app. There is no sweep/hot-wallet system yet (see "Crypto deposits" above), so
+there's nowhere for the server to automatically pay out *from* even if it wanted to — the admin
+sends the USDT themselves, from their own wallet software, using whatever funds they've manually
+moved out of the per-user deposit addresses.
+
+- **`request_withdrawal(p_amount, p_address)`** (migration `crypto_withdrawals`) — row-locks the
+  caller's wallet (`select ... for update`), checks sufficient balance, deducts it immediately, and
+  inserts a `crypto_withdrawals` row (`status = 'pending'`). Deducting at request time (not at
+  approval time) is what makes a double-request impossible — the second request simply sees the
+  already-reduced balance. Destination address gets a base58/length/prefix sanity check
+  (`^T[1-9A-HJ-NP-Za-km-z]{33}$`) — enough to catch an Ethereum address or a bad paste, not a full
+  checksum validator.
+- **`admin_mark_withdrawal_paid(p_withdrawal_id, p_tx_hash)`** / **`admin_reject_withdrawal(p_withdrawal_id,
+  p_note)`** — same `is_admin(auth.uid())`-guarded pattern as every other `admin_*` RPC in this
+  project. Marking paid just records the tx hash the admin pasted in after sending the funds
+  themselves; rejecting refunds the reserved amount back to the wallet. Both are guarded by `where
+  status = 'pending'` so a withdrawal can't be resolved twice.
+- **RLS**: same shape as `crypto_deposits` — `crypto_withdrawals_select_own` (a user sees their own
+  requests) + `crypto_withdrawals_select_admin` (`is_admin(auth.uid())` sees all). No client insert
+  policy on the table itself — the only way a row is created is through `request_withdrawal()`.
+- **`design/wallet.html`**: the Withdraw panel now takes a real amount + TRC-20 address and calls
+  `request_withdrawal` directly; "Transaction History" merges withdrawals in as a third source
+  alongside match results and deposits, showing Pending/Paid/Rejected status per row.
+- **`design/admin.html`**: a "Withdrawal Requests" section lists pending (and past) requests with
+  a tx-hash input + Mark Paid / Reject per row, mirroring the existing Crypto Deposits section's
+  layout/conventions exactly.
+- **Verified**: the migration, RLS policies, and RPCs applied cleanly with no new security
+  advisories beyond the same `SECURITY DEFINER`-is-publicly-callable warning every other `admin_*`/
+  `is_admin` function in this project already carries (accepted there too — these all self-check
+  `auth.uid()`/`is_admin()` internally rather than relying on `REVOKE`). Not exercised against a
+  real browser session in this pass (no browser tool available here) — the inline scripts in both
+  pages were syntax-checked, and the SQL logic (locking, balance math, `status = 'pending'` guards)
+  was reviewed against the exact working pattern `admin_adjust_wallet_balance`/`admin_set_user_banned`
+  already use in production.
 
 ## Running it
 
