@@ -22,16 +22,29 @@
      edge (the screen's real height) — min()/max() over both units always
      picks the right one regardless of which orientation is real, so every
      landscape-table rule below reads --land-h/--land-w instead of 100vh/
-     100vw directly. Split into a stable pair (plain vh/vw, used only for
-     the rotation transform's own box math below, which needs a value that
-     doesn't shift under it while a mobile browser's chrome shows/hides)
-     and a dvh-aware pair (used for the actual layout fill, same vh+dvh
-     fallback pattern the rules below already used before this existed). */
+     100vw directly.
+
+     This min()/max()-over-vh/vw formula is a FALLBACK only, live for the
+     brief instant before the page's own JS runs (see updateLandVars(),
+     one of the first things the script below does) and overrides both
+     with real pixel values read from window.innerWidth/innerHeight
+     instead. That
+     override is load-bearing, not a nicety: a real phone's address bar
+     shows and hides as part of normal browsing, and plain vh (and even
+     dvh, inconsistently, across browser versions) can report the
+     viewport as if that chrome weren't there — a real bug caught on an
+     actual device, not in headless testing (headless Chromium has no
+     address bar to get this wrong about), where the rotated table
+     rendered visibly offset from the real screen, cards clipped off one
+     edge with blank space on the other. window.innerWidth/innerHeight
+     always reflect the CURRENTLY visible viewport, chrome included, and
+     updateLandVars() re-reads them on every resize (which fires when the
+     address bar shows/hides, not just on an actual rotation), so the
+     rotated box tracks the real screen continuously instead of trusting
+     a CSS unit that doesn't. */
   :root {
     --land-w: max(100vw, 100vh);
     --land-h: min(100vw, 100vh);
-    --land-w-dvh: max(100vw, 100dvh);
-    --land-h-dvh: min(100vw, 100dvh);
   }
 
   /* width:100% is load-bearing: .rummy-page is a flex item of .app (column
@@ -310,9 +323,9 @@
       background: radial-gradient(ellipse at 50% 35%, #1c9463 0%, #0f6b47 55%, #073d29 100%);
       box-shadow: inset 0 0 70px 20px rgba(0,0,0,.5);
     }
-    .app { max-width: none; min-height: var(--land-h); min-height: var(--land-h-dvh); padding-bottom: 0; }
+    .app { max-width: none; min-height: var(--land-h); padding-bottom: 0; }
     .rummy-page {
-      max-width: 100%; height: var(--land-h); height: var(--land-h-dvh); box-sizing: border-box;
+      max-width: 100%; height: var(--land-h); box-sizing: border-box;
       padding: 4px 10px calc(4px + env(safe-area-inset-bottom));
       display: flex; flex-direction: column;
     }
@@ -620,6 +633,21 @@
   const params = new URLSearchParams(location.search);
   const FAST = params.get('fast') === '1'; // used by automated tests only
   const STEP_MS = FAST ? 15 : 650;
+
+  // Overrides the CSS :root fallback for --land-w/--land-h (see that
+  // rule's own comment) with real pixel values read straight from
+  // window.innerWidth/innerHeight — the only source that reliably
+  // reflects the CURRENTLY visible viewport on a real phone, address bar
+  // included. Runs immediately (before anything else touches layout) and
+  // again on every resize, since a mobile browser fires resize whenever
+  // its chrome shows/hides, not just on an actual device rotation.
+  function updateLandVars() {
+    const w = window.innerWidth, h = window.innerHeight;
+    document.documentElement.style.setProperty('--land-w', Math.max(w, h) + 'px');
+    document.documentElement.style.setProperty('--land-h', Math.min(w, h) + 'px');
+  }
+  updateLandVars();
+  window.addEventListener('resize', updateLandVars);
   const MODE = params.get('mode') === 'pool' ? 'pool' : 'points';
   const playerCount = [2, 4].includes(Number(params.get('players'))) ? Number(params.get('players')) : 4;
   const pointsValue = [1, 2, 5].includes(Number(params.get('value'))) ? Number(params.get('value')) : 1;
