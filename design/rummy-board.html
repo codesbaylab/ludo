@@ -389,19 +389,38 @@
        stretches auto-height rows to fill leftover space in the container)
        is load-bearing here: without it, the grid's rows — including the
        card row — stretch/center down into whatever extra height
-       #hand-section-content has available, pushing the hand low enough to
-       reach down toward the Game Log pill. Pinning content to the top
-       instead leaves any leftover space harmlessly below the cards. */
+       #hand-section-content has available, needlessly crowding the
+       Game Log that sits right below .hand-section in normal flow (see
+       .log-panel's own comment). Pinning content to the top instead
+       leaves any leftover space harmlessly below the cards, and the
+       padding-bottom below adds a little more breathing room on top of
+       that before the log pill starts. */
     #hand-section-content {
       display: grid; grid-template-columns: 1fr auto; column-gap: 10px; align-items: center;
       align-content: start;
       grid-template-areas: "head actions" "hint actions" "legend actions" "cards actions";
-      flex: 1 1 auto; min-height: 0; padding-bottom: 44px;
+      flex: 1 1 auto; min-height: 0; padding-bottom: 2px;
     }
     .hand-head { grid-area: head; margin-bottom: 0; }
     .hand-head .htitle { color: #fff; }
     .hand-head .hcount { color: rgba(255,255,255,.7); }
-    .hand-hint { grid-area: hint; font-size: 10px; margin-bottom: 2px; color: rgba(255,255,255,.85); }
+    /* white-space:nowrap + ellipsis, not a natural wrap: this hint's text
+       length varies a lot (a short "Ready to declare!" vs. the much
+       longer "you need at least one unbroken run..." explainer), and on
+       a narrow-enough landscape width the long version wrapping to two
+       lines was enough extra height, on top of everything else in this
+       grid, to push its total past what .hand-section's flex-shrink
+       budget actually had — CSS Grid's implicit rows size to their own
+       content regardless of the grid container's own height, so that
+       overflow doesn't visibly break anything (still clipped by html/
+       body's overflow:hidden) but does show up as real, if invisible,
+       page overflow, squeezing whatever sits right after in flow (the
+       Game Log). Truncating instead keeps the row's height fixed and
+       predictable regardless of message length. */
+    .hand-hint {
+      grid-area: hint; font-size: 10px; margin-bottom: 2px; color: rgba(255,255,255,.85);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
     .hand-hint.ready { color: #7effa8; }
     .legend { grid-area: legend; gap: 6px; margin: 0 0 4px; font-size: 8px; color: rgba(255,255,255,.8); }
     .legend i { width: 7px; height: 7px; }
@@ -416,26 +435,23 @@
     .hand-line .pcard { margin-left: -17px; }
     .pcard.lifted { transform: translateY(-16px); }
 
-    /* The Game Log moves out of the page's normal flow entirely — a small
-       floating pill fixed at the bottom-RIGHT corner (not bottom-left, an
-       earlier version's placement — a real device screenshot showed it
-       sitting right on top of the hand's leftmost cards there, since the
-       hand's own grid column runs the full left side of the layout. The
-       right side, below the action-bar column, is reliably clear: that
-       column is only ~92px of stacked buttons vertically centered in its
-       own space, never the hand, regardless of how many cards are in
-       hand or how tall the hint text above them runs) that expands into
-       an overlay ON TOP of the felt when tapped, rather than an in-page
-       panel that pushes layout down. It can never be the reason the page
-       needs to scroll, since position:fixed elements don't participate in
-       .rummy-page's flex height budget at all. z-index sits below the
-       result modal (50) so it still covers it correctly if both happen to
-       be open. max-width reads --land-w, not plain 100vw, for the same
-       reason as everywhere else in this block — on a rotated portrait
-       phone 100vw is the screen's real (short) width, not the landscape
-       canvas's actual (long) width. */
+    /* The Game Log is a compact dark pill, not the full-width cream card
+       portrait uses — but a NORMAL, in-flow flex child of .rummy-page,
+       sitting after .hand-section, same as portrait. Two earlier versions
+       instead pulled it out of flow with position:fixed to save vertical
+       space (first anchored bottom-left, then bottom-right after that
+       overlapped the hand) and both had the same underlying problem: a
+       floating pill has no reliable "always clear" corner to sit in,
+       since exactly which corner is actually free shifts with hand
+       length, hint-text length, and viewport size. In flow, it can't
+       overlap anything by construction — it just claims its own real
+       space below the hand, and .hand-section (flex:1 1 auto) shrinks to
+       leave room for it the same way it already accommodates the header/
+       felt/standings above it. align-self:flex-start keeps it a compact
+       pill rather than stretching to the column's full width (flex
+       columns default to stretching their children). */
     .log-panel {
-      position: fixed; right: 10px; bottom: 10px; z-index: 40;
+      align-self: flex-start; margin-top: 2px; flex: 0 0 auto;
       max-width: min(320px, calc(var(--land-w) - 20px));
       background: rgba(8,28,20,.78); border: 1px solid rgba(255,255,255,.22);
       box-shadow: 0 8px 20px rgba(0,0,0,.4); border-radius: 999px;
@@ -443,12 +459,11 @@
     }
     .log-panel.open { border-radius: 14px; }
     /* width:auto/inline-flex, not the base rule's width:100% — .log-panel
-       is position:fixed with only right/bottom set, so its own width is
-       shrink-to-fit around its content; a 100%-width child inside a
-       shrink-to-fit parent resolves against an ambiguous/zero basis and
-       collapsed the button's actual clickable area to nothing (an early
-       version of this hit exactly that). */
-    .log-toggle { width: auto; display: inline-flex; padding: 7px 12px; font-size: 11px; color: #fff; }
+       is a shrink-to-fit pill (align-self:flex-start, see above), and a
+       100%-width child inside a shrink-to-fit parent resolves against an
+       ambiguous/zero basis and collapsed the button's actual clickable
+       area to nothing (an early version of this hit exactly that). */
+    .log-toggle { width: auto; display: inline-flex; padding: 5px 12px; font-size: 11px; color: #fff; }
     .log-toggle .chev { display: inline !important; color: rgba(255,255,255,.7); }
     /* A REAL bug this caught: styles.css's own @media (min-width:761px)
        block — meant for the Ludo board's desktop 3-column layout, where
