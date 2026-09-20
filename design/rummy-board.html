@@ -13,6 +13,27 @@
      doesn't share much visually with the Ludo board grid, so this stays out
      of the shared styles.css rather than adding rules nothing else uses. */
 
+  /* The landscape table's "short edge" / "long edge" as CSS custom
+     properties instead of raw vh/vw, because the two situations that now
+     both render this table (a real landscape phone, and a portrait phone
+     forced to LOOK landscape via the rotate transform further down) can't
+     share the same raw-unit meaning: on a real landscape phone 100vh
+     already IS the short edge, but on a portrait phone 100vh is the LONG
+     edge (the screen's real height) — min()/max() over both units always
+     picks the right one regardless of which orientation is real, so every
+     landscape-table rule below reads --land-h/--land-w instead of 100vh/
+     100vw directly. Split into a stable pair (plain vh/vw, used only for
+     the rotation transform's own box math below, which needs a value that
+     doesn't shift under it while a mobile browser's chrome shows/hides)
+     and a dvh-aware pair (used for the actual layout fill, same vh+dvh
+     fallback pattern the rules below already used before this existed). */
+  :root {
+    --land-w: max(100vw, 100vh);
+    --land-h: min(100vw, 100vh);
+    --land-w-dvh: max(100vw, 100dvh);
+    --land-h-dvh: min(100vw, 100dvh);
+  }
+
   /* width:100% is load-bearing: .rummy-page is a flex item of .app (column
      direction), and margin:0 auto sets auto cross-axis margins — which per
      the flexbox spec disables stretch alignment, so without an explicit
@@ -262,8 +283,14 @@
      isLandscapeMode() below; kept in sync with this exact media query).
      Gated on max-height too, not just orientation, so a landscape DESKTOP
      browser window (wide AND tall) doesn't trigger phone-table styling
-     meant for a rotated phone's short viewport. */
-  @media (orientation: landscape) and (max-height: 520px) {
+     meant for a rotated phone's short viewport. A portrait phone gets this
+     same styling too (second comma-branch below) — see the rotate-transform
+     block right after this one for why: rather than asking the player to
+     physically turn their phone, the whole page gets CSS-rotated 90° to
+     look landscape regardless of which way they're actually holding it, so
+     the landscape table is simply what phone players always see. */
+  @media (orientation: landscape) and (max-height: 520px),
+         (orientation: portrait) and (max-width: 900px) {
     /* Full-bleed: the ENTIRE screen is the felt now, not a rounded green
        card floating on the page's cream background — header, pool
        standings, opponents, center row and hand all become regions laid
@@ -271,15 +298,21 @@
        overflow:hidden means the page can never scroll (nothing ever sits
        below the fold to scroll to), and .rummy-page fills the exact
        viewport height as a column flexbox so every region gets sized to
-       actually fit rather than overflowing. */
+       actually fit rather than overflowing. min-height on body overrides
+       styles.css's own global `body { min-height: 100vh }` — harmless on a
+       real landscape phone (100vh there already equals --land-h) but a
+       real bug on a rotated portrait one, where plain 100vh is the screen's
+       actual (long) height and would force the page taller than the table
+       actually needs, defeating the height:100% right above it. */
     html, body { height: 100%; overflow: hidden; }
     body {
+      min-height: var(--land-h);
       background: radial-gradient(ellipse at 50% 35%, #1c9463 0%, #0f6b47 55%, #073d29 100%);
       box-shadow: inset 0 0 70px 20px rgba(0,0,0,.5);
     }
-    .app { max-width: none; min-height: 100vh; min-height: 100dvh; padding-bottom: 0; }
+    .app { max-width: none; min-height: var(--land-h); min-height: var(--land-h-dvh); padding-bottom: 0; }
     .rummy-page {
-      max-width: 100%; height: 100vh; height: 100dvh; box-sizing: border-box;
+      max-width: 100%; height: var(--land-h); height: var(--land-h-dvh); box-sizing: border-box;
       padding: 4px 10px calc(4px + env(safe-area-inset-bottom));
       display: flex; flex-direction: column;
     }
@@ -377,11 +410,14 @@
        that pushes layout down. It can never be the reason the page needs
        to scroll, since position:fixed elements don't participate in
        .rummy-page's flex height budget at all. z-index sits below the
-       result modal (50) and the rotate-block (250) so either still covers
-       it correctly if both happen to be open. */
+       result modal (50) so it still covers it correctly if both happen to
+       be open. max-width reads --land-w, not plain 100vw, for the same
+       reason as everywhere else in this block — on a rotated portrait
+       phone 100vw is the screen's real (short) width, not the landscape
+       canvas's actual (long) width. */
     .log-panel {
       position: fixed; left: 10px; bottom: 10px; z-index: 40;
-      max-width: min(320px, calc(100vw - 20px));
+      max-width: min(320px, calc(var(--land-w) - 20px));
       background: rgba(8,28,20,.78); border: 1px solid rgba(255,255,255,.22);
       box-shadow: 0 8px 20px rgba(0,0,0,.4); border-radius: 999px;
       transition: border-radius .2s ease;
@@ -417,50 +453,53 @@
     .log-body div { color: rgba(255,255,255,.85); border-top-color: rgba(255,255,255,.18); }
   }
 
-  /* --- Landscape-only: block play entirely in portrait, rather than
-     rendering a squeezed portrait layout — real cards need real size to
-     read at a glance, and the whole point of landscape mode is defeated if
-     portrait quietly stays playable alongside it. A CSS media query, not
-     the Screen Orientation API's lock(): that API only works inside an
+  /* --- Landscape-only, but auto-rotated rather than asked for -----------
+     A player found the earlier "rotate your phone to play" block-and-ask
+     screen (a full-screen overlay over a dead, uninteractable portrait
+     page) unnecessary friction — real cards still need real size to read
+     at a glance, so portrait can't be left playable at the old squeezed
+     size either. The fix: never render portrait at all. Instead the whole
+     page is spun 90° with a CSS transform so it visually reads as the same
+     landscape table from the moment it loads, whichever way the phone is
+     actually being held — no overlay, no instruction, nothing to act on.
+     Not the Screen Orientation API's lock(): that only works inside an
      already-fullscreen context (an installed PWA in standalone/fullscreen
      display mode, never a plain browser tab) and iOS Safari doesn't
-     implement it at all regardless — so it can't be relied on to actually
-     force anything cross-platform. This instead just covers the screen
-     and asks, which works identically in a browser tab or an installed
-     PWA, on any platform. Paired with max-width so a portrait-shaped
-     DESKTOP window doesn't get the same treatment meant for a phone (a
-     portrait phone is realistically well under this; a resized desktop
-     window rarely is) — same reasoning as the landscape table query's own
-     max-height pairing above. Skipped entirely under ?fast=1 (via
-     body.fast-test) so the automated test suite, which runs in a portrait
-     390x900 viewport, isn't blocked from clicking the board it needs to
-     test. */
-  .rotate-block { display: none; }
+     implement it at all regardless, so it can't force anything
+     cross-platform — a transform works identically in a browser tab or an
+     installed PWA, on any platform. Paired with max-width so a
+     portrait-shaped DESKTOP window doesn't get the same treatment meant for
+     a phone (a portrait phone is realistically well under this; a resized
+     desktop window rarely is) — same reasoning as the landscape table
+     query's own max-height pairing above.
+
+     The math: html's own width/height are set to the SWAPPED viewport
+     values (long edge as width, short edge as height — i.e. what the page
+     would measure if the device really were landscape), then rotated -90deg
+     around its own top-left corner after being absolutely positioned with
+     that corner already sitting at the real viewport's bottom-left
+     (top: var(--land-w) is 100% of the real portrait viewport's height;
+     left: 0). Rotating that box a quarter-turn about that anchor swings it
+     into exact alignment with the real (0,0)-to-(viewport) rectangle — the
+     standard recipe for faking landscape without the Orientation API,
+     verified here by the numbers actually landing on that rectangle rather
+     than by the transform merely looking plausible. Every position:fixed
+     element on the page (the log panel, result modals, the flying-card
+     animation) automatically rotates along with it for free: a transform
+     on an ancestor becomes the containing block for fixed descendants, so
+     they end up positioned — and rotated — in the same shared coordinate
+     space as everything else, not left behind in real screen space. */
   @media (orientation: portrait) and (max-width: 900px) {
-    .rotate-block { display: flex; }
+    html {
+      width: var(--land-w); height: var(--land-h);
+      position: absolute; top: var(--land-w); left: 0;
+      transform-origin: left top; transform: rotate(-90deg);
+      overflow: hidden;
+    }
   }
-  body.fast-test .rotate-block { display: none !important; }
-  .rotate-block {
-    /* Above .flying-card's z-index:200 — the deal/draw/discard animation
-       otherwise pokes through this overlay while a hand is mid-deal at
-       page load, caught by an initial-load screenshot in portrait. */
-    position: fixed; inset: 0; z-index: 250; flex-direction: column; align-items: center;
-    justify-content: center; gap: 10px; text-align: center; padding: 24px;
-    background: linear-gradient(160deg, #141413, #0a5537);
-  }
-  .rotate-block .icon { font-size: 42px; color: #fff; }
-  .rotate-block .title { font-family: "Baloo 2"; font-weight: 800; font-size: 18px; color: #fff; }
-  .rotate-block .sub { font-size: 13px; color: rgba(255,255,255,.75); max-width: 280px; font-weight: 600; }
-  .rotate-block .back { margin-top: 10px; font-size: 12px; font-weight: 800; color: #fff; opacity: .8; text-decoration: none; }
 </style>
 </head>
 <body>
-<div class="rotate-block" id="rotate-block">
-  <div class="icon">↻</div>
-  <div class="title">Rotate your phone to play</div>
-  <div class="sub">Rummy is a landscape-only table — turn your phone sideways to see your hand and the felt at full size.</div>
-  <a class="back" href="rummy-lobby.html">← Back to Lobby</a>
-</div>
 <div class="app wide">
   <div class="rummy-page">
 
@@ -580,11 +619,6 @@
   // Pool Rummy:   ?mode=pool&players=2|4&pool=51|101|201&entry=50|100|200
   const params = new URLSearchParams(location.search);
   const FAST = params.get('fast') === '1'; // used by automated tests only
-  // Lets the portrait rotate-block CSS rule stand down for the automated
-  // test suite, which runs in a portrait 390x900 viewport and needs to
-  // actually click the board — see that rule's own comment for why this
-  // is a body class rather than a media-query-only mechanism.
-  if (FAST) document.body.classList.add('fast-test');
   const STEP_MS = FAST ? 15 : 650;
   const MODE = params.get('mode') === 'pool' ? 'pool' : 'points';
   const playerCount = [2, 4].includes(Number(params.get('players'))) ? Number(params.get('players')) : 4;
@@ -876,12 +910,15 @@
     }
   }
 
-  // Same media query as the landscape CSS block above — kept identical on
-  // purpose, since renderHand()'s one-row-vs-two-row decision has to agree
-  // with which CSS layout is actually active, or the JS-computed rows and
-  // the CSS grid they're rendered into fall out of sync.
+  // Same two conditions as the landscape CSS block above (real landscape,
+  // or a portrait phone that's about to get CSS-rotated to look landscape)
+  // — kept identical on purpose, since renderHand()'s one-row-vs-two-row
+  // decision has to agree with which CSS layout is actually active, or the
+  // JS-computed rows and the CSS grid they're rendered into fall out of
+  // sync.
   const landscapeQuery = window.matchMedia('(orientation: landscape) and (max-height: 520px)');
-  function isLandscapeMode() { return landscapeQuery.matches; }
+  const rotatedPortraitQuery = window.matchMedia('(orientation: portrait) and (max-width: 900px)');
+  function isLandscapeMode() { return landscapeQuery.matches || rotatedPortraitQuery.matches; }
 
   function renderHand() {
     const hand = state.hands[0];
@@ -1452,15 +1489,17 @@
     document.getElementById('log-panel').classList.toggle('open');
   });
 
-  // Rotating the phone mid-game needs to actually re-lay-out the hand (the
-  // CSS grid/sizing swap is automatic, but the one-row-vs-two-row DOM split
-  // renderHand() builds is a JS decision, not something a media query can
-  // do by itself) — re-render on the query's own change event rather than a
-  // generic resize listener, so this fires exactly on the portrait<->
-  // landscape crossing and not on every intermediate resize event.
-  landscapeQuery.addEventListener('change', () => {
-    if (state && phase !== 'round-over') renderAll();
-  });
+  // Rotating the phone mid-game (or resizing a desktop window across the
+  // max-width/max-height thresholds) needs to actually re-lay-out the hand
+  // (the CSS grid/sizing swap is automatic, but the one-row-vs-two-row DOM
+  // split renderHand() builds is a JS decision, not something a media query
+  // can do by itself) — re-render on the queries' own change events rather
+  // than a generic resize listener, so this fires exactly on a real
+  // portrait<->landscape crossing and not on every intermediate resize
+  // event.
+  const onOrientationChange = () => { if (state && phase !== 'round-over') renderAll(); };
+  landscapeQuery.addEventListener('change', onOrientationChange);
+  rotatedPortraitQuery.addEventListener('change', onOrientationChange);
 
   dealHand();
 </script>
