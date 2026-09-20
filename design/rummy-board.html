@@ -390,9 +390,8 @@
        is load-bearing here: without it, the grid's rows — including the
        card row — stretch/center down into whatever extra height
        #hand-section-content has available, pushing the hand low enough to
-       overlap the floating Game Log pill fixed at the bottom-left corner.
-       Pinning content to the top instead leaves any leftover space
-       harmlessly below the cards, clear of the pill. */
+       reach down toward the Game Log pill. Pinning content to the top
+       instead leaves any leftover space harmlessly below the cards. */
     #hand-section-content {
       display: grid; grid-template-columns: 1fr auto; column-gap: 10px; align-items: center;
       align-content: start;
@@ -418,10 +417,17 @@
     .pcard.lifted { transform: translateY(-16px); }
 
     /* The Game Log moves out of the page's normal flow entirely — a small
-       floating pill fixed at the bottom-left corner that expands into an
-       overlay ON TOP of the felt when tapped, rather than an in-page panel
-       that pushes layout down. It can never be the reason the page needs
-       to scroll, since position:fixed elements don't participate in
+       floating pill fixed at the bottom-RIGHT corner (not bottom-left, an
+       earlier version's placement — a real device screenshot showed it
+       sitting right on top of the hand's leftmost cards there, since the
+       hand's own grid column runs the full left side of the layout. The
+       right side, below the action-bar column, is reliably clear: that
+       column is only ~92px of stacked buttons vertically centered in its
+       own space, never the hand, regardless of how many cards are in
+       hand or how tall the hint text above them runs) that expands into
+       an overlay ON TOP of the felt when tapped, rather than an in-page
+       panel that pushes layout down. It can never be the reason the page
+       needs to scroll, since position:fixed elements don't participate in
        .rummy-page's flex height budget at all. z-index sits below the
        result modal (50) so it still covers it correctly if both happen to
        be open. max-width reads --land-w, not plain 100vw, for the same
@@ -429,7 +435,7 @@
        phone 100vw is the screen's real (short) width, not the landscape
        canvas's actual (long) width. */
     .log-panel {
-      position: fixed; left: 10px; bottom: 10px; z-index: 40;
+      position: fixed; right: 10px; bottom: 10px; z-index: 40;
       max-width: min(320px, calc(var(--land-w) - 20px));
       background: rgba(8,28,20,.78); border: 1px solid rgba(255,255,255,.22);
       box-shadow: 0 8px 20px rgba(0,0,0,.4); border-radius: 999px;
@@ -437,7 +443,7 @@
     }
     .log-panel.open { border-radius: 14px; }
     /* width:auto/inline-flex, not the base rule's width:100% — .log-panel
-       is position:fixed with only left/bottom set, so its own width is
+       is position:fixed with only right/bottom set, so its own width is
        shrink-to-fit around its content; a 100%-width child inside a
        shrink-to-fit parent resolves against an ambiguous/zero basis and
        collapsed the button's actual clickable area to nothing (an early
