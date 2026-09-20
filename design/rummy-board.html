@@ -486,7 +486,7 @@
      desktop window rarely is) — same reasoning as the landscape table
      query's own max-height pairing above.
 
-     The math: html's own width/height are set to the SWAPPED viewport
+     The math: .app's own width/height are set to the SWAPPED viewport
      values (long edge as width, short edge as height — i.e. what the page
      would measure if the device really were landscape), then rotated -90deg
      around its own top-left corner after being absolutely positioned with
@@ -496,16 +496,35 @@
      into exact alignment with the real (0,0)-to-(viewport) rectangle — the
      standard recipe for faking landscape without the Orientation API,
      verified here by the numbers actually landing on that rectangle rather
-     than by the transform merely looking plausible. Every position:fixed
-     element on the page (the log panel, result modals, the flying-card
-     animation) automatically rotates along with it for free: a transform
-     on an ancestor becomes the containing block for fixed descendants, so
-     they end up positioned — and rotated — in the same shared coordinate
-     space as everything else, not left behind in real screen space. */
+     than by the transform merely looking plausible.
+
+     .app's containing block for this is #rotate-wrap, a plain, otherwise
+     unstyled div that exists in the markup for exactly this — pinned to
+     the viewport with position:fixed here, separately from .app's own
+     rotation. Not html or body itself: an earlier version put both the
+     pin and the rotation directly on html (and, briefly mid-development,
+     on body) and both turned out fragile — position:fixed on body
+     specifically was caught, in this project's own testing, silently
+     breaking the felt's background from painting at all (a real rendering
+     bug reproduced in plain desktop Chromium, not just theorized), and the
+     original html-transform version was the one a real iOS device showed
+     rendering visibly offset from the screen despite correct math on
+     paper. A plain wrapper div sidesteps whatever special-cased behavior
+     the root html/body elements carry around backgrounds and containing
+     blocks in different engines, which is what actually matters here far
+     more than exactly which element does the pinning. Every position:fixed
+     element inside #rotate-wrap (the log panel, the declare/result modal,
+     the flying-card animation clones — see flyCard()'s own comment on why
+     it appends into #rotate-wrap specifically, not document.body)
+     automatically rotates along with it for free: a transform on an
+     ancestor becomes the containing block for fixed descendants, so they
+     end up positioned — and rotated — in the same shared coordinate space
+     as everything else, not left behind in real screen space. */
   @media (orientation: portrait) and (max-width: 900px) {
-    html {
+    #rotate-wrap { position: fixed; inset: 0; overflow: hidden; }
+    .app {
       width: var(--land-w); height: var(--land-h);
-      position: absolute; top: var(--land-w); left: 0;
+      position: absolute; top: var(--land-w); left: 0; margin: 0;
       transform-origin: left top; transform: rotate(-90deg);
       overflow: hidden;
     }
@@ -513,6 +532,7 @@
 </style>
 </head>
 <body>
+<div id="rotate-wrap">
 <div class="app wide">
   <div class="rummy-page">
 
@@ -623,6 +643,7 @@
 
 <div class="declare-modal" id="declare-modal">
   <div class="card declare-card" id="declare-card-content"></div>
+</div>
 </div>
 
 <script src="rummy-rules.js"></script>
@@ -829,7 +850,14 @@
       clone.style.left = fromRect.left + 'px';
       clone.style.top = fromRect.top + 'px';
       clone.style.transition = `transform ${durationMs}ms cubic-bezier(.2,.7,.3,1)`;
-      document.body.appendChild(clone);
+      // #rotate-wrap, not document.body: in the rotated-portrait case (see
+      // that element's own CSS comment) it's what carries the rotation
+      // transform, and only its own descendants inherit it as their
+      // containing block — a clone appended straight to body would sit
+      // outside that and render upright while everything else is rotated.
+      // A no-op distinction in real landscape, where #rotate-wrap has no
+      // transform of its own.
+      document.getElementById('rotate-wrap').appendChild(clone);
       const dx = (toRect.left + toRect.width / 2) - (fromRect.left + fromRect.width / 2);
       const dy = (toRect.top + toRect.height / 2) - (fromRect.top + fromRect.height / 2);
       void clone.offsetWidth; // force reflow so the transition applies
