@@ -128,18 +128,32 @@
 
     const client = new Colyseus.Client(SERVER_URL);
     let room;
-    try {
-      room = await client.joinOrCreate('ludo', {
-        name: profile?.display_name || session.user.email || 'Player',
-        userId: session.user.id,
-        stake,
-        playerCount,
-      });
-    } catch (err) {
-      console.error('[ludo] failed to join waiting room:', err);
-      document.getElementById('players-title').textContent = 'Could not reach the game server';
-      document.getElementById('start-hint').textContent = 'Could not reach the game server. Is it running?';
-      return;
+    // The live server (Render free tier) spins down after ~15 min idle, and a
+    // cold start after that takes ~30-60s — a bare single joinOrCreate attempt
+    // fails outright during that window instead of just being slow. Retry for
+    // up to a minute (matching game.js's own reconnect-retry window) before
+    // giving up for real, and tell the player what's actually happening.
+    for (let attempt = 1; attempt <= 20 && !room; attempt++) {
+      try {
+        room = await client.joinOrCreate('ludo', {
+          name: profile?.display_name || session.user.email || 'Player',
+          userId: session.user.id,
+          stake,
+          playerCount,
+        });
+      } catch (err) {
+        if (attempt === 1) {
+          document.getElementById('start-hint').textContent =
+            'Waking up the game server — this can take up to a minute…';
+        }
+        if (attempt === 20) {
+          console.error('[ludo] failed to join waiting room:', err);
+          document.getElementById('players-title').textContent = 'Could not reach the game server';
+          document.getElementById('start-hint').textContent = 'Could not reach the game server. Is it running?';
+          return;
+        }
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      }
     }
 
     document.getElementById('room-code').textContent = room.roomId;

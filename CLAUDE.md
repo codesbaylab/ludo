@@ -789,7 +789,21 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   instead of running its own rules locally; `login.html`/`lobby.html` use real Supabase Auth.
 - **Live server**: deployed on Render's free tier at `wss://ludo-x96u.onrender.com` (spins down
   after ~15 min idle; first connection after that has a ~30-60s cold start). `design/game.js`
-  now defaults to this URL; `?server=` still overrides it for local dev.
+  now defaults to this URL; `?server=` still overrides it for local dev. **The initial
+  `joinOrCreate` retries through that cold start** instead of failing outright: both
+  `design/waiting-room.html` and `design/game.js`'s `connect()` used to make a single
+  `joinOrCreate` attempt and immediately show "Could not reach the game server. Is it running?"
+  on any failure — which is exactly what a cold-starting Render instance looks like from the
+  client (a real screenshot showed this on a totally healthy, just-idle server), not just a
+  genuinely dead one. Both now retry up to 20 times, 3s apart (the same 3s/20-attempt window
+  `game.js`'s drop-reconnect logic already used), showing "Waking up the game server — this can
+  take up to a minute…" after the first failed attempt so the wait reads as expected rather than
+  broken, and only falling back to the original "is it running?" message if every attempt over
+  that ~60s window fails. The handoff `client.reconnect()` from `waiting-room.html` into
+  `board.html` keeps its own separate, much shorter 5-attempt/400ms retry unchanged — that one is
+  absorbing a same-tick server race (the leave from the previous page vs. the resume on this one),
+  not a cold start, since the server was necessarily already warm for the waiting room to have
+  connected in the first place.
 - **Withdrawal requests are real** (request/approve/reject/audit-trail), but payout itself is a
   **manual v1 step by design** — see "Withdrawals" below. There is still no sweep/hot-wallet
   system, so the admin sends USDT from their own wallet software; the app never signs or

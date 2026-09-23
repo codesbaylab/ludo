@@ -663,17 +663,29 @@
 
     if (!joined) {
       connectingStatus.textContent = 'Joining a table…';
-      try {
-        joined = await client.joinOrCreate('ludo', {
-          name: profile?.display_name || session.user.email || 'Player',
-          userId: session.user.id,
-          stake: joinStake,
-          playerCount: joinPlayerCount,
-        });
-      } catch (err) {
-        console.error('[ludo] failed to join room:', err);
-        connectingStatus.textContent = 'Could not reach the game server. Is it running?';
-        return;
+      // Same cold-start reasoning as the handoff retry above, plus
+      // waiting-room.html's own join retry: the live server (Render free
+      // tier) can take ~30-60s to wake from idle, so a bare single attempt
+      // here fails outright during that window instead of just being slow.
+      for (let attempt = 1; attempt <= 20 && !joined; attempt++) {
+        try {
+          joined = await client.joinOrCreate('ludo', {
+            name: profile?.display_name || session.user.email || 'Player',
+            userId: session.user.id,
+            stake: joinStake,
+            playerCount: joinPlayerCount,
+          });
+        } catch (err) {
+          if (attempt === 1) {
+            connectingStatus.textContent = 'Waking up the game server — this can take up to a minute…';
+          }
+          if (attempt === 20) {
+            console.error('[ludo] failed to join room:', err);
+            connectingStatus.textContent = 'Could not reach the game server. Is it running?';
+            return;
+          }
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
       }
     }
 
