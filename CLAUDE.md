@@ -10,9 +10,11 @@ by a Supabase project for auth/wallet-ledger/match-history.
   only for discussion, before any real change.** Explicit user preference. A mockup/prototype is a
   real file committed to `design/` (a standalone page, not wired into the app's navigation or
   data — the same pattern `rummy-lobby.html`/`rummy-board.html` themselves started as, per their
-  entry below) and shipped through the normal branch → PR → merge → GitHub Pages flow like
-  everything else, so it's reachable by a real URL the user can open on their own phone, not a
-  claude.ai artifact link.
+  entry below) and shipped by pushing straight to `main` like everything else (see below), so it's
+  reachable by a real URL the user can open on their own phone, not a claude.ai artifact link.
+- **Always push directly to `main`, not a feature branch/PR.** Explicit user preference — commit
+  and push straight to `main` (which auto-deploys via `.github/workflows/pages.yml`) rather than
+  opening a branch/PR and waiting for a merge, unless the user asks for a PR for a specific change.
 
 ## Structure
 
