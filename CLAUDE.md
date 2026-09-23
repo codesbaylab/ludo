@@ -15,6 +15,8 @@ by a Supabase project for auth/wallet-ledger/match-history.
 - **Always push directly to `main`, not a feature branch/PR.** Explicit user preference — commit
   and push straight to `main` (which auto-deploys via `.github/workflows/pages.yml`) rather than
   opening a branch/PR and waiting for a merge, unless the user asks for a PR for a specific change.
+- **Always answer short.** Explicit user preference — keep chat replies brief/direct, not long
+  explanations, unless the user asks for more detail.
 
 ## Structure
 
