@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Ludo Online — Rummy Waiting Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="https://unpkg.com/colyseus.js@0.15.20/dist/colyseus.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f6b47">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ludo">
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <a href="rummy-lobby.html" class="nav-item" id="leave-link" style="flex-direction:row; gap:6px; color:var(--text-dim);">← Leave</a>
+    <h1 style="font-size:17px;">Rummy Waiting Room</h1>
+    <span class="badge badge-cash" id="table-badge">₹1/pt Table</span>
+  </div>
+
+  <div style="padding: 10px 20px;">
+    <div class="card" id="stake-card" style="margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, var(--green-soft), var(--paper));">
+      <div id="stake-left">
+        <div style="font-size:12px; color:var(--text-dim); font-weight:700;">Points Value</div>
+        <div id="stake-left-value" style="font-size:19px; font-weight:800;">₹1 / point</div>
+      </div>
+      <div style="text-align:right;" id="stake-right">
+        <div style="font-size:12px; color:var(--text-dim); font-weight:700;">Max Loss (80 pts)</div>
+        <div id="stake-right-value" style="font-size:19px; font-weight:800; color:#178a4c;">₹80</div>
+      </div>
+    </div>
+
+    <div class="section-title" id="players-title">Players (0/4)</div>
+    <div style="display:flex; flex-direction:column; gap:10px;" id="players-list"></div>
+
+    <div class="section-title">Settings</div>
+    <div class="card" style="display:flex; flex-direction:column; gap:14px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:14px; font-weight:700;">Mode</span>
+        <span id="mode-value" style="color:var(--text-dim); font-size:14px; font-weight:700;">Points Rummy</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:14px; font-weight:700;">Max Players</span>
+        <span id="max-players-value" style="color:var(--text-dim); font-size:14px; font-weight:700;">4</span>
+      </div>
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:14px; font-weight:700;">Room Type</span>
+        <span style="color:var(--text-dim); font-size:14px; font-weight:700;">Private · Cash · Real players only</span>
+      </div>
+    </div>
+
+    <div style="margin-top:22px; display:flex; flex-direction:column; gap:10px;">
+      <p id="start-hint" class="hint">Waiting for the table to fill — the hand starts automatically once everyone's in. Real players only, no bots.</p>
+    </div>
+  </div>
+</div>
+<script>
+  const qp = new URLSearchParams(location.search);
+  const mode = qp.get('mode') === 'pool' ? 'pool' : 'points';
+  const playersParam = Number(qp.get('players'));
+  const playerCount = [2, 4].includes(playersParam) ? playersParam : 4;
+  const pointValue = [1, 2, 5].includes(Number(qp.get('value'))) ? Number(qp.get('value')) : 1;
+  const poolLimit = [51, 101, 201].includes(Number(qp.get('pool'))) ? Number(qp.get('pool')) : 101;
+  const entryFee = [50, 100, 200].includes(Number(qp.get('entry'))) ? Number(qp.get('entry')) : 100;
+  // Same default/override pattern as design/game.js and waiting-room.html.
+  const SERVER_URL = qp.get('server') || 'wss://ludo-x96u.onrender.com';
+
+  document.getElementById('max-players-value').textContent = String(playerCount);
+
+  if (mode === 'pool') {
+    document.getElementById('table-badge').textContent = `${poolLimit} Pool · ₹${entryFee}`;
+    document.getElementById('mode-value').textContent = 'Pool Rummy';
+    document.getElementById('stake-left').innerHTML = '<div style="font-size:12px; color:var(--text-dim); font-weight:700;">Pool Size / Entry</div><div id="stake-left-value" style="font-size:19px; font-weight:800;"></div>';
+    document.getElementById('stake-left-value').textContent = `${poolLimit} pool · ₹${entryFee} entry`;
+    document.getElementById('stake-right').innerHTML = '<div style="font-size:12px; color:var(--text-dim); font-weight:700;">Winner Takes</div><div id="stake-right-value" style="font-size:19px; font-weight:800; color:#178a4c;"></div>';
+    document.getElementById('stake-right-value').textContent = `₹${entryFee * playerCount}`;
+  } else {
+    document.getElementById('table-badge').textContent = `₹${pointValue}/pt Table`;
+    document.getElementById('stake-left-value').textContent = `₹${pointValue} / point`;
+    document.getElementById('stake-right-value').textContent = `₹${pointValue * 80}`;
+  }
+
+  function renderPlayers(snapshot, mySessionId) {
+    const connected = snapshot.players.filter(p => p.connected).length;
+    document.getElementById('players-title').textContent = `Players (${connected}/${snapshot.players.length})`;
+
+    const list = document.getElementById('players-list');
+    list.innerHTML = '';
+    snapshot.players.forEach(p => {
+      const isMe = p.connected && p.sessionId === mySessionId;
+      const chip = document.createElement('div');
+      chip.className = 'player-chip' + (p.connected ? ' ready' : ' empty');
+      const avatarStyle = p.connected
+        ? 'background:linear-gradient(135deg,#2ecc71,#178a4c);'
+        : 'background:var(--paper-2); color:var(--text-faint); box-shadow:none; border:2px dashed var(--border);';
+      const initial = p.connected ? (p.name || '?')[0].toUpperCase() : '?';
+      const nameText = p.connected ? (p.name || 'Player') + (isMe ? ' (You)' : '') : 'Waiting for player…';
+      chip.innerHTML = `
+        <div class="avatar" style="width:36px; height:36px; font-size:13px; ${avatarStyle}">${initial}</div>
+        <div class="name"${p.connected ? '' : ' style="color:var(--text-faint);"'}>${nameText}</div>
+        ${p.connected ? `<span class="badge ${isMe ? 'badge-host' : 'badge-ready'}">${isMe ? 'You' : 'Ready'}</span>` : ''}
+      `;
+      list.appendChild(chip);
+    });
+  }
+
+  (async () => {
+    const { data: { session } } = await ludoSupabase.auth.getSession();
+    if (!session) { location.href = 'login.html'; return; }
+
+    const { data: profile } = await ludoSupabase
+      .from('profiles').select('display_name').eq('id', session.user.id).single();
+
+    const client = new Colyseus.Client(SERVER_URL);
+    let room;
+    // Same cold-start reasoning as waiting-room.html — see that file's own
+    // comment for the full story (a real trace showed a 60s window wasn't
+    // always enough after a multi-day idle period).
+    for (let attempt = 1; attempt <= 30 && !room; attempt++) {
+      try {
+        room = await client.joinOrCreate('rummy', {
+          name: profile?.display_name || session.user.email || 'Player',
+          userId: session.user.id,
+          mode,
+          playerCount,
+          pointValue,
+          poolLimit,
+          entryFee,
+        });
+      } catch (err) {
+        if (attempt === 1) {
+          document.getElementById('start-hint').textContent =
+            'Waking up the game server — this can take a couple of minutes…';
+        }
+        if (attempt === 30) {
+          console.error('[rummy] failed to join waiting room:', err);
+          document.getElementById('players-title').textContent = 'Could not reach the game server';
+          document.getElementById('start-hint').textContent = 'Could not reach the game server. Is it running?';
+          return;
+        }
+        await new Promise(resolve => setTimeout(resolve, 4000));
+      }
+    }
+
+    document.getElementById('leave-link').addEventListener('click', () => {
+      room.leave(true); // consented — frees the seat immediately.
+    });
+
+    let navigated = false;
+    room.onStateChange(state => {
+      const snapshot = state.toJSON();
+      renderPlayers(snapshot, room.sessionId);
+
+      if (!navigated && snapshot.started) {
+        navigated = true;
+        document.getElementById('start-hint').textContent = 'All players ready! Starting…';
+        // Same handoff pattern as waiting-room.html -> board.html, under a
+        // separate sessionStorage key so a Ludo and Rummy handoff in flight
+        // at once (unlikely, but cheap to avoid) can never collide.
+        sessionStorage.setItem('rummyReconnectToken', room.reconnectionToken);
+        const dest = mode === 'pool'
+          ? `rummy-cash-board.html?mode=pool&players=${playerCount}&pool=${poolLimit}&entry=${entryFee}`
+          : `rummy-cash-board.html?mode=points&players=${playerCount}&value=${pointValue}`;
+        setTimeout(() => { location.href = dest; }, 700);
+      }
+    });
+
+    room.onLeave(() => {
+      if (navigated) return;
+      document.getElementById('start-hint').textContent = 'Disconnected from the game server.';
+    });
+  })();
+</script>
+</body>
+</html>

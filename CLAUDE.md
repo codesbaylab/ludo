@@ -832,14 +832,17 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   authenticated user, not just its owner — a deliberate privacy/product call to revisit later,
   not something to change as a side effect of another task.
 
-### Rummy multiplayer (server-side foundation — client not wired up yet)
+### Rummy multiplayer (real money — server verified, client wired but not yet playtested live)
 
 The practice table (`rummy-lobby.html`/`rummy-board.html`, documented under Structure above) is
-client-only against bots, by design, with no real stakes. This is the start of a **separate real-
-money multiplayer path**, mirroring Ludo's server architecture — decided after the user confirmed
-real stakes, real-players-only (no bot fallback), and building both Points and Pool at once, ahead
-of public launch. **Server-side foundation is built and verified; the client (`rummy-lobby.html`/
-`rummy-board.html`, or new pages) does not talk to it yet** — that's the next phase.
+client-only against bots, by design, with no real stakes, and is untouched by any of this. This is
+a **separate real-money multiplayer path**, mirroring Ludo's server architecture — decided after
+the user confirmed real stakes, real-players-only (no bot fallback), and building both Points and
+Pool at once, ahead of public launch. Built in two passes: the server foundation first (verified
+with 4000+ randomized engine comparisons and full simulated network games — see below), then the
+client (`rummy-lobby.html`'s new Cash Tables path, `rummy-waiting-room.html`, `rummy-cash-board.html`
+— see "Client is now wired up" near the end of this section for what shipped and what's still
+deliberately trimmed).
 
 - **`server/src/rummy/engine.ts`** — a faithful TypeScript port of `design/rummy-rules.js`'s
   authoritative logic (deal, meld detection, declare validation, deadwood scoring, Pool
@@ -924,14 +927,53 @@ of public launch. **Server-side foundation is built and verified; the client (`r
   survivor (4 hands) with sane cumulative scores. `npm run test:sim` (Ludo's existing full-game
   test) re-ran clean afterward too, confirming the new `rummy` room registration in `index.ts`
   didn't disturb the existing one.
-- **Explicitly not done yet**: the client. `rummy-lobby.html`/`rummy-board.html` still only know how
-  to play the local-bots practice mode — no stakes picker wired to real money, no waiting room, no
-  network connection to the `rummy` room at all. `design/lobby.html`'s Rummy tile is correspondingly
-  still ungated (`server-gated` isn't applied to it) since it only leads to the practice table today,
-  which needs no server; that will need to change once a real-money entry point exists alongside it.
-  Also not done: an admin-visible Rummy section in `admin.html` (mirroring the existing Crypto
-  Deposits/Withdrawal Requests sections), and surfacing Rummy results in `wallet.html`'s
-  transaction history / `history.html`.
+- **Client is now wired up (first pass)** — `rummy-lobby.html` gained a `table-type-picker` toggle
+  ("🎲 Practice (free)" / "💵 Cash Table (real money)") right at the top, above the existing mode/
+  stakes pickers, which are **entirely reused unchanged** for both table types (the same points-
+  value/pool-size/entry-fee/player-count tiles just feed a different destination depending on which
+  type is selected). Practice's own behavior is untouched — same href, same page, same zero-server
+  local simulation, zero regression risk. Cash Tables reuse those exact picker values but route
+  through two new pages instead: `rummy-waiting-room.html` (a close copy of `waiting-room.html`,
+  joining the `rummy` room instead of `ludo` — same cold-start retry, same real-players-only "starts
+  once everyone's connected" flow, no bot fallback per the earlier scoping decision) and
+  `rummy-cash-board.html` (the real network-driven board, replacing local simulation with
+  `room.send('draw'/'discard'/'declare', …)` and rendering off `room.state` plus the private
+  `'hand'` message — see the server section above for why hands can't just live in synced state).
+  The "Start Table" button on the Cash side is gated behind a live `/health` check (same pattern as
+  `design/lobby.html`'s `server-gated` tiles, scoped to just this one button since Practice still
+  needs no server at all) and behind a real Supabase session check (redirects to `login.html` — the
+  server enforces this too via `userId`, but failing fast in the lobby is a much better experience
+  than silently not being able to join two screens later). "Recent Rummy Games" on this page is now
+  a real query against `rummy_match_players`/`rummy_matches` for the signed-in user (was two
+  hardcoded fake rows) — showing fabricated numbers next to a page that now has an actual real-money
+  mode felt wrong to leave as-is.
+  - **Deliberately trimmed for this first pass**, to keep it shippable rather than re-building
+    every practice-table polish feature against a network data source in one go: `rummy-cash-board.html`
+    is **portrait-only** (no landscape table, no forced-rotation transform — those are pure CSS/UX
+    layered on top of `rummy-board.html`'s local state and would need re-verifying against network
+    timing regardless), has **no manual drag-reorder** (hand is always auto-arranged via the same
+    `computeBestGrouping`-based logic, same visual meld coloring, just not draggable), and **no
+    fly-card/shuffle animations or sound** (state changes render immediately). The wild rank is shown
+    as a text badge ("Wild Rank: 7") rather than the actual indicator card face, since `RummyState`
+    only syncs `wildRank` (a string, safe to broadcast) — the full indicator `CardState` was never
+    added to the schema; a real addition, not a bug, if the card face matters enough to warrant it
+    later. None of this affects correctness or real money — purely presentation depth the practice
+    table has that this one doesn't yet.
+  - **Not yet done, still**: an admin-visible Rummy section in `admin.html` (mirroring the existing
+    Crypto Deposits/Withdrawal Requests sections), and surfacing Rummy results in `wallet.html`'s
+    merged transaction history (right now a Cash Table result only shows up in `rummy-lobby.html`'s
+    own history list, not the wallet's). Also: no join-by-room-code for a Rummy Cash Table (the
+    "Join with code" tile stays disabled/preview-only for both table types, same as before — real
+    join-by-code isn't wired up for either Rummy path yet).
+  - **Not exercised against a live Chromium session or the real deployed server in this pass** —
+    the sandbox this was built in has no browser tool and can't reach `onrender.com` (see the
+    server-side section's own verification notes for why). Every inline `<script>` block was
+    syntax-checked (`node --check`), and the underlying server logic these pages talk to was
+    verified for real (4000+ engine comparisons, full simulated network games — see above); the
+    client wiring itself — the actual join → deal → draw/discard/declare → payout loop rendered in
+    a real browser against the real live server — still needs a real playthrough before this ships
+    to real users for real money. Flagging this plainly rather than claiming end-to-end verification
+    that wasn't actually possible here.
 
 ## Crypto deposits (USDT / TRC-20)
 

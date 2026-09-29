@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Ludo Online — Rummy Cash Table</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
+<script src="https://unpkg.com/colyseus.js@0.15.20/dist/colyseus.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f6b47">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ludo">
+<style>
+  /* Portrait-only for this first real-multiplayer pass (no landscape/drag/
+     fly-animation polish yet — see CLAUDE.md's Rummy multiplayer section
+     for what's deliberately deferred). CSS below is the same visual
+     language as the practice table (design/rummy-board.html) so a player
+     moving between the two doesn't see a different game — trimmed to what
+     this page actually uses (no drag/just-drawn/landscape rules). */
+  .rummy-page { width: 100%; box-sizing: border-box; padding: 12px 12px calc(16px + env(safe-area-inset-bottom)); max-width: 720px; margin: 0 auto; }
+  .cash-banner {
+    background: var(--green-soft); border: 1px solid var(--green); border-radius: var(--radius-sm);
+    padding: 8px 12px; font-size: 12px; font-weight: 700; color: #0f6b47; text-align: center; margin-bottom: 10px;
+  }
+  .rummy-header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:10px; }
+  .rummy-title { text-align:center; }
+  .rummy-title .name { font-family:"Baloo 2"; font-weight:800; font-size:15px; }
+  .rummy-title .sub { font-size:11px; color:var(--text-dim); font-weight:700; }
+
+  .felt {
+    background: radial-gradient(ellipse at center, #1a8558 0%, #0f6b47 70%, #0a5537 100%);
+    border-radius: var(--radius-lg); padding: 14px 10px 18px;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,.08), 0 12px 28px rgba(10,60,40,.35);
+    position: relative;
+  }
+
+  .opponent-row { display:flex; justify-content:space-around; gap:8px; margin-bottom: 14px; }
+  .opponent { display:flex; flex-direction:column; align-items:center; gap:4px; padding: 6px 8px; border-radius: var(--radius-sm); flex: 1; min-width:0; transition: box-shadow .2s ease, opacity .5s ease; }
+  .opponent.active { box-shadow: 0 0 0 2px var(--accent), 0 0 16px rgba(255,138,61,.5); background: rgba(255,255,255,.06); }
+  .opponent.eliminated { opacity:.35; }
+  .opponent .avatar { width:38px; height:38px; font-size:15px; border: 2px solid rgba(255,255,255,.5); }
+  .opponent .oname { color:#fff; font-size:12px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80px; }
+  .opponent .ocards { display:flex; margin-top:2px; }
+  .card-back { width: 20px; height: 28px; border-radius: 4px; flex-shrink:0; background: repeating-linear-gradient(135deg, #d94f70, #d94f70 3px, #c23a5c 3px, #c23a5c 6px); border: 1.5px solid #fff; margin-left:-12px; }
+  .opponent .ocards .card-back:first-child { margin-left:0; }
+  .ocount { color:#fff; font-size:10px; font-weight:800; opacity:.85; margin-top:1px; }
+  .oturn-label { font-size:10px; font-weight:800; color: var(--accent); background:#fff; border-radius:8px; padding:1px 7px; margin-top:2px; }
+  .odisc-label { font-size:9px; font-weight:800; color:#fff; background:rgba(0,0,0,.35); border-radius:8px; padding:1px 6px; margin-top:2px; }
+
+  .center-row { display:flex; align-items:center; justify-content:center; gap:22px; padding: 10px 0 4px; }
+  .pile { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .pile-label { color:rgba(255,255,255,.85); font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; }
+  .closed-deck { position:relative; width:46px; height:64px; cursor:pointer; }
+  .closed-deck.disabled { cursor:default; filter: grayscale(.5); opacity:.6; }
+  .closed-deck .card-back { position:absolute; width:46px; height:64px; margin:0; border-radius:7px; }
+  .closed-deck .card-back:nth-child(1) { top:4px; left:4px; }
+  .closed-deck .card-back:nth-child(2) { top:2px; left:2px; }
+  .closed-deck .card-back:nth-child(3) { top:0; left:0; }
+  .deck-count { position:absolute; bottom:-9px; right:-9px; background:#fff; color:var(--text); font-size:10px; font-weight:800; border-radius:10px; padding:2px 6px; box-shadow: var(--shadow); }
+
+  .trophy-bounce { animation: trophy-bounce .5s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes trophy-bounce { 0% { transform: scale(.4) rotate(-15deg); opacity: 0; } 60% { transform: scale(1.15) rotate(6deg); opacity: 1; } 100% { transform: scale(1) rotate(0deg); } }
+
+  .joker-chip { display:flex; flex-direction:column; align-items:center; gap:2px; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.3); border-radius: 12px; padding: 8px 12px; }
+  .joker-chip .jlabel { color:rgba(255,255,255,.8); font-size:9px; font-weight:800; text-transform:uppercase; }
+  .joker-chip .jrank { color:#fff; font-size:20px; font-weight:800; font-family:"Baloo 2"; }
+
+  .pcard { width: 46px; height: 64px; border-radius: 7px; background: #fff; border: 1px solid rgba(0,0,0,.12); box-shadow: 0 2px 5px rgba(0,0,0,.25); position: relative; flex-shrink: 0; display:flex; align-items:center; justify-content:center; font-family: "Baloo 2"; font-weight:800; user-select:none; transition: transform .15s ease, box-shadow .15s ease; }
+  .pcard .corner { position:absolute; top:3px; left:4px; font-size:11px; line-height:1; text-align:left; }
+  .pcard .pip { font-size:20px; }
+  .pcard.red { color:#d32f2f; }
+  .pcard.black { color:#26282b; }
+  .pcard.joker { color:#b8860b; background: linear-gradient(160deg, #fff8e1, #fff1c2); }
+  .pcard.joker .pip { font-size:18px; }
+  .pcard.wild-rank { box-shadow: 0 0 0 2px #d4a017, 0 2px 5px rgba(0,0,0,.25); }
+  .pcard.wild-rank::after { content: '★'; position:absolute; top:2px; right:3px; font-size:9px; color:#d4a017; }
+
+  .discard-pile .pcard { box-shadow: 0 3px 8px rgba(0,0,0,.35); }
+  .discard-pile.empty { width:46px; height:64px; border-radius:7px; border:2px dashed rgba(255,255,255,.4); }
+  .discard-pile.disabled { cursor:default; filter: grayscale(.5); opacity:.6; }
+
+  .status-strip { text-align:center; color:#fff; font-size:12px; font-weight:700; margin-top:4px; background: rgba(0,0,0,.18); border-radius: 10px; padding: 6px 10px; }
+  .turn-countdown { font-size:11px; font-weight:800; margin-top:2px; }
+
+  .hand-section { margin-top: 14px; border-radius: var(--radius-md); transition: box-shadow .2s ease; }
+  .hand-section.active-turn { box-shadow: 0 0 0 2px var(--accent); padding: 8px; margin: 14px -8px 0; }
+  .hand-head { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:6px; }
+  .hand-head .htitle { font-family:"Baloo 2"; font-weight:800; font-size:14px; }
+  .hand-head .hcount { font-size:12px; color:var(--text-dim); font-weight:700; }
+  .hand-hint { font-size:12px; font-weight:700; margin-bottom:6px; color: var(--text-dim); }
+  .hand-hint.ready { color: #178a4c; }
+
+  .hand-row { padding: 10px 4px 14px; }
+  .hand-line { display:flex; align-items:flex-end; justify-content:center; }
+  .hand-line + .hand-line { margin-top:10px; }
+  .hand-line .pcard { margin-left:-14px; }
+  .hand-line .pcard.clickable { cursor:pointer; }
+  .hand-line .pcard:first-child { margin-left:0; }
+  .hand-line .group-gap { width:10px; flex-shrink:0; }
+  .pcard.lifted { transform: translateY(-14px); box-shadow: 0 8px 14px rgba(0,0,0,.3); z-index:2; }
+  .pcard.deadwood { box-shadow: 0 0 0 2px var(--red), 0 2px 5px rgba(0,0,0,.25); }
+  .pcard.meld-pure { box-shadow: 0 0 0 2px #178a4c, 0 2px 5px rgba(0,0,0,.25); }
+  .pcard.meld-seq { box-shadow: 0 0 0 2px #2e7ce0, 0 2px 5px rgba(0,0,0,.25); }
+  .pcard.meld-set { box-shadow: 0 0 0 2px #8a4fd4, 0 2px 5px rgba(0,0,0,.25); }
+  .pcard.lifted.meld-pure { box-shadow: 0 0 0 2px #178a4c, 0 8px 14px rgba(0,0,0,.3); }
+  .pcard.lifted.meld-seq { box-shadow: 0 0 0 2px #2e7ce0, 0 8px 14px rgba(0,0,0,.3); }
+  .pcard.lifted.meld-set { box-shadow: 0 0 0 2px #8a4fd4, 0 8px 14px rgba(0,0,0,.3); }
+  .pcard.lifted.deadwood { box-shadow: 0 0 0 2px var(--red), 0 8px 14px rgba(0,0,0,.3); }
+
+  .legend { display:flex; flex-wrap:wrap; gap:10px; font-size:10px; font-weight:700; color:var(--text-dim); margin: 2px 0 8px; }
+  .legend span { display:inline-flex; align-items:center; gap:4px; }
+  .legend i { width:10px; height:10px; border-radius:3px; display:inline-block; }
+  .legend .lg-pure { background:#178a4c; }
+  .legend .lg-seq { background:#2e7ce0; }
+  .legend .lg-set { background:#8a4fd4; }
+  .legend .lg-dead { background:var(--red); }
+  .legend .lg-wild { background:#d4a017; }
+
+  .action-bar { display:flex; gap:8px; margin-top:6px; }
+  .action-bar .btn { flex:1; padding:12px 8px; font-size:13px; }
+  .btn-declare { background: linear-gradient(135deg, #ffd23c, #ff8a3d); color:#3a2c05; font-weight:800; border:none; border-radius: var(--radius-md); box-shadow: var(--shadow); }
+  .btn-declare:active { transform: scale(.97); }
+  .btn:disabled { opacity:.45; }
+
+  .declare-modal { position:fixed; inset:0; background:rgba(20,30,20,.55); display:none; align-items:center; justify-content:center; z-index:50; padding:20px; overflow-y:auto; }
+  .declare-modal.open { display:flex; }
+  .declare-card { max-width:360px; width:100%; text-align:center; animation: pop .2s ease; }
+  @keyframes pop { from { transform:scale(.85); opacity:0; } to { transform:scale(1); opacity:1; } }
+  .score-row { display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; font-weight:700; }
+  .score-row:last-of-type { border-bottom:none; }
+  .score-row .amt-pos { color:#178a4c; }
+  .score-row .amt-neg { color:var(--red); }
+
+  .pool-standings { padding:10px 14px; margin-bottom:10px; }
+  .pool-standings-title { font-size:11px; font-weight:800; color:var(--text-dim); text-transform:uppercase; letter-spacing:.4px; margin-bottom:6px; }
+  .pool-row { display:flex; justify-content:space-between; font-size:13px; font-weight:700; padding:2px 0; }
+  .pool-row.eliminated { opacity:.45; text-decoration:line-through; }
+  .pool-row .cap { font-weight:600; color:var(--text-dim); }
+  .you-eliminated-banner { text-align:center; padding: 20px 10px; color:var(--text-dim); font-weight:700; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="rummy-page">
+    <div class="rummy-header">
+      <a href="rummy-lobby.html" class="back-link" id="exit-link">← Exit</a>
+      <div class="rummy-title">
+        <div class="name" id="table-name">Rummy — Cash Table</div>
+        <div class="sub" id="table-sub">Real players · real money</div>
+      </div>
+      <a href="wallet.html" class="wallet-chip" id="wallet-chip">💰 …</a>
+    </div>
+
+    <div class="cash-banner">💵 Real money table — real opponents, real stakes. Play fair.</div>
+
+    <div class="pool-standings card" id="pool-standings" style="display:none;">
+      <div class="pool-standings-title">Pool Standings</div>
+      <div id="pool-standings-body"></div>
+    </div>
+
+    <div class="felt">
+      <div class="opponent-row" id="opponent-row"></div>
+
+      <div class="center-row">
+        <div class="pile">
+          <div class="pile-label">Closed Deck</div>
+          <div class="closed-deck" id="closed-deck">
+            <div class="card-back"></div>
+            <div class="card-back"></div>
+            <div class="card-back"></div>
+            <div class="deck-count" id="deck-count">–</div>
+          </div>
+        </div>
+
+        <div class="joker-chip">
+          <div class="jlabel">Wild Rank</div>
+          <div class="jrank" id="wild-rank-value">–</div>
+        </div>
+
+        <div class="pile">
+          <div class="pile-label">Discard</div>
+          <div class="discard-pile" id="discard-pile"></div>
+        </div>
+      </div>
+
+      <div class="status-strip" id="status-strip">Connecting…</div>
+      <div class="turn-countdown" id="turn-countdown" style="display:none; color:#fff; text-align:center;"></div>
+    </div>
+
+    <div class="hand-section" id="hand-section">
+      <div id="hand-section-content">
+        <div class="hand-head">
+          <div class="htitle">Your Hand</div>
+          <div class="hcount"><span id="hand-count">–</span> cards · tap to select</div>
+        </div>
+        <div class="hand-hint" id="hand-hint">—</div>
+        <div class="legend">
+          <span><i class="lg-pure"></i>Pure sequence</span>
+          <span><i class="lg-seq"></i>Sequence</span>
+          <span><i class="lg-set"></i>Set</span>
+          <span><i class="lg-dead"></i>Deadwood</span>
+          <span><i class="lg-wild"></i>Wild card</span>
+        </div>
+
+        <div class="hand-row" id="hand-row"></div>
+
+        <div class="action-bar">
+          <button class="btn btn-secondary" id="btn-discard" disabled>Discard</button>
+          <button class="btn btn-declare" id="btn-declare" disabled>Declare</button>
+        </div>
+      </div>
+      <div class="you-eliminated-banner" id="you-eliminated-banner" style="display:none;">
+        You're out of this pool — watching the rest play out. Final standings will show once it's decided.
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="game-over-overlay open" id="connecting-overlay">
+  <div class="game-over-card card" style="text-align:center;">
+    <div class="tile-icon" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px;">🃏</div>
+    <h1 style="font-size:20px;">Connecting…</h1>
+    <p id="connecting-status" style="font-size:13px; color:var(--text-dim); font-weight:600; margin-top:6px;">Reaching the game server</p>
+  </div>
+</div>
+
+<div class="declare-modal" id="declare-modal">
+  <div class="card declare-card" id="declare-card-content"></div>
+</div>
+
+<script src="rummy-rules.js"></script>
+<script>
+  const qp = new URLSearchParams(location.search);
+  const MODE = qp.get('mode') === 'pool' ? 'pool' : 'points';
+  const PLAYER_COUNT = [2, 4].includes(Number(qp.get('players'))) ? Number(qp.get('players')) : 4;
+  const SERVER_URL = qp.get('server') || 'wss://ludo-x96u.onrender.com';
+
+  document.getElementById('table-sub').textContent = MODE === 'pool'
+    ? `Pool Rummy · ${PLAYER_COUNT} players`
+    : `Points Rummy · ${PLAYER_COUNT} players`;
+  document.getElementById('pool-standings').style.display = MODE === 'pool' ? '' : 'none';
+
+  let room = null;
+  let mySeatIdx = -1;
+  let myHand = []; // from the private 'hand' message — never derived from room.state
+  let selectedCardId = null;
+  let handGroupTags = [];
+  let lastSnapshot = null;
+
+  function cardHtml(card, extraClass, wildRank) {
+    if (card.rank === 'JOKER') {
+      return `<div class="pcard joker ${extraClass || ''}"><span class="pip">🃏</span></div>`;
+    }
+    const color = RummyRules.SUIT_COLOR[card.suit];
+    const wildClass = card.rank === wildRank ? 'wild-rank' : '';
+    return `<div class="pcard ${color} ${wildClass} ${extraClass || ''}"><span class="corner">${card.rank}<br>${card.suit}</span><span class="pip">${card.suit}</span></div>`;
+  }
+
+  function computeMeldsSorted(hand, wildRank) {
+    const g = RummyRules.computeBestGrouping(hand, wildRank);
+    const meldsSorted = g.chosenMelds.slice().sort((a, b) => {
+      const rank = m => (m.kind === 'sequence' ? (m.pure ? 0 : 1) : 2);
+      return rank(a) - rank(b);
+    });
+    return { g, meldsSorted };
+  }
+
+  // Always auto-arranged (no manual drag in this first real-multiplayer
+  // pass — see CLAUDE.md) — reorders myHand into its best-found groups,
+  // same logic design/rummy-board.html's practice table already uses and
+  // has extensively verified.
+  function arrangeHand(wildRank) {
+    const { g, meldsSorted } = computeMeldsSorted(myHand, wildRank);
+    const order = [];
+    meldsSorted.forEach((m, gi) => {
+      const kind = m.kind === 'sequence' ? (m.pure ? 'pure' : 'seq') : 'set';
+      m.indices.slice().sort((a, b) => a - b).forEach(i => order.push({ idx: i, kind, groupIdx: gi }));
+    });
+    const deadwood = g.ungroupedIndices.slice().sort((a, b) => {
+      const ca = myHand[a], cb = myHand[b];
+      const suitRank = c => (c.rank === 'JOKER' ? 99 : RummyRules.SUITS.indexOf(c.suit));
+      const rankRank = c => (c.rank === 'JOKER' ? 99 : RummyRules.RANKS.indexOf(c.rank));
+      return suitRank(ca) - suitRank(cb) || rankRank(ca) - rankRank(cb);
+    });
+    deadwood.forEach(i => order.push({ idx: i, kind: 'dead', groupIdx: meldsSorted.length }));
+
+    myHand = order.map(o => myHand[o.idx]);
+    handGroupTags = order.map(o => ({ kind: o.kind, groupIdx: o.groupIdx }));
+    return g;
+  }
+
+  function renderHint(grouping) {
+    const el = document.getElementById('hand-hint');
+    if (myHand.length !== 13) {
+      el.textContent = 'Draw a card to begin your turn.';
+      el.className = 'hand-hint';
+    } else if (!grouping.pureAchieved) {
+      el.textContent = 'No pure sequence yet — you need at least one unbroken run with no wild cards.';
+      el.className = 'hand-hint';
+    } else if (grouping.deadwood === 0) {
+      el.textContent = '✓ Ready to declare!';
+      el.className = 'hand-hint ready';
+    } else {
+      el.textContent = `${grouping.deadwood} point${grouping.deadwood === 1 ? '' : 's'} of deadwood left.`;
+      el.className = 'hand-hint';
+    }
+  }
+
+  function isMyTurn(snapshot) {
+    return mySeatIdx !== -1 && snapshot.currentPlayerIdx === mySeatIdx && !snapshot.matchOver;
+  }
+
+  function renderHand(snapshot) {
+    const wildRank = snapshot.wildRank;
+    const grouping = arrangeHand(wildRank);
+    renderHint(grouping);
+    document.getElementById('hand-count').textContent = String(myHand.length);
+
+    const container = document.getElementById('hand-row');
+    container.innerHTML = '';
+    const interactive = isMyTurn(snapshot) && snapshot.phase === 'discard';
+    const splitAt = Math.ceil(myHand.length / 2);
+    const lines = [myHand.slice(0, splitAt), myHand.slice(splitAt)];
+
+    lines.forEach((lineCards, lineIdx) => {
+      const lineOffset = lineIdx === 0 ? 0 : splitAt;
+      const line = document.createElement('div');
+      line.className = 'hand-line';
+      lineCards.forEach((c, j) => {
+        const i = lineOffset + j;
+        const tag = handGroupTags[i] || { kind: 'dead', groupIdx: -1 };
+        if (j > 0 && tag.groupIdx !== (handGroupTags[i - 1] || {}).groupIdx) {
+          const gap = document.createElement('div');
+          gap.className = 'group-gap';
+          line.appendChild(gap);
+        }
+        const meldClass = tag.kind === 'pure' ? 'meld-pure' : tag.kind === 'seq' ? 'meld-seq' : tag.kind === 'set' ? 'meld-set' : 'deadwood';
+        const classes = [selectedCardId === c.id ? 'lifted' : '', meldClass, interactive ? 'clickable' : ''].join(' ');
+        const wrap = document.createElement('div');
+        wrap.innerHTML = cardHtml(c, classes, wildRank);
+        const el = wrap.firstElementChild;
+        if (interactive) {
+          el.addEventListener('click', () => {
+            selectedCardId = selectedCardId === c.id ? null : c.id;
+            renderHand(lastSnapshot);
+            updateActionButtons(lastSnapshot);
+          });
+        }
+        line.appendChild(el);
+      });
+      container.appendChild(line);
+    });
+  }
+
+  function updateActionButtons(snapshot) {
+    const canAct = interactiveNow(snapshot);
+    document.getElementById('btn-discard').disabled = !canAct || !selectedCardId;
+    // Declare doesn't require a pre-selected card — it'll fall back to
+    // RummyRules.findDeclareOption to pick a sensible one, same forgiving
+    // behavior the practice table already has.
+    document.getElementById('btn-declare').disabled = !canAct || myHand.length !== 14;
+  }
+
+  function interactiveNow(snapshot) {
+    return isMyTurn(snapshot) && snapshot.phase === 'discard' && myHand.length === 14;
+  }
+
+  function renderDeckAndDiscard(snapshot) {
+    document.getElementById('deck-count').textContent = String(snapshot.closedDeckCount);
+    document.getElementById('wild-rank-value').textContent = snapshot.wildRank || '–';
+
+    const pile = document.getElementById('discard-pile');
+    const top = snapshot.discardTop;
+    pile.innerHTML = top && top.id ? cardHtml(top, '', snapshot.wildRank) : '<div class="discard-pile empty"></div>';
+    if (top && top.id) pile.classList.remove('empty'); else pile.classList.add('empty');
+
+    const canDraw = isMyTurn(snapshot) && snapshot.phase === 'draw';
+    document.getElementById('closed-deck').classList.toggle('disabled', !canDraw);
+    pile.classList.toggle('disabled', !canDraw || !(top && top.id));
+  }
+
+  function renderOpponents(snapshot) {
+    const row = document.getElementById('opponent-row');
+    row.innerHTML = '';
+    snapshot.players.forEach((p, i) => {
+      if (i === mySeatIdx) return;
+      const el = document.createElement('div');
+      el.className = 'opponent' + (i === snapshot.currentPlayerIdx ? ' active' : '') + (p.eliminated ? ' eliminated' : '');
+      const backs = Math.min(p.handCount, 5);
+      const backsHtml = Array.from({ length: backs }).map(() => '<div class="card-back"></div>').join('');
+      el.innerHTML = `
+        <div class="avatar" style="background:linear-gradient(135deg,#2ecc71,#178a4c);">${(p.name || '?')[0].toUpperCase()}</div>
+        <div class="oname">${p.connected ? (p.name || 'Player') : (p.name || 'Player') + ' (away)'}</div>
+        <div class="ocards">${backsHtml}</div>
+        <div class="ocount">${p.handCount} card${p.handCount === 1 ? '' : 's'}</div>
+        ${i === snapshot.currentPlayerIdx ? '<div class="oturn-label">Their turn</div>' : ''}
+        ${!p.connected ? '<div class="odisc-label">Disconnected</div>' : ''}
+      `;
+      row.appendChild(el);
+    });
+  }
+
+  function renderPoolStandings(snapshot) {
+    if (MODE !== 'pool') return;
+    const body = document.getElementById('pool-standings-body');
+    body.innerHTML = snapshot.players.map((p, i) => `
+      <div class="pool-row${p.eliminated ? ' eliminated' : ''}">
+        <span>${i === mySeatIdx ? 'You' : (p.name || 'Player')}</span>
+        <span>${p.cumulative} <span class="cap">/ ${snapshot.poolLimit}</span></span>
+      </div>
+    `).join('');
+  }
+
+  function renderStatusStrip(snapshot) {
+    document.getElementById('status-strip').textContent = snapshot.statusMessage;
+  }
+
+  // Cosmetic countdown only — the server is the real timer, same philosophy
+  // as design/game.js's own turnSeq-keyed countdown for Ludo.
+  let lastTurnSeq = -1;
+  let countdownInterval = null;
+  function armCountdown(snapshot) {
+    if (snapshot.turnSeq === lastTurnSeq) return;
+    lastTurnSeq = snapshot.turnSeq;
+    clearInterval(countdownInterval);
+    const el = document.getElementById('turn-countdown');
+    if (!isMyTurn(snapshot) || snapshot.matchOver) { el.style.display = 'none'; return; }
+    const deadline = Date.now() + snapshot.turnTimeoutMs;
+    el.style.display = '';
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+      el.textContent = `⏱ ${remaining}s`;
+      if (remaining <= 0) clearInterval(countdownInterval);
+    };
+    tick();
+    countdownInterval = setInterval(tick, 250);
+  }
+
+  function renderYouEliminated(snapshot) {
+    const eliminated = MODE === 'pool' && mySeatIdx !== -1 && snapshot.players[mySeatIdx] && snapshot.players[mySeatIdx].eliminated;
+    document.getElementById('hand-section-content').style.display = eliminated ? 'none' : '';
+    document.getElementById('you-eliminated-banner').style.display = eliminated ? '' : 'none';
+  }
+
+  function renderResultModal(snapshot) {
+    const modal = document.getElementById('declare-modal');
+    if (snapshot.phase !== 'hand-over' && !snapshot.matchOver) {
+      modal.classList.remove('open');
+      return;
+    }
+
+    const points = snapshot.lastHandPoints || [];
+    const invalidBy = snapshot.lastHandInvalidDeclareBy;
+    const winnerIdx = snapshot.lastHandWinnerIdx;
+    const headline = invalidBy !== -1
+      ? (invalidBy === mySeatIdx ? `❌ Invalid declare — you take the ${RummyRules.MAX_PENALTY}-point penalty.` : `❌ ${snapshot.players[invalidBy].name} declared invalidly and takes the ${RummyRules.MAX_PENALTY}-point penalty.`)
+      : (winnerIdx === mySeatIdx ? '🏆 You declare — you win this hand!' : `🏆 ${snapshot.players[winnerIdx].name} declares and wins this hand.`);
+
+    if (snapshot.matchOver) {
+      if (MODE === 'points') {
+        const rows = snapshot.players.map((p, i) => {
+          const isWinnerRow = invalidBy === -1 && i === winnerIdx;
+          const amount = points[i] * snapshot.pointValue;
+          const amtText = isWinnerRow ? 'won' : amount > 0 ? `-₹${amount}` : '₹0';
+          const amtClass = isWinnerRow || amount === 0 ? 'amt-pos' : 'amt-neg';
+          return `<div class="score-row"><span>${i === mySeatIdx ? 'You' : p.name}</span><span class="${amtClass}">${points[i]} pts · ${amtText}</span></div>`;
+        }).join('');
+        document.getElementById('declare-card-content').innerHTML = `
+          <div class="tile-icon trophy-bounce" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">${invalidBy !== -1 ? '❌' : '🏆'}</div>
+          <h1 style="font-size:19px; margin:0;">${headline}</h1>
+          <p style="font-size:12px; color:var(--text-dim); font-weight:600; margin:8px 0 4px;">Real wallet updated — this table is now over.</p>
+          <div style="margin-top:10px; text-align:left;">${rows}</div>
+          <a href="rummy-lobby.html"><button class="btn btn-primary" style="margin-top:16px;">Back to Rummy Lobby</button></a>
+        `;
+      } else {
+        const survivorIdx = snapshot.players.findIndex(p => !p.eliminated);
+        const rows = snapshot.players.map((p, i) => {
+          const isSurvivor = i === survivorIdx;
+          return `<div class="score-row"><span>${i === mySeatIdx ? 'You' : p.name} — ${p.cumulative} pts</span><span class="${isSurvivor ? 'amt-pos' : 'amt-neg'}">${isSurvivor ? 'won the pot' : `-₹${snapshot.entryFee}`}</span></div>`;
+        }).join('');
+        const title = survivorIdx === mySeatIdx ? '🏆 You win the pool!' : `🏆 ${snapshot.players[survivorIdx].name} wins the pool!`;
+        document.getElementById('declare-card-content').innerHTML = `
+          <div class="tile-icon trophy-bounce" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">🏆</div>
+          <h1 style="font-size:19px; margin:0;">${title}</h1>
+          <p style="font-size:12px; color:var(--text-dim); font-weight:600; margin:8px 0 4px;">Real wallet updated — this pool is now over.</p>
+          <div style="margin-top:10px; text-align:left;">${rows}</div>
+          <a href="rummy-lobby.html"><button class="btn btn-primary" style="margin-top:16px;">Back to Rummy Lobby</button></a>
+        `;
+      }
+      modal.classList.add('open');
+      return;
+    }
+
+    // Pool mode, hand over but match continues — the server deals the next
+    // hand automatically after a short pause, so this is display-only (no
+    // "Next Hand" button to click, unlike the practice table).
+    const rows = snapshot.players.map((p, i) => `
+      <div class="score-row"><span>${i === mySeatIdx ? 'You' : p.name}${p.eliminated ? ' <span style="color:var(--red); font-weight:800;">OUT</span>' : ''}</span><span>${points[i] || 0} pts this hand · ${p.cumulative}/${snapshot.poolLimit} total</span></div>
+    `).join('');
+    document.getElementById('declare-card-content').innerHTML = `
+      <div class="tile-icon trophy-bounce" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">${invalidBy !== -1 ? '❌' : '🏆'}</div>
+      <h1 style="font-size:18px; margin:0;">${headline}</h1>
+      <div style="margin-top:10px; text-align:left;">${rows}</div>
+      <p style="font-size:13px; font-weight:700; color:var(--text-dim); margin-top:14px;">Next hand starting…</p>
+    `;
+    modal.classList.add('open');
+  }
+
+  function renderAll(snapshot) {
+    try {
+      lastSnapshot = snapshot;
+      mySeatIdx = snapshot.players.findIndex(p => p.sessionId === room.sessionId);
+      renderStatusStrip(snapshot);
+      renderDeckAndDiscard(snapshot);
+      renderOpponents(snapshot);
+      renderPoolStandings(snapshot);
+      renderYouEliminated(snapshot);
+      armCountdown(snapshot);
+      renderHand(snapshot);
+      updateActionButtons(snapshot);
+      renderResultModal(snapshot);
+      document.getElementById('hand-section').classList.toggle('active-turn', isMyTurn(snapshot) && !snapshot.matchOver);
+    } catch (err) {
+      console.error('[rummy] render error:', err);
+    }
+  }
+
+  // --- Actions --------------------------------------------------------
+
+  document.getElementById('closed-deck').addEventListener('click', () => {
+    if (!lastSnapshot || !isMyTurn(lastSnapshot) || lastSnapshot.phase !== 'draw') return;
+    room.send('draw', { source: 'closed' });
+  });
+  document.getElementById('discard-pile').addEventListener('click', () => {
+    if (!lastSnapshot || !isMyTurn(lastSnapshot) || lastSnapshot.phase !== 'draw') return;
+    if (!(lastSnapshot.discardTop && lastSnapshot.discardTop.id)) return;
+    room.send('draw', { source: 'discard' });
+  });
+  document.getElementById('btn-discard').addEventListener('click', () => {
+    if (!selectedCardId || !lastSnapshot || !interactiveNow(lastSnapshot)) return;
+    room.send('discard', { cardId: selectedCardId });
+    selectedCardId = null;
+  });
+  document.getElementById('btn-declare').addEventListener('click', () => {
+    if (!lastSnapshot || !interactiveNow(lastSnapshot)) return;
+    // Forgiving, same as the practice table: prefer keeping whichever card
+    // is selected (if any), otherwise let RummyRules find any valid removal.
+    const selfIndex = selectedCardId ? myHand.findIndex(c => c.id === selectedCardId) : undefined;
+    const option = RummyRules.findDeclareOption(myHand, lastSnapshot.wildRank, selfIndex);
+    const cardId = option ? myHand[option.removeIndex].id : (selectedCardId || myHand[myHand.length - 1].id);
+    if (!option) {
+      if (!confirm(`This isn't a valid Rummy hand yet — declaring anyway costs the ${RummyRules.MAX_PENALTY}-point penalty. Declare anyway?`)) return;
+    }
+    room.send('declare', { cardId });
+    selectedCardId = null;
+  });
+
+  // --- Connection -------------------------------------------------------
+
+  function hideConnectingOverlay() {
+    document.getElementById('connecting-overlay').classList.remove('open');
+  }
+
+  function attachRoomHandlers(joinedRoom) {
+    room = joinedRoom;
+    hideConnectingOverlay();
+
+    room.onMessage('hand', (msg) => {
+      myHand = msg.cards || [];
+      selectedCardId = null;
+      if (lastSnapshot) renderAll(lastSnapshot);
+    });
+    room.onStateChange((state) => renderAll(state.toJSON()));
+
+    document.getElementById('exit-link').addEventListener('click', async (e) => {
+      e.preventDefault();
+      document.getElementById('connecting-status').textContent = 'Leaving table…';
+      document.getElementById('connecting-overlay').classList.add('open');
+      await room.leave(true);
+      location.href = 'rummy-lobby.html';
+    });
+
+    const CONSENTED_CLOSE_CODE = 4000;
+    let reconnecting = false;
+    room.onLeave((code) => {
+      if (code === CONSENTED_CLOSE_CODE || reconnecting) return;
+      reconnecting = true;
+      document.getElementById('connecting-overlay').classList.add('open');
+      document.getElementById('connecting-status').textContent = 'Connection lost — reconnecting…';
+      const token = room.reconnectionToken;
+      (async () => {
+        for (let attempt = 1; attempt <= 20 && reconnecting; attempt++) {
+          try {
+            const newRoom = await client.reconnect(token);
+            reconnecting = false;
+            attachRoomHandlers(newRoom);
+            return;
+          } catch (err) {
+            if (attempt === 20) {
+              document.getElementById('connecting-status').textContent = 'Could not reconnect to the game server.';
+            }
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+          }
+        }
+      })();
+    });
+  }
+
+  let client;
+  async function connect() {
+    const { data: { session } } = await ludoSupabase.auth.getSession();
+    if (!session) { location.href = 'login.html'; return; }
+
+    const [{ data: profile }, { data: wallet }] = await Promise.all([
+      ludoSupabase.from('profiles').select('display_name').eq('id', session.user.id).single(),
+      ludoSupabase.from('wallets').select('balance').eq('user_id', session.user.id).single(),
+    ]);
+    if (wallet) document.getElementById('wallet-chip').textContent = `💰 ₹${Number(wallet.balance).toFixed(2)}`;
+
+    client = new Colyseus.Client(SERVER_URL);
+    let joined;
+
+    const handoffToken = sessionStorage.getItem('rummyReconnectToken');
+    if (handoffToken) {
+      sessionStorage.removeItem('rummyReconnectToken');
+      document.getElementById('connecting-status').textContent = 'Resuming your seat…';
+      for (let attempt = 1; attempt <= 5 && !joined; attempt++) {
+        try {
+          joined = await client.reconnect(handoffToken);
+        } catch (err) {
+          if (attempt === 5) console.error('[rummy] handoff reconnect failed, falling back to a fresh join:', err);
+          else await new Promise((resolve) => setTimeout(resolve, 400));
+        }
+      }
+    }
+
+    if (!joined) {
+      document.getElementById('connecting-status').textContent = 'Joining a table…';
+      const poolLimit = [51, 101, 201].includes(Number(qp.get('pool'))) ? Number(qp.get('pool')) : 101;
+      const entryFee = [50, 100, 200].includes(Number(qp.get('entry'))) ? Number(qp.get('entry')) : 100;
+      const pointValue = [1, 2, 5].includes(Number(qp.get('value'))) ? Number(qp.get('value')) : 1;
+      for (let attempt = 1; attempt <= 30 && !joined; attempt++) {
+        try {
+          joined = await client.joinOrCreate('rummy', {
+            name: profile?.display_name || session.user.email || 'Player',
+            userId: session.user.id,
+            mode: MODE,
+            playerCount: PLAYER_COUNT,
+            pointValue,
+            poolLimit,
+            entryFee,
+          });
+        } catch (err) {
+          if (attempt === 1) {
+            document.getElementById('connecting-status').textContent = 'Waking up the game server — this can take a couple of minutes…';
+          }
+          if (attempt === 30) {
+            console.error('[rummy] failed to join table:', err);
+            document.getElementById('connecting-status').textContent = 'Could not reach the game server. Is it running?';
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 4000));
+        }
+      }
+    }
+
+    attachRoomHandlers(joined);
+  }
+
+  connect();
+</script>
+</body>
+</html>

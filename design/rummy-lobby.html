@@ -7,8 +7,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="supabase-client.js"></script>
 <meta name="theme-color" content="#ff8a3d">
 <style>
+  .table-type-picker { display:flex; gap:8px; margin: 0 0 10px; }
+  .table-type-btn { flex:1; }
+  #start-link.disabled { opacity:.45; filter:grayscale(.4); pointer-events:none; }
   /* Rummy-specific bits only — everything else reuses styles.css's shared
      chrome (topbar, tile/action-grid, card, player-chip) the same way every
      other page in the app does. */
@@ -33,14 +38,19 @@
       <h1 style="font-size:20px;">Ludo Online</h1>
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
-      <a href="wallet.html" class="wallet-chip">💰 ₹250.00</a>
-      <div class="avatar">A</div>
+      <a href="wallet.html" class="wallet-chip" id="wallet-chip">💰 ₹250.00</a>
+      <div class="avatar" id="user-avatar">A</div>
     </div>
   </div>
 
   <div style="padding: 8px 20px;">
+    <div class="table-type-picker" id="table-type-picker">
+      <button type="button" class="btn btn-primary btn-sm table-type-btn" data-type="practice">🎲 Practice (free)</button>
+      <button type="button" class="btn btn-secondary btn-sm table-type-btn" data-type="cash">💵 Cash Table (real money)</button>
+    </div>
+
     <div class="preview-banner-outer">
-      <div style="background: var(--yellow-soft); border: 1px solid var(--yellow); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12px; font-weight: 700; color: #8a6d00; text-align: center;">
+      <div id="type-banner" style="background: var(--yellow-soft); border: 1px solid var(--yellow); border-radius: var(--radius-sm); padding: 8px 12px; font-size: 12px; font-weight: 700; color: #8a6d00; text-align: center;">
         🎲 Practice table — real rules, computer opponents, no real money or other players yet
       </div>
     </div>
@@ -164,39 +174,83 @@
     </div>
 
     <div style="margin-top:16px; display:flex; flex-direction:column; gap:10px;">
-      <a id="start-link" href="rummy-board.html?players=2&value=1"><button class="btn btn-primary">Start Table (vs. computer players)</button></a>
+      <span class="badge badge-waiting" id="cash-server-status" style="display:none; align-self:center;">⏳ Checking game server…</span>
+      <a id="start-link" href="rummy-board.html?players=2&value=1"><button class="btn btn-primary" id="start-btn">Start Table (vs. computer players)</button></a>
       <a href="lobby.html"><button class="btn btn-ghost">← Back to Lobby</button></a>
       <p class="hint" style="margin:0;" id="mode-hint">You'll play a full round against computer opponents with the real rules enforced — no real money changes hands, and table matchmaking with other people isn't wired up yet.</p>
     </div>
 
-    <div class="section-title">Recent Rummy Games</div>
-    <div style="display:flex; flex-direction:column; gap:10px;">
-      <div class="player-chip">
-        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:var(--green);">J</div>
-        <div>
-          <div class="name">Won · 82 points</div>
-          <div class="status">₹2/point table · 2h ago</div>
-        </div>
-        <span class="badge badge-ready">Win</span>
-      </div>
-      <div class="player-chip">
-        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:var(--red);">R</div>
-        <div>
-          <div class="name">Lost · 46 points</div>
-          <div class="status">₹1/point table · yesterday</div>
-        </div>
-        <span class="badge badge-waiting">Loss</span>
-      </div>
+    <div class="section-title">Recent Cash Table Games</div>
+    <div style="display:flex; flex-direction:column; gap:10px;" id="recent-rummy-list">
+      <p class="hint" style="margin:0;">Sign in to see your real Cash Table history.</p>
     </div>
   </div>
 </div>
 <script>
-  const state = { mode: 'points', value: 1, players: 4, pool: 101, entry: 100 };
+  const state = { mode: 'points', value: 1, players: 4, pool: 101, entry: 100, tableType: 'practice' };
   const VALUE_LABEL = { 1: '₹1 / point', 2: '₹2 / point', 5: '₹5 / point' };
   const POINTS_CAP = 80;
 
+  // Real balance/name once signed in — the demo ₹250.00 chip only stays for
+  // a signed-out visitor previewing the practice picker. Cash Tables here
+  // touch a real wallet now, unlike the rest of this page.
+  (async () => {
+    const { data: { session } } = await ludoSupabase.auth.getSession();
+    if (!session) return;
+    const { data: wallet } = await ludoSupabase.from('wallets').select('balance').eq('user_id', session.user.id).single();
+    if (wallet) document.getElementById('wallet-chip').textContent = `💰 ₹${Number(wallet.balance).toFixed(2)}`;
+    const { data: profile } = await ludoSupabase.from('profiles').select('display_name').eq('id', session.user.id).single();
+    const name = profile?.display_name || session.user.email || 'Player';
+    document.getElementById('user-avatar').textContent = name[0].toUpperCase();
+
+    const { data: recent } = await ludoSupabase
+      .from('rummy_match_players')
+      .select('result, points, payout, rummy_matches(mode, point_value, pool_limit, entry_fee, finished_at)')
+      .eq('user_id', session.user.id)
+      .order('finished_at', { foreignTable: 'rummy_matches', ascending: false })
+      .limit(5);
+
+    const list = document.getElementById('recent-rummy-list');
+    list.innerHTML = '';
+    if (!recent || recent.length === 0) {
+      list.innerHTML = '<p class="hint" style="margin:0;">No Cash Table games yet — start one above!</p>';
+      return;
+    }
+    recent.forEach((r) => {
+      const m = r.rummy_matches;
+      const won = r.result === 'win';
+      const tableLabel = m.mode === 'pool'
+        ? `${m.pool_limit} Pool · ₹${m.entry_fee} entry`
+        : `₹${m.point_value}/point table`;
+      const row = document.createElement('div');
+      row.className = 'player-chip';
+      row.innerHTML = `
+        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:${won ? 'var(--green)' : 'var(--red)'};">${won ? 'W' : 'L'}</div>
+        <div>
+          <div class="name">${won ? 'Won' : 'Lost'} · ${r.points} points${r.payout !== 0 ? ` · ${r.payout > 0 ? '+' : ''}₹${r.payout}` : ''}</div>
+          <div class="status">${tableLabel} · ${ludoTimeAgo(m.finished_at)}</div>
+        </div>
+        <span class="badge ${won ? 'badge-ready' : 'badge-waiting'}">${won ? 'Win' : 'Loss'}</span>
+      `;
+      list.appendChild(row);
+    });
+  })();
+
   function render() {
     const isPool = state.mode === 'pool';
+    const isCash = state.tableType === 'cash';
+
+    document.querySelectorAll('.table-type-btn').forEach((btn) => {
+      const selected = btn.dataset.type === state.tableType;
+      btn.classList.toggle('btn-primary', selected);
+      btn.classList.toggle('btn-secondary', !selected);
+    });
+    document.getElementById('type-banner').innerHTML = isCash
+      ? '💵 Cash table — real players, real money. 10% platform fee on winnings, same as Ludo\'s cash tables.'
+      : '🎲 Practice table — real rules, computer opponents, no real money or other players yet';
+    document.getElementById('type-banner').style.background = isCash ? 'var(--green-soft)' : 'var(--yellow-soft)';
+    document.getElementById('type-banner').style.borderColor = isCash ? 'var(--green)' : 'var(--yellow)';
+    document.getElementById('type-banner').style.color = isCash ? '#0f6b47' : '#8a6d00';
 
     document.querySelectorAll('.mode-btn').forEach((btn) => {
       const selected = btn.dataset.mode === state.mode;
@@ -211,11 +265,15 @@
     if (isPool) {
       document.getElementById('mode-title').textContent = 'Pool Rummy';
       document.getElementById('mode-sub').textContent = 'Several hands, running scores — cross the cap and you\'re out';
-      document.getElementById('mode-hint').textContent = 'You\'ll play hand after hand against computer opponents until only one player is left standing — real rules and real elimination math, no real money changes hands.';
+      document.getElementById('mode-hint').textContent = isCash
+        ? 'You\'ll play hand after hand against real opponents until only one player is left standing — real rules, real elimination math, real money. No bots fill empty seats.'
+        : 'You\'ll play hand after hand against computer opponents until only one player is left standing — real rules and real elimination math, no real money changes hands.';
     } else {
       document.getElementById('mode-title').textContent = 'Points Rummy';
       document.getElementById('mode-sub').textContent = 'Classic 13-card draw & discard · one hand, settled immediately';
-      document.getElementById('mode-hint').textContent = 'You\'ll play a full round against computer opponents with the real rules enforced — no real money changes hands, and table matchmaking with other people isn\'t wired up yet.';
+      document.getElementById('mode-hint').textContent = isCash
+        ? 'You\'ll play one real hand against real opponents with real rules enforced server-side — real money settles the moment the hand ends. No bots fill empty seats.'
+        : 'You\'ll play a full round against computer opponents with the real rules enforced — no real money changes hands, and table matchmaking with other people isn\'t wired up yet.';
     }
 
     document.querySelectorAll('.points-tile[data-value]').forEach((tile) => {
@@ -244,10 +302,36 @@
     document.getElementById('sum-entry').textContent = `₹${state.entry}`;
     document.getElementById('sum-pot').textContent = `₹${state.entry * state.players}`;
 
-    document.getElementById('start-link').href = isPool
-      ? `rummy-board.html?mode=pool&players=${state.players}&pool=${state.pool}&entry=${state.entry}`
-      : `rummy-board.html?mode=points&players=${state.players}&value=${state.value}`;
+    document.getElementById('start-btn').textContent = isCash ? 'Start Table (real players, real money)' : 'Start Table (vs. computer players)';
+    document.getElementById('start-link').href = isCash
+      ? (isPool
+          ? `rummy-waiting-room.html?mode=pool&players=${state.players}&pool=${state.pool}&entry=${state.entry}`
+          : `rummy-waiting-room.html?mode=points&players=${state.players}&value=${state.value}`)
+      : isPool
+        ? `rummy-board.html?mode=pool&players=${state.players}&pool=${state.pool}&entry=${state.entry}`
+        : `rummy-board.html?mode=points&players=${state.players}&value=${state.value}`;
+
+    updateCashGating();
   }
+
+  document.querySelectorAll('.table-type-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      state.tableType = btn.dataset.type;
+      render();
+    });
+  });
+
+  // Cash Tables need a real session before joining a real-money room — the
+  // server enforces this too (RummyRoom.onJoin requires a userId to even
+  // persist a result), but redirecting to login.html here is a much better
+  // experience than silently failing to join a couple of screens later.
+  document.getElementById('start-link').addEventListener('click', async (e) => {
+    if (state.tableType !== 'cash') return;
+    e.preventDefault();
+    const { data: { session } } = await ludoSupabase.auth.getSession();
+    if (!session) { location.href = 'login.html'; return; }
+    location.href = document.getElementById('start-link').href;
+  });
 
   document.querySelectorAll('.mode-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -287,6 +371,53 @@
   });
 
   render();
+
+  // Same gating pattern as design/lobby.html's server-gated tiles — only
+  // relevant for Cash Tables (practice needs no server at all). Polls
+  // forever in the background once cash mode is first selected, same
+  // reasoning as lobby.html: re-greys the button if the server drops again.
+  const SERVER_URL = new URLSearchParams(location.search).get('server') || 'wss://ludo-x96u.onrender.com';
+  const HEALTH_URL = SERVER_URL.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:') + '/health';
+  let serverOnline = false;
+
+  async function pingServer() {
+    try {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(HEALTH_URL, { cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(timeout);
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  function updateCashGating() {
+    const badge = document.getElementById('cash-server-status');
+    const isCash = state.tableType === 'cash';
+    badge.style.display = isCash ? '' : 'none';
+    document.getElementById('start-link').classList.toggle('disabled', isCash && !serverOnline);
+    if (isCash) {
+      badge.textContent = serverOnline ? '🟢 Game server online' : '⏳ Checking game server…';
+      badge.className = 'badge ' + (serverOnline ? 'badge-ready' : 'badge-waiting');
+    }
+  }
+
+  (async function pollServerStatus() {
+    for (;;) {
+      if (state.tableType === 'cash') {
+        const ok = await pingServer();
+        if (ok !== serverOnline) {
+          serverOnline = ok;
+          updateCashGating();
+        }
+        await new Promise((r) => setTimeout(r, serverOnline ? 30000 : 4000));
+      } else {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
+  })();
+
 </script>
 </body>
 </html>
