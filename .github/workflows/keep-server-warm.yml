@@ -1,0 +1,15 @@
+name: Keep game server warm
+
+on:
+  schedule:
+    # Every 10 min — comfortably inside Render's ~15 min idle spin-down
+    # window, so the free instance never actually goes to sleep.
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping /health
+        run: curl -fsS --max-time 90 https://ludo-x96u.onrender.com/health
