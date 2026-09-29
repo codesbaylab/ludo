@@ -832,6 +832,107 @@ Plan: `C:\Users\PC\.claude\plans\streamed-humming-island.md`.
   authenticated user, not just its owner — a deliberate privacy/product call to revisit later,
   not something to change as a side effect of another task.
 
+### Rummy multiplayer (server-side foundation — client not wired up yet)
+
+The practice table (`rummy-lobby.html`/`rummy-board.html`, documented under Structure above) is
+client-only against bots, by design, with no real stakes. This is the start of a **separate real-
+money multiplayer path**, mirroring Ludo's server architecture — decided after the user confirmed
+real stakes, real-players-only (no bot fallback), and building both Points and Pool at once, ahead
+of public launch. **Server-side foundation is built and verified; the client (`rummy-lobby.html`/
+`rummy-board.html`, or new pages) does not talk to it yet** — that's the next phase.
+
+- **`server/src/rummy/engine.ts`** — a faithful TypeScript port of `design/rummy-rules.js`'s
+  authoritative logic (deal, meld detection, declare validation, deadwood scoring, Pool
+  bookkeeping), **duplicated rather than imported** because Render's Docker build context is
+  `./server` only (`dockerContext: ./server` in `render.yaml`) — a cross-directory `require` into
+  `design/` resolves fine locally but 404s inside the deployed container. The client's bot-decision
+  helpers (`botChooseDrawSource`/`botChooseDiscardIndex`) and `findDeclareOption` (a UX nicety for
+  suggesting which card to drop) are deliberately **not** ported — real-money tables are
+  real-players-only, and the server only ever needs to validate a declare attempt the client
+  already committed to, not suggest one. **Verified against the original, not just trusted to be a
+  faithful copy**: `server/src/test/compareRummyEngine.ts` (`npm run test:rummy-engine`) requires
+  `design/rummy-rules.js` directly (fine for a dev-only script that never ships — see the Dockerfile
+  note above) and randomly compares `computeBestGrouping`/`isValidDeclare`/`applyPoolHandResult`
+  against it across 4000+ random hands plus a hand-built known-valid 13-card declare — full
+  agreement on every check.
+- **Hands are never part of the synced Colyseus schema** (`server/src/rooms/schema/RummyState.ts`)
+  — unlike Ludo's board state, which is fully public, a card hand is exactly the kind of hidden
+  information Colyseus's default full-state-to-every-client sync would leak straight to every
+  opponent. `RummyState` only carries what a real table shows everyone: player names/connected/
+  `handCount` (card-back counts, not contents), the wild rank, the discard pile's top card, deck
+  counts, whose turn/phase it is, and (Pool mode) each seat's running `cumulative`/`eliminated`.
+  Each player's actual hand is kept in `RummyRoom`'s own private `hands: Card[][]` array and
+  delivered only to that player via a private `client.send('hand', {cards})` message — on the
+  initial deal, after every draw/discard of their own, and again on a successful reconnect (Colyseus
+  doesn't replay past messages automatically, so a reconnecting client would otherwise have an
+  empty hand until their next mutation).
+- **Turn flow**: `phase` cycles `'draw'` (current player draws from the closed deck or discard pile)
+  → `'discard'` (discard a card, or attempt `'declare'` by setting one aside and checking if the
+  remaining 13 validate) → back to `'draw'` for the next seat, using `Engine.firstActiveFrom` to
+  skip eliminated seats (a no-op in Points mode, where nobody is ever eliminated) — one shared code
+  path for both modes, same reasoning `rummy-board.html`'s own `advanceTurn()` already documented.
+  A declare attempt — valid or not — always ends the hand immediately (mirrors the practice table's
+  `endHand()` exactly); an invalid one costs the declarer the flat 80-point penalty and nobody else
+  is charged anything.
+- **Auto-timeout keeps a table moving** if someone goes idle, same philosophy as `LudoRoom`'s
+  auto-roll/auto-pick: a draw timeout (default 20s, overridable for tests) auto-draws from the
+  closed deck; a discard timeout auto-discards whatever card is at the end of the current player's
+  hand (i.e. whatever they just drew) — deliberately the simplest always-legal default rather than
+  any "smart" server-side discard choice, since this only fires once a player's already gone idle
+  and keeping the table moving matters far more than optimizing a move on their behalf.
+- **Reconnection** mirrors `LudoRoom`'s 60s-default grace-window pattern
+  (`allowReconnection`/`reconnectGraceSeconds`) exactly, plus re-sending the reconnected player's
+  private hand (see above) and re-arming whichever timer matches the current `phase` for their
+  seat if it's currently their turn.
+- **Forfeit is necessarily different from Ludo's**: Ludo can let 2+ remaining players "just keep
+  playing" through a departed player's turn via the existing auto-timers — nobody else needs to
+  take *their* specific actions. A card game can't: once only one player is left connected, nobody
+  can finish the hand fairly (the others' actual hands are gone/unknown to a fair continuation), so
+  `checkForfeit()` awards the sole survivor the current hand outright the moment it's down to one
+  connected seat (everyone else scored at the flat max penalty, as a forfeit charge) — and in Pool
+  mode, force-eliminates every other seat immediately so the survivor also takes the whole match,
+  not just the one hand. A deliberate simplification flagged here rather than silently shipped.
+- **Wallet settlement happens once per whole match, deferred to the end** — same principle as
+  `LudoRoom.persistResult`: nothing is pre-deducted at join time; every player's net delta is
+  computed and applied in one pass via the same `increment_wallet_balance` RPC Ludo already uses,
+  after a flat 10% platform fee (`PLATFORM_FEE_RATE` in `RummyRoom.ts`, matching Ludo's cash-table
+  fee — a deliberate consistency choice, not something the user specified a number for). **Points
+  mode is always a single-hand match**: whoever isn't the winner pays `their points × the table's
+  point value` toward the winner's payout (fee taken off the winner's side, same shape as Ludo's
+  `payout - stake`); an invalid declare moves no money at all (the declarer's penalty is a scoring
+  concept only, relevant if this table's players start another Points hand from the lobby — nobody
+  "wins" a penalty). **Pool mode settles once, when the match ends** (one survivor): pot =
+  `entryFee × playerCount`, survivor nets `pot - fee - entryFee`, everyone else nets `-entryFee` —
+  balances to `-fee` overall, unlike the practice table's own display math (`+pot` for the survivor,
+  `-entryFee` for everyone else, which doesn't net to anything sensible — harmless there since no
+  real wallet is ever touched, but had to be fixed for real money here).
+- **`rummy_matches` + `rummy_match_players`** (new tables, migration `add_rummy_matches`) — same
+  shape and RLS pattern as `matches`/`match_players` (any `authenticated` user may `SELECT` all
+  rows; the real privacy boundary is `profiles`' own RLS, same as Ludo's history already relies on;
+  all writes are server-side via the service role key). `rummy_match_players.payout` stores the
+  real wallet delta each row caused directly — unlike `match_players`, which leaves payout to be
+  recomputed client-side from a single `stake` value, Rummy's payout isn't a simple function of one
+  number, so it's recorded at write time instead.
+- **Verified with real network play, not just unit tests**: `server/src/test/simulateRummyMatch.ts`
+  (`npm run test:sim:rummy`) spins up a real Colyseus server and drives real `colyseus.js` clients
+  through complete Points (4p and 2p) and Pool (2p, 51-point cap for a fast-resolving run) matches
+  using only the public `draw`/`discard`/`declare` message API — decisions made via the practice
+  table's own bot heuristics (`botChooseDrawSource`/`botChooseDiscardIndex`/`findDeclareOption` from
+  `design/rummy-rules.js`, borrowed here only to drive believable play; the server itself never
+  depends on them, per the engine-port note above). All three passed: Points matches resolved in
+  one hand with a real winner or invalid-declare recorded; the Pool match resolved to exactly one
+  survivor (4 hands) with sane cumulative scores. `npm run test:sim` (Ludo's existing full-game
+  test) re-ran clean afterward too, confirming the new `rummy` room registration in `index.ts`
+  didn't disturb the existing one.
+- **Explicitly not done yet**: the client. `rummy-lobby.html`/`rummy-board.html` still only know how
+  to play the local-bots practice mode — no stakes picker wired to real money, no waiting room, no
+  network connection to the `rummy` room at all. `design/lobby.html`'s Rummy tile is correspondingly
+  still ungated (`server-gated` isn't applied to it) since it only leads to the practice table today,
+  which needs no server; that will need to change once a real-money entry point exists alongside it.
+  Also not done: an admin-visible Rummy section in `admin.html` (mirroring the existing Crypto
+  Deposits/Withdrawal Requests sections), and surfacing Rummy results in `wallet.html`'s
+  transaction history / `history.html`.
+
 ## Crypto deposits (USDT / TRC-20)
 
 Custodial, no third-party payment gateway (explicit product decision — the alternative would be a

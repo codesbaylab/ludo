@@ -4,6 +4,7 @@ import cors from 'cors';
 import { Server } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { LudoRoom } from './rooms/LudoRoom';
+import { RummyRoom } from './rooms/RummyRoom';
 import { getSupabase } from './supabase';
 import { getOrCreateDepositAddress } from './crypto/depositAddress';
 import { cryptoDepositsEnabled } from './crypto/tron';
@@ -62,6 +63,12 @@ const gameServer = new Server({
 // or stakes into the same room (joinOrCreate would otherwise fill whatever
 // open 'ludo' room it finds first, regardless of these options).
 gameServer.define('ludo', LudoRoom).filterBy(['playerCount', 'stake']);
+// Same reasoning as 'ludo' above — a real-money Rummy table must only ever
+// matchmake players who asked for the exact same mode and stake shape.
+// pointValue/poolLimit/entryFee are 0 (a consistent, mode-irrelevant
+// default — see RummyRoom.onCreate) for whichever mode doesn't use them, so
+// two same-mode tables still match on the fields that actually matter.
+gameServer.define('rummy', RummyRoom).filterBy(['mode', 'playerCount', 'pointValue', 'poolLimit', 'entryFee']);
 
 const port = Number(process.env.PORT) || 2567;
 gameServer.listen(port).then(() => {

@@ -8,7 +8,9 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node build/index.js",
-    "test:sim": "tsx src/test/simulateMatch.ts"
+    "test:sim": "tsx src/test/simulateMatch.ts",
+    "test:sim:rummy": "tsx src/test/simulateRummyMatch.ts",
+    "test:rummy-engine": "tsx src/test/compareRummyEngine.ts"
   },
   "dependencies": {
     "@colyseus/schema": "^2.0.35",
