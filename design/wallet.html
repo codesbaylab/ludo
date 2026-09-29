@@ -136,7 +136,14 @@
       ]);
       if (!addressRes.ok) {
         const body = await addressRes.json().catch(() => ({}));
-        throw new Error(body.error || `server returned ${addressRes.status}`);
+        // Tagged so the catch block below can tell "the server answered but
+        // said no" apart from "the fetch itself never got a response" —
+        // those have completely different real causes and were previously
+        // both papered over with the same generic cold-start guess.
+        const err = new Error(body.error || `server returned ${addressRes.status}`);
+        err.serverResponded = true;
+        err.status = addressRes.status;
+        throw err;
       }
       const { address } = await addressRes.json();
       const rate = Number(rateRes.data?.usdt_inr_rate ?? 90);
@@ -153,7 +160,16 @@
       blockEl.style.display = 'block';
     } catch (err) {
       console.error('[ludo] failed to load deposit address:', err);
-      statusEl.textContent = 'Could not reach the game server to get your deposit address — the server may be waking up from idle (~30-60s on the first try), or crypto deposits may not be enabled yet. Try again in a moment.';
+      // The old version showed the same "maybe cold-starting, maybe not
+      // enabled" guess for every failure, including ones where the server
+      // had already answered with a real reason — actively misleading once
+      // e.g. lobby.html's own /health check had just confirmed the server
+      // was reachable. Only guess "reaching the server" for an actual fetch
+      // failure (network error, CORS, timeout — no response at all); a
+      // real HTTP response gets its real message shown instead.
+      statusEl.textContent = err.serverResponded
+        ? `Could not load your deposit address: ${err.message}`
+        : 'Could not reach the game server to get your deposit address — the server may be waking up from idle (~30-60s on the first try). Try again in a moment.';
       depositAddressLoaded = false; // allow retrying on the next panel open
     }
   }
