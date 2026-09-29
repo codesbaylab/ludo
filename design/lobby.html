@@ -7,6 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<style>
+  .server-status { margin: 10px 0 4px; }
+  .server-gated.disabled { opacity:.45; filter:grayscale(.4); pointer-events:none; }
+</style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase-client.js"></script>
 <link rel="manifest" href="manifest.json">
@@ -40,19 +44,23 @@
       <div class="stat"><div class="num" id="stat-winrate">…</div><div class="lbl">Win Rate</div></div>
     </div>
 
+    <div class="server-status" id="server-status">
+      <span class="badge badge-waiting" id="server-status-badge">⏳ Checking game server…</span>
+    </div>
+
     <div class="section-title">Free Play</div>
     <div class="action-grid">
-      <a class="tile tile-quick" href="stake-confirm.html?stake=0">
+      <a class="tile tile-quick server-gated" href="stake-confirm.html?stake=0">
         <div class="tile-icon">⚡</div>
         <div class="tile-title">Quick Match</div>
         <div class="tile-sub">Auto-join players</div>
       </a>
-      <a class="tile tile-create" href="stake-confirm.html?stake=0">
+      <a class="tile tile-create server-gated" href="stake-confirm.html?stake=0">
         <div class="tile-icon">➕</div>
         <div class="tile-title">Create Room</div>
         <div class="tile-sub">Play with friends</div>
       </a>
-      <a class="tile tile-join tile-wide" href="#join-box">
+      <a class="tile tile-join tile-wide server-gated" href="#join-box">
         <div>
           <div class="tile-title">Join with code</div>
           <div class="tile-sub">Have a room code? Enter it below</div>
@@ -65,7 +73,7 @@
       <div class="field" style="margin-bottom:12px;">
         <input class="input input-code" maxlength="6" placeholder="ABC123" />
       </div>
-      <a href="stake-confirm.html?stake=0"><button class="btn btn-secondary">Join Room</button></a>
+      <a href="stake-confirm.html?stake=0" class="server-gated"><button class="btn btn-secondary" id="join-room-btn">Join Room</button></a>
     </div>
 
     <div class="section-title">Other Games</div>
@@ -81,7 +89,7 @@
 
     <div class="section-title">Cash Tables 💵</div>
     <div class="action-grid">
-      <a class="tile tile-cash" href="stake-confirm.html?stake=10">
+      <a class="tile tile-cash server-gated" href="stake-confirm.html?stake=10">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
           <div class="tile-icon">🪙</div>
           <div style="display:flex; gap:3px;">
@@ -94,7 +102,7 @@
         <div class="tile-title">₹10 Table</div>
         <div class="tile-sub">Win up to ₹36 · 4 players</div>
       </a>
-      <a class="tile tile-cash" href="stake-confirm.html?stake=50">
+      <a class="tile tile-cash server-gated" href="stake-confirm.html?stake=50">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
           <div class="tile-icon">💎</div>
           <div style="display:flex; gap:3px;">
@@ -123,6 +131,62 @@
   </div>
 </div>
 <script>
+  // Same default/override pattern as design/game.js and waiting-room.html.
+  const SERVER_URL = new URLSearchParams(location.search).get('server') || 'wss://ludo-x96u.onrender.com';
+  const HEALTH_URL = SERVER_URL.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:') + '/health';
+
+  const gatedTiles = document.querySelectorAll('.server-gated');
+  const statusBadge = document.getElementById('server-status-badge');
+
+  function setGated(disabled) {
+    gatedTiles.forEach(el => el.classList.toggle('disabled', disabled));
+  }
+
+  async function pingServer() {
+    try {
+      const ctrl = new AbortController();
+      const timeout = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(HEALTH_URL, { cache: 'no-store', signal: ctrl.signal });
+      clearTimeout(timeout);
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  // Game-selection tiles stay disabled/greyed until the game server actually
+  // answers /health — no point letting a player pick a table only to hit
+  // "Could not reach the game server" in the waiting room a screen later.
+  // Keeps polling forever in the background (not just until first success)
+  // so tiles re-grey if the server drops again mid-visit.
+  (async function pollServerStatus() {
+    let serverOnline = false;
+    let attempt = 0;
+    for (;;) {
+      attempt++;
+      const ok = await pingServer();
+      if (ok) {
+        if (!serverOnline) {
+          serverOnline = true;
+          setGated(false);
+        }
+        statusBadge.textContent = '🟢 Game server online';
+        statusBadge.className = 'badge badge-ready';
+        await new Promise(r => setTimeout(r, 30000));
+      } else {
+        if (serverOnline) {
+          serverOnline = false;
+          setGated(true);
+        }
+        statusBadge.textContent = attempt === 1
+          ? '⏳ Checking game server…'
+          : '⏳ Waking up the game server — this can take a couple of minutes…';
+        statusBadge.className = 'badge badge-waiting';
+        await new Promise(r => setTimeout(r, 4000));
+      }
+    }
+  })();
+
   (async () => {
     const { data: { session } } = await ludoSupabase.auth.getSession();
     if (!session) { location.href = 'login.html'; return; }

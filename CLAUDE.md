@@ -73,6 +73,17 @@ by a Supabase project for auth/wallet-ledger/match-history.
   exists anywhere in the schema or backend. `profile.html` also has a Change Password panel
   (`auth.updateUser({password})`) — works for any signed-in user, admin or not, since it's the
   same page for everyone.
+- `design/lobby.html` **gates every real-multiplayer tile behind a live game-server check** — a
+  status badge (`#server-status-badge`) polls `GET {SERVER_URL}/health` (same `?server=`
+  override/default-URL pattern as `game.js`/`waiting-room.html`, WS scheme swapped for HTTP) every
+  4s while down, greying out (`.server-gated.disabled`: `opacity:.45; filter:grayscale(.4);
+  pointer-events:none`) Quick Match/Create Room/Join-with-code/Join Room/both Cash Tables tiles
+  until it succeeds — added after a real cold-start trace showed a player could tap straight into
+  a dead room and only find out in the waiting room, a screen later, that the server wasn't up
+  yet. **Rummy is deliberately not gated** (no `.server-gated` class) since it's fully client-side,
+  no Colyseus/server involved at all. Once healthy, polling continues every 30s in the background
+  (not just until first success) so the tiles re-grey if the server drops again mid-visit rather
+  than staying falsely enabled for the rest of the session.
 - `design/stake-confirm.html` — real 2/4-player table-size picker, forwards the choice via
   `?players=` through to `waiting-room.html`. Every lobby entry point (Cash Tables, Quick Match,
   Create Room, Join Room) routes through it — none of them skip straight to `waiting-room.html`.
