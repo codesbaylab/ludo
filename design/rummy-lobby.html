@@ -12,8 +12,11 @@
 <script src="ui-dialog.js"></script>
 <meta name="theme-color" content="#ff8a3d">
 <style>
-  .table-type-picker { display:flex; gap:8px; margin: 0 0 10px; }
-  .table-type-btn { flex:1; }
+  /* One compact segmented control instead of three wrapping pills. */
+  .table-type-picker { display:flex; gap:4px; margin: 0 0 12px; padding:4px; background:var(--paper); border:2px solid var(--border); border-radius:18px; }
+  .table-type-btn { flex:1; min-width:0; padding:10px 4px; font-size:13px; white-space:nowrap; border-radius:14px; }
+  .table-type-picker .table-type-btn.btn-secondary { background:transparent; border-color:transparent; box-shadow:none; color:var(--text-dim); }
+  .table-type-picker .table-type-btn.btn-primary { box-shadow:0 4px 10px rgba(255,120,80,.28); }
   #start-link.disabled { opacity:.45; filter:grayscale(.4); pointer-events:none; }
   /* Rummy-specific bits only — everything else reuses styles.css's shared
      chrome (topbar, tile/action-grid, card, player-chip) the same way every
@@ -46,9 +49,9 @@
 
   <div style="padding: 8px 20px;">
     <div class="table-type-picker" id="table-type-picker">
-      <button type="button" class="btn btn-primary btn-sm table-type-btn" data-type="practice">🎲 vs Computer (free)</button>
-      <button type="button" class="btn btn-secondary btn-sm table-type-btn" data-type="free">👥 Free · Real players</button>
-      <button type="button" class="btn btn-secondary btn-sm table-type-btn" data-type="cash">💵 Cash Table (real money)</button>
+      <button type="button" class="btn btn-primary btn-sm table-type-btn" data-type="practice">🎲 Practice</button>
+      <button type="button" class="btn btn-secondary btn-sm table-type-btn" data-type="free">👥 Free Play</button>
+      <button type="button" class="btn btn-secondary btn-sm table-type-btn" data-type="cash">💵 Cash</button>
     </div>
 
     <div class="preview-banner-outer">
@@ -203,7 +206,7 @@
       const { data } = await ludoSupabase.from('profiles').select('is_pro').eq('id', session.user.id).single();
       isPro = !!data?.is_pro;
     }
-    if (!isPro) document.querySelector('.table-type-btn[data-type="cash"]').textContent = '🔒 Cash Table (Pro)';
+    if (!isPro) document.querySelector('.table-type-btn[data-type="cash"]').textContent = '🔒 Cash';
   })();
   async function promptGoPro() {
     const go = await ludoConfirm({ tone: 'accent', icon: '🔒', title: 'Pro members only',
