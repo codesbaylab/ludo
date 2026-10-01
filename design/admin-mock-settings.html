@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Admin — Settings & System (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin-mock.css">
+<script src="admin-mock.js"></script>
+</head>
+<body data-page="settings" data-title="Settings &amp; System" data-sub="Platform rules in one place, plus the health of everything behind them" data-range="off">
+
+<div id="tools" style="display:contents"><button class="am-btn">↶ Change history</button><button class="am-btn primary">💾 Save changes</button></div>
+
+<div id="page" style="display:none">
+  <div class="am-tabs" data-tabs="s">
+    <button class="on" data-t="plat">Platform</button><button data-t="money">Money rules</button><button data-t="flags">Features &amp; messaging</button><button data-t="sys">System health</button><button data-t="alerts">Alerts &amp; notifications</button><button data-t="data">Data &amp; backups</button>
+  </div>
+
+  <!-- PLATFORM -->
+  <div data-tab-group="s" data-tab="plat">
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>👑 Pro membership</h3><div class="sub">One-time fee, non-refundable</div></div></div>
+        <div class="field-row"><span>Pro fee<small>Applies to new purchases only</small></span><input value="₹500" /></div>
+        <div class="field-row"><span>Pro-only features</span><span class="chip">Cash tables · Referrals · Withdrawals</span></div>
+        <div class="field-row"><span>Grant Pro automatically after<small>e.g. a loyalty reward</small></span><input value="Off" /></div>
+      </div>
+      <div class="am-card"><div class="head"><div><h3>🎁 Referral levels</h3><div class="sub">Commission as % of the Pro fee · max 100% total</div></div></div>
+        <div class="field-row"><span>Level 1</span><input value="20%" /></div><div class="field-row"><span>Level 2</span><input value="5%" /></div><div class="field-row"><span>Level 3</span><input value="2%" /></div>
+        <div class="field-row"><span>Total paid per Pro purchase</span><b>27% · ₹135</b></div>
+        <div class="field-row"><span>Hold commission until invitee plays<small>Anti-farming</small></span><div class="switch"></div></div>
+      </div>
+    </div>
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>🔁 Player transfers</h3><div class="sub">Limits apply to the sender</div></div></div>
+        <div class="field-row"><span>Minimum</span><input value="₹10" /></div><div class="field-row"><span>Maximum per transfer</span><input value="₹5,000" /></div><div class="field-row"><span>Maximum per 24 hours</span><input value="₹20,000" /></div>
+        <div class="field-row"><span>New accounts (&lt; 7 days) limit<small>Stricter cap for fresh accounts</small></span><input value="₹1,000" /></div>
+      </div>
+      <div class="am-card"><div class="head"><div><h3>🎮 Game fee &amp; stakes</h3><div class="sub">Currently fixed in code at 10% — becomes editable</div></div></div>
+        <div class="field-row"><span>Platform fee on cash pots</span><input value="10%" /></div>
+        <div class="field-row"><span>Ludo cash stakes offered</span><span class="chip">₹10 · ₹50 · ₹100 · ₹500</span></div>
+        <div class="field-row"><span>Rummy point values</span><span class="chip">₹1 · ₹2 · ₹5</span></div>
+        <div class="field-row"><span>Turn timer<small>Auto-roll / auto-discard</small></span><input value="15 s" /></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MONEY -->
+  <div data-tab-group="s" data-tab="money" style="display:none">
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>⬇️ Deposits</h3></div></div>
+        <div class="field-row"><span>USDT → ₹ rate</span><input value="₹90.00" /></div><div class="field-row"><span>Minimum deposit</span><input value="₹100" /></div><div class="field-row"><span>Confirmations required<small>Tron solidity node = irreversible</small></span><input value="19" /></div><div class="field-row"><span>Accept deposits</span><div class="switch on"></div></div></div>
+      <div class="am-card"><div class="head"><div><h3>⬆️ Withdrawals</h3></div></div>
+        <div class="field-row"><span>Minimum withdrawal</span><input value="₹500" /></div><div class="field-row"><span>Max per request</span><input value="₹50,000" /></div><div class="field-row"><span>Payout SLA<small>Alerts when exceeded</small></span><input value="24 h" /></div><div class="field-row"><span>Accept withdrawal requests</span><div class="switch on"></div></div></div>
+    </div>
+    <div class="am-card"><div class="head"><div><h3>🛰️ Hot wallet</h3><div class="sub">Needs the planned balance-check job</div></div></div>
+      <div class="am-grid g3" style="margin:0"><div><div class="dim" style="font-size:11px;font-weight:800">USDT ON HAND</div><div style="font-size:24px;font-weight:800">33,720</div></div><div><div class="dim" style="font-size:11px;font-weight:800">LIABILITIES (USDT)</div><div style="font-size:24px;font-weight:800">31,780</div></div><div><div class="dim" style="font-size:11px;font-weight:800">COVERAGE</div><div style="font-size:24px;font-weight:800" class="pos">106%</div></div></div></div>
+  </div>
+
+  <!-- FLAGS -->
+  <div data-tab-group="s" data-tab="flags" style="display:none">
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>🚩 Feature switches</h3><div class="sub">Turn a feature off instantly, without a deploy</div></div></div>
+        <div class="field-row"><span>Ludo cash tables</span><div class="switch on"></div></div><div class="field-row"><span>Rummy cash tables</span><div class="switch on"></div></div><div class="field-row"><span>Free Rummy (real players)</span><div class="switch on"></div></div><div class="field-row"><span>Private rooms</span><div class="switch on"></div></div><div class="field-row"><span>Player transfers</span><div class="switch on"></div></div><div class="field-row"><span>Referral payouts</span><div class="switch on"></div></div><div class="field-row"><span>New signups</span><div class="switch on"></div></div></div>
+      <div class="am-card"><div class="head"><div><h3>📣 Messaging</h3><div class="sub">Shown to all players</div></div></div>
+        <div class="field-row"><span>Maintenance mode<small>Blocks new tables; running games finish</small></span><div class="switch"></div></div>
+        <div style="padding:10px 0"><div class="dim" style="font-size:11px;font-weight:800;margin-bottom:6px">ANNOUNCEMENT BANNER</div><textarea class="input" rows="3" style="width:100%">🎉 Weekend special: Pro fee waived commission for new referrals until Sunday!</textarea></div>
+        <div class="field-row"><span>Show banner</span><div class="switch on"></div></div><div class="field-row"><span>Banner colour</span><select><option>Info (blue)</option><option>Warning (yellow)</option><option>Promo (orange)</option></select></div></div>
+    </div>
+  </div>
+
+  <!-- SYSTEM -->
+  <div data-tab-group="s" data-tab="sys" style="display:none">
+    <div class="am-grid g4" id="sys-kpis"></div>
+    <div class="am-grid g21">
+      <div class="am-card"><div class="head"><div><h3>🖥 Game server</h3><div class="sub">Connected players and rooms, last 24 h</div></div><span class="chip green">healthy</span></div><div id="c-conn"></div></div>
+      <div class="am-card"><div class="head"><div><h3>🔌 Services</h3><div class="sub">Live status</div></div></div>
+        <div class="list-row"><span class="chip green">●</span><div class="grow">Game server (Render)<small>uptime 6 d 4 h · last deploy 3 h ago</small></div><span class="dim">42 ms</span></div>
+        <div class="list-row"><span class="chip green">●</span><div class="grow">Database (Supabase)<small>41 connections · 612 MB</small></div><span class="dim">18 ms</span></div>
+        <div class="list-row"><span class="chip yellow">●</span><div class="grow">Deposit watcher<small>last scan 14:02 · 6 min behind</small></div><span class="dim">slow</span></div>
+        <div class="list-row"><span class="chip green">●</span><div class="grow">TronGrid API<small>rate-limit 38% used</small></div><span class="dim">310 ms</span></div>
+        <div class="list-row"><span class="chip green">●</span><div class="grow">Email delivery<small>0 bounces today</small></div><span class="dim">ok</span></div>
+      </div>
+    </div>
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>🚀 Deploys &amp; restarts</h3><div class="sub">A restart ends live matches — stakes are refunded automatically</div></div></div><div id="t-dep"></div></div>
+      <div class="am-card"><div class="head"><div><h3>⚠️ Recent server errors</h3><div class="sub">Grouped, last 24 h</div></div></div><div id="t-err"></div></div>
+    </div>
+  </div>
+
+  <!-- ALERTS -->
+  <div data-tab-group="s" data-tab="alerts" style="display:none">
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>🔔 Alert thresholds</h3></div></div>
+        <div class="field-row"><span>Withdrawal waiting longer than</span><input value="12 h" /></div><div class="field-row"><span>Deposit watcher behind by more than</span><input value="5 min" /></div><div class="field-row"><span>Single withdrawal above</span><input value="₹25,000" /></div><div class="field-row"><span>Risk score above</span><input value="80" /></div><div class="field-row"><span>Hot wallet coverage below</span><input value="110%" /></div><div class="field-row"><span>Signup spike (per hour) above</span><input value="150" /></div></div>
+      <div class="am-card"><div class="head"><div><h3>📬 Where to send them</h3></div></div>
+        <div class="field-row"><span>✉ Email<small>alerts@yourcompany.com</small></span><div class="switch on"></div></div><div class="field-row"><span>💬 Telegram<small>@ludo_admin_alerts</small></span><div class="switch on"></div></div><div class="field-row"><span>📱 WhatsApp (critical only)</span><div class="switch"></div></div><div class="field-row"><span>Daily summary at 8:00 am</span><div class="switch on"></div></div></div>
+    </div>
+  </div>
+
+  <!-- DATA -->
+  <div data-tab-group="s" data-tab="data" style="display:none">
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>💾 Backups</h3></div></div>
+        <div class="list-row"><span class="chip green">✓</span><div class="grow">Nightly database backup<small>today 03:00 · 612 MB · kept 30 days</small></div><button class="am-btn sm">Restore…</button></div>
+        <div class="list-row"><span class="chip green">✓</span><div class="grow">Wallet ledger export<small>today 03:10 · signed checksum</small></div><button class="am-btn sm">⬇</button></div>
+        <div class="list-row"><span class="chip yellow">!</span><div class="grow">Master seed backup check<small>last confirmed 41 days ago — confirm offline copy</small></div><button class="am-btn sm">Confirm</button></div></div>
+      <div class="am-card"><div class="head"><div><h3>🗂 Data retention</h3></div></div>
+        <div class="field-row"><span>Match history kept for</span><input value="24 months" /></div><div class="field-row"><span>Audit log kept for</span><input value="7 years" /></div><div class="field-row"><span>Delete inactive free accounts after</span><input value="Never" /></div><div class="field-row"><span>Player data export on request</span><div class="switch on"></div></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const C = AM.COLORS;
+  const k = [['Uptime (30d)', '99.94%', 'green'], ['Players online', '128', 'blue'], ['Open tables', '41', 'orange'], ['Error rate', '0.12%', 'yellow']];
+  document.getElementById('sys-kpis').innerHTML = k.map(function (x) { return '<div class="am-card kpi"><div class="lbl">' + x[0] + '</div><div class="val">' + x[1] + '</div></div>'; }).join('');
+  const L = Array.from({ length: 24 }, function (_, i) { return i + ':00'; });
+  AM.line(document.getElementById('c-conn'), { labels: L, h: 230, series: [{ name: 'Connected players', color: C.blue, values: AM.series(24, 90, .6, 3, 5, false).map(function (v, i) { return Math.round(v * (.5 + .9 * Math.exp(-Math.pow((i - 21) / 4, 2)))); }) }, { name: 'Open tables', color: C.orange, values: AM.series(24, 30, .6, 1, 6, false).map(function (v, i) { return Math.round(v * (.4 + .9 * Math.exp(-Math.pow((i - 21) / 4, 2)))); }), area: false }] });
+  AM.table(document.getElementById('t-dep'), [{ l: 'When', k: 'w' }, { l: 'Version', k: function (r) { return '<span class="mono">' + r.v + '</span>'; } }, { l: 'Change', k: 'c' }, { l: 'Live matches ended', a: 'r', k: 'm' }],
+    [{ w: '3 h ago', v: '3e02477', c: 'Cache-busting asset links', m: 0 }, { w: 'yesterday', v: 'ebbe1c1', c: 'Rummy forfeit fix', m: 4 }, { w: '2 d ago', v: '2fa34da', c: 'Stake holds', m: 6 }, { w: '3 d ago', v: 'd1c7be9', c: 'Private rooms', m: 2 }]);
+  AM.table(document.getElementById('t-err'), [{ l: 'Error', k: 'e' }, { l: 'Count', a: 'r', k: 'n' }, { l: 'Last seen', k: function (r) { return '<span class="dim">' + r.w + '</span>'; } }],
+    [{ e: 'reconnection token invalid or expired', n: 14, w: '6 min ago' }, { e: 'TronGrid 429 rate limited', n: 6, w: '14 min ago' }, { e: 'room “…” has been disposed', n: 3, w: '2 h ago' }]);
+});
+</script>
+</body>
+</html>

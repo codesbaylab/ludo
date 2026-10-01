@@ -91,6 +91,11 @@ by a Supabase project for auth/wallet-ledger/match-history.
   `…?v=<commit>` before upload (GitHub Pages sends `max-age=600`; without this a browser could pair NEW html with the
   OLD stylesheet right after a deploy — unstyled buttons). Local files stay unstamped. **A new shared asset must be
   added to that sed list** or it will be cached for 10 minutes.
+- **Admin analytics mockup (not built)**: `design/admin-mock-*.html` (dashboard, users, user, finance, games,
+  referrals, risk, reports, audit, settings) share `admin-mock.css` + `admin-mock.js` (hand-rolled SVG charts,
+  deterministic fake data, sidebar shell). Standalone and unlinked from the app; for review only. Planned data
+  prerequisites are listed in the user's memory (`project_admin_analytics_plan`): wallet ledger, admin audit log,
+  roles, match end reason, login/device events, rollups.
 
 ## Structure
 

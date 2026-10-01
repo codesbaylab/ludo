@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Admin — Audit & Roles (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin-mock.css">
+<script src="admin-mock.js"></script>
+</head>
+<body data-page="audit" data-title="Audit &amp; Roles" data-sub="Who did what, when — and who is allowed to do what" data-range="off">
+
+<div id="tools" style="display:contents"><button class="am-btn">⬇ Export log</button><button class="am-btn primary">＋ Add admin</button></div>
+
+<div id="page" style="display:none">
+  <div class="am-grid g4" id="kpis"></div>
+
+  <div class="am-card">
+    <div class="am-tabs" data-tabs="a">
+      <button class="on" data-t="log">Admin action log</button><button data-t="roles">Roles &amp; permissions</button><button data-t="admins">Admins &amp; security</button><button data-t="appr">Approvals <span class="chip red">2</span></button>
+    </div>
+
+    <div data-tab-group="a" data-tab="log">
+      <div class="filters"><div class="am-search"><span>🔍</span><input placeholder="Search target, reason, admin…" /></div><select><option>Admin: all</option><option>aghilraj11</option><option>finance_ravi</option><option>support_meena</option></select><select><option>Action: all</option><option>Balance adjusted</option><option>Withdrawal paid / rejected</option><option>User banned / unbanned</option><option>Settings changed</option><option>Pro granted / revoked</option><option>Report exported</option></select><select><option>Last 7 days</option><option>Last 30 days</option></select></div>
+      <div id="t-log"></div>
+    </div>
+
+    <div data-tab-group="a" data-tab="roles" style="display:none">
+      <div class="dim" style="font-size:12px;font-weight:700;margin-bottom:10px">Principle of least privilege: support can look but not move money; finance moves money but can’t change rules; only a super admin edits settings and roles.</div>
+      <div id="t-roles"></div>
+    </div>
+
+    <div data-tab-group="a" data-tab="admins" style="display:none">
+      <div id="t-admins"></div>
+      <div class="am-grid g2" style="margin:14px 0 0">
+        <div class="am-card" style="box-shadow:none"><h3>🔐 Security policy</h3>
+          <div class="field-row"><span>Require 2-factor for all admins</span><div class="switch on"></div></div>
+          <div class="field-row"><span>Session timeout<small>Auto sign-out when idle</small></span><input value="30 min" /></div>
+          <div class="field-row"><span>Restrict admin login to office IPs</span><div class="switch"></div></div>
+        </div>
+        <div class="am-card" style="box-shadow:none"><h3>🤝 Two-person rules</h3>
+          <div class="field-row"><span>Withdrawals ≥<small>A second finance admin must approve</small></span><input value="₹25,000" /></div>
+          <div class="field-row"><span>Manual balance adjustment ≥</span><input value="₹2,000" /></div>
+          <div class="field-row"><span>Reason required for every adjustment</span><div class="switch on"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div data-tab-group="a" data-tab="appr" style="display:none">
+      <div class="alert-row med"><span style="font-size:22px">⏳</span><div class="body"><b>Withdrawal ₹24,500 · Meera S</b>Requested by finance_ravi · needs a second approver (you can approve — you didn’t create it).<div style="margin-top:6px"><span class="chip yellow">awaiting approval · 7 h</span></div></div><div style="display:flex;gap:6px"><button class="am-btn sm green">Approve</button><button class="am-btn sm danger">Decline</button></div></div>
+      <div class="alert-row med"><span style="font-size:22px">±</span><div class="body"><b>Balance adjustment +₹5,000 · Imran Q</b>Reason: “Tournament prize correction” · requested by support_meena.<div style="margin-top:6px"><span class="chip yellow">awaiting approval · 1 h</span></div></div><div style="display:flex;gap:6px"><button class="am-btn sm green">Approve</button><button class="am-btn sm danger">Decline</button></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const k = [['Admin actions (30d)', '1,204', 'blue'], ['Money-moving actions', '318', 'orange'], ['Settings changes', '11', 'purple'], ['Failed login attempts', '7', 'red']];
+  document.getElementById('kpis').innerHTML = k.map(function (x) { return '<div class="am-card kpi"><div class="lbl">' + x[0] + '</div><div class="val">' + x[1] + '</div></div>'; }).join('');
+  const log = [
+    ['Today 14:20', 'aghilraj11', 'Settings changed', 'Pro fee', '₹450 → ₹500', 'Aligning with new pricing', 'purple'], ['Today 13:58', 'finance_ravi', 'Withdrawal paid', 'Arjun D · ₹12,000', 'tx 0x7be4…d1a9', '—', 'green'],
+    ['Today 11:02', 'finance_ravi', 'Note added', 'Sana M', 'ID verified over WhatsApp', '—', ''], ['Yesterday', 'support_meena', 'Balance adjusted', 'Sana M', '+₹500', 'Tournament prize correction', 'orange'],
+    ['Yesterday', 'aghilraj11', 'User banned', 'Rohit G', 'Ban · reason logged', 'Collusion (case #112)', 'red'], ['29 Sep', 'aghilraj11', 'Referral levels changed', 'L1/L2', '20% / 5% → 20% / 5% / 2%', 'Add third level', 'purple'],
+    ['29 Sep', 'finance_ravi', 'Withdrawal rejected', 'Kabir A · ₹5,000', 'refunded to wallet', 'Deposit < 24h, risk 72', 'red'], ['28 Sep', 'compliance_nina', 'Report exported', 'Risk case register', 'PDF · Q3', '—', 'blue']];
+  AM.table(document.getElementById('t-log'), [{ l: 'When', k: function (r) { return '<span class="dim">' + r[0] + '</span>'; } }, { l: 'Admin', k: function (r) { return AM.who(r[1], r[1].length); } }, { l: 'Action', k: function (r) { return AM.chip(r[2], r[6]); } }, { l: 'Target', k: 3 }, { l: 'Change', k: 4 }, { l: 'Reason', k: function (r) { return '<span class="dim">' + r[5] + '</span>'; } }, { l: 'IP', k: function () { return '<span class="mono dim">103.21.•••</span>'; } }],
+    log.map(function (r) { return { 0: r[0], 1: r[1], 2: r[2], 3: r[3], 4: r[4], 5: r[5], 6: r[6] }; }).map(function (o) { return [o[0], o[1], o[2], o[3], o[4], o[5], o[6]]; }), { pager: '1,204', wide: true });
+  const y = '<span class="pos">✓</span>', n = '<span class="dim">—</span>';
+  const perms = [['View dashboards & reports', y, y, y, y], ['View users & wallets', y, y, y, y], ['Ban / unban users', y, n, y, n], ['Grant / revoke Pro', y, n, y, n], ['Adjust balances', y, y, n, n], ['Approve & pay withdrawals', y, y, n, n], ['Edit fees, limits, referral levels', y, n, n, n], ['Manage admins & roles', y, n, n, n], ['Export reports with personal data', y, y, n, n], ['Work risk cases', y, y, y, n]];
+  AM.table(document.getElementById('t-roles'), [{ l: 'Permission', k: 0 }, { l: '👑 Super admin', a: 'c', k: 1 }, { l: '💰 Finance', a: 'c', k: 2 }, { l: '🎧 Support', a: 'c', k: 3 }, { l: '📊 Analyst (read-only)', a: 'c', k: 4 }], perms.map(function (r) { return { 0: r[0], 1: r[1], 2: r[2], 3: r[3], 4: r[4] }; }));
+  AM.table(document.getElementById('t-admins'), [{ l: 'Admin', k: function (r) { return AM.who(r.n, r.n.length, r.e); } }, { l: 'Role', k: function (r) { return AM.chip(r.r, r.c); } }, { l: '2-factor', k: function (r) { return r.t ? AM.chip('Enabled', 'green') : AM.chip('Not set', 'red'); } }, { l: 'Last login', k: function (r) { return '<span class="dim">' + r.l + '</span>'; } }, { l: 'Actions (30d)', a: 'r', k: 'a' }, { l: '', a: 'r', k: function () { return '<button class="am-btn sm">Edit</button> <button class="am-btn sm danger">Remove</button>'; } }],
+    [{ n: 'aghilraj11', e: 'a•••@gmail.com', r: 'Super admin', c: 'purple', t: 1, l: 'now', a: 211 }, { n: 'finance_ravi', e: 'r•••@company.com', r: 'Finance', c: 'orange', t: 1, l: '2 h ago', a: 604 }, { n: 'support_meena', e: 'm•••@company.com', r: 'Support', c: 'blue', t: 0, l: 'yesterday', a: 322 }, { n: 'compliance_nina', e: 'n•••@company.com', r: 'Analyst', c: '', t: 1, l: '3 d ago', a: 67 }]);
+});
+</script>
+</body>
+</html>

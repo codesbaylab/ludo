@@ -29,7 +29,7 @@ jobs:
       - name: Stamp asset URLs with the commit (cache-busting)
         run: |
           V="${GITHUB_SHA::8}"
-          sed -i -E "s#(href|src)=\"(styles\.css|game\.js|supabase-client\.js|ui-dialog\.js|app-update\.js|rummy-rules\.js)\"#\1=\"\2?v=$V\"#g" design/*.html
+          sed -i -E "s#(href|src)=\"(styles\.css|game\.js|supabase-client\.js|ui-dialog\.js|app-update\.js|rummy-rules\.js|admin-mock\.css|admin-mock\.js)\"#\1=\"\2?v=$V\"#g" design/*.html
           grep -c "?v=$V" design/login.html
       - uses: actions/upload-pages-artifact@v3
         with:

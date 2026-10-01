@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Admin — Finance (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin-mock.css">
+<script src="admin-mock.js"></script>
+</head>
+<body data-page="finance" data-title="Finance" data-sub="Money in, money out, and whether the books balance">
+
+<div id="tools" style="display:contents"><button class="am-btn">⬇ Export ledger</button><button class="am-btn primary">＋ Manual adjustment</button></div>
+
+<div id="page" style="display:none">
+  <div class="am-grid g4" id="kpis"></div>
+
+  <div class="am-grid g21">
+    <div class="am-card"><div class="head"><div><h3>🔁 Money in vs out</h3><div class="sub">USDT deposits, paid withdrawals and net</div></div></div><div id="c-flow"></div></div>
+    <div class="am-card">
+      <div class="head"><div><h3>⚖️ Books check</h3><div class="sub">Automated reconciliation · run 3 min ago</div></div><button class="am-btn sm">Run now</button></div>
+      <div class="list-row"><span class="chip green">✓</span><div class="grow">Wallet ledger = Σ wallet balances<small>₹28,60,000 on both sides</small></div></div>
+      <div class="list-row"><span class="chip green">✓</span><div class="grow">Deposits credited = on-chain received<small>475 / 475 transactions matched</small></div></div>
+      <div class="list-row"><span class="chip green">✓</span><div class="grow">Held funds = open table stakes<small>₹38,400 across 41 tables</small></div></div>
+      <div class="list-row"><span class="chip yellow">!</span><div class="grow">Hot wallet covers liabilities<small>Coverage 118% — target ≥ 120%</small></div></div>
+      <div class="progress" style="margin-top:10px"><i style="width:98%"></i></div>
+    </div>
+  </div>
+
+  <div class="am-card">
+    <div class="am-tabs" data-tabs="f">
+      <button class="on" data-t="wd">Withdrawals <span class="chip red">3 pending</span></button><button data-t="dep">Deposits</button><button data-t="xf">Player transfers</button><button data-t="pl">Revenue &amp; P&amp;L</button><button data-t="rate">USDT rate</button>
+    </div>
+
+    <div data-tab-group="f" data-tab="wd">
+      <div class="filters"><select><option>Status: pending</option><option>All</option><option>Paid</option><option>Rejected</option></select><select><option>Sort: oldest first</option><option>Amount ↓</option></select><span class="dim" style="font-size:12px;font-weight:700">Payout is manual: send USDT from your wallet, paste the tx hash, mark paid. Requests ≥ ₹25,000 need a second approver.</span></div>
+      <div id="t-wd"></div>
+    </div>
+    <div data-tab-group="f" data-tab="dep" style="display:none"><div id="t-dep"></div></div>
+    <div data-tab-group="f" data-tab="xf" style="display:none">
+      <div class="am-grid g21" style="margin-bottom:0"><div><div id="c-xf"></div></div><div><div id="t-xf"></div></div></div>
+    </div>
+    <div data-tab-group="f" data-tab="pl" style="display:none">
+      <div class="am-grid g21" style="margin-bottom:0">
+        <div id="c-pl"></div>
+        <div>
+          <dl class="kv" id="pl-kv"></dl>
+        </div>
+      </div>
+    </div>
+    <div data-tab-group="f" data-tab="rate" style="display:none">
+      <div class="am-grid g21" style="margin-bottom:0">
+        <div id="c-rate"></div>
+        <div><div class="field-row"><span>Current rate<small>Applied to new deposits only</small></span><input value="₹90.00" /></div><div class="field-row"><span>Alert if market drifts &gt;<small>vs a live price feed</small></span><input value="3%" /></div><button class="am-btn primary" style="margin-top:10px">Update rate</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="am-grid g2">
+    <div class="am-card"><div class="head"><div><h3>🧮 Liabilities by player tier</h3><div class="sub">Who the ₹28.6L in wallets belongs to</div></div></div><div id="c-liab"></div></div>
+    <div class="am-card"><div class="head"><div><h3>⏱ Withdrawal speed</h3><div class="sub">Request → paid, last 30 days</div></div></div><div id="c-sla"></div></div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const C = AM.COLORS;
+  const kp = [['USDT deposits (30d)', '₹16,13,389', 'green', '475 txs'], ['Withdrawals paid (30d)', '₹10,53,104', 'red', '212 payouts'], ['Pending withdrawals', '₹41,500', 'yellow', '3 requests'], ['Wallet liabilities', '₹28,60,000', 'blue', '9,000 wallets'],
+    ['Held in live games', '₹38,400', 'orange', '41 tables'], ['Platform revenue (30d)', '₹3,37,421', 'purple', 'fees + Pro'], ['Referral commission paid', '₹48,200', 'pink', 'cost of growth'], ['Net margin', '10.4%', 'teal', 'revenue ÷ deposits']];
+  document.getElementById('kpis').innerHTML = kp.map(function (x) { return '<div class="am-card kpi"><div class="lbl">' + x[0] + '</div><div class="val">' + x[1] + '</div><div class="meta"><span class="chip ' + x[2] + '">' + x[3] + '</span></div></div>'; }).join('');
+  const L = AM.dayLabels(30), dep = AM.series(30, 52000, .7, 380, 15, true), wd = AM.series(30, 31000, .8, 290, 16, true);
+  AM.bars(document.getElementById('c-flow'), { labels: L, h: 240, fmt: AM.inr, yfmt: function (v) { return '₹' + AM.short(v); }, series: [{ name: 'Deposits', color: C.green, values: dep }, { name: 'Withdrawals', color: C.red, values: wd }] });
+  const wdRows = [{ n: 'Arjun D', i: 4, a: 12000, w: '19 h ago', f: ['New account'], pro: 1 }, { n: 'Meera S', i: 5, a: 24500, w: '7 h ago', f: [], pro: 1 }, { n: 'Kabir A', i: 6, a: 5000, w: '2 h ago', f: ['Deposit < 24h ago'], pro: 0 }];
+  AM.table(document.getElementById('t-wd'), [
+    { l: 'Player', k: function (r) { return AM.who(r.n, r.i, '<span class="mono">' + AM.PID(r.i + 40) + '</span>'); } },
+    { l: 'Amount', a: 'r', k: function (r) { return '<b>' + AM.inr(r.a) + '</b><small class="dim" style="display:block">≈ ' + (r.a / 90).toFixed(1) + ' USDT</small>'; } },
+    { l: 'Destination', k: function (r) { return '<span class="mono">TQn9…' + AM.PID(r.i).slice(0, 4) + '</span> <button class="am-btn sm">copy</button>'; } },
+    { l: 'Waiting', k: function (r) { return r.w; } },
+    { l: 'Checks', k: function (r) { return r.f.length ? r.f.map(function (f) { return AM.chip('⚠ ' + f, 'yellow'); }).join(' ') : AM.chip('✓ clean', 'green'); } },
+    { l: 'Payout tx hash', k: function () { return '<input placeholder="paste tx hash" style="border:2px solid var(--border);border-radius:10px;padding:5px 8px;font:inherit;font-weight:700;width:150px;background:var(--paper-2)">'; } },
+    { l: '', a: 'r', k: function () { return '<button class="am-btn sm green">Mark paid</button> <button class="am-btn sm danger">Reject</button>'; } }], wdRows, { wide: true });
+  AM.table(document.getElementById('t-dep'), [{ l: 'Detected', k: 'w' }, { l: 'Player', k: function (r) { return AM.who(r.n, r.i); } }, { l: 'USDT', a: 'r', k: 'u' }, { l: 'Rate', a: 'r', k: 'r' }, { l: 'Credited', a: 'r', k: function (r) { return '<b>' + r.c + '</b>'; } }, { l: 'Confirmations', a: 'r', k: 'cf' }, { l: 'Tx', k: function (r) { return '<span class="mono">' + r.tx + '…</span> ↗'; } }],
+    [{ w: '21 min ago', n: 'Meera S', i: 5, u: '180.00', r: '₹90', c: '₹16,200', cf: '19/19', tx: 'a91f03c2' }, { w: '3 h ago', n: 'Ravi K', i: 1, u: '55.50', r: '₹90', c: '₹4,995', cf: '19/19', tx: '7be4d1a9' }, { w: '6 h ago', n: 'Jilna P', i: 3, u: '12.00', r: '₹90', c: '₹1,080', cf: '19/19', tx: '03cc8e51' }, { w: 'yesterday', n: 'Arjun D', i: 4, u: '300.00', r: '₹89', c: '₹26,700', cf: '19/19', tx: 'd2a67b04' }], { wide: true });
+  AM.bars(document.getElementById('c-xf'), { labels: AM.dayLabels(14), w: 460, h: 230, yfmt: function (v) { return '₹' + AM.short(v); }, fmt: AM.inr, series: [{ name: 'Transfer volume', color: C.blue, values: AM.series(14, 14000, .9, 200, 51, true) }] });
+  AM.table(document.getElementById('t-xf'), [{ l: 'From → To', k: function (r) { return r.a + ' → ' + r.b; } }, { l: '₹', a: 'r', k: 'v' }, { l: 'Flag', k: function (r) { return r.f ? AM.chip(r.f, 'yellow') : ''; } }], [{ a: 'Kabir A', b: 'Divya R', v: '5,000', f: 'Loop ×2' }, { a: 'Ravi K', b: 'Sana M', v: '3,200' }, { a: 'Divya R', b: 'Kabir A', v: '4,800', f: 'Loop ×2' }, { a: 'Sana M', b: 'Tara C', v: '1,500' }]);
+  AM.bars(document.getElementById('c-pl'), { labels: ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'], h: 240, stacked: true, fmt: AM.inr, yfmt: function (v) { return '₹' + AM.short(v); }, series: [{ name: 'Ludo fees', color: C.orange, values: [38000, 41000, 40200, 44100] }, { name: 'Rummy fees', color: C.pink, values: [19000, 21500, 20800, 23400] }, { name: 'Pro fees', color: C.purple, values: [21000, 24500, 22000, 26000] }] });
+  document.getElementById('pl-kv').innerHTML = [['Ludo match fees', '₹1,63,300'], ['Rummy match fees', '₹84,700'], ['Pro memberships', '₹93,500'], ['<b>Gross revenue</b>', '<b>₹3,41,500</b>'], ['− Referral commission', '−₹48,200'], ['− Manual bonuses / corrections', '−₹3,900'], ['<b>Net revenue</b>', '<b class="pos">₹2,89,400</b>']].map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('');
+  AM.line(document.getElementById('c-rate'), { labels: AM.dayLabels(30), h: 230, yfmt: function (v) { return '₹' + v.toFixed(0); }, fmt: function (v) { return '₹' + v; }, series: [{ name: 'USDT/INR rate set', color: C.teal, values: AM.series(30, 89, .02, .03, 61, false).map(function (v, i) { return 88 + (i > 12 ? 1 : 0) + (i > 22 ? 1 : 0) + (v % 2) * .3; }) }] });
+  AM.donut(document.getElementById('c-liab'), [{ label: 'Whales (₹50k+)', value: 1210000, color: C.purple, fmt: '42%' }, { label: 'Pro regulars', value: 1020000, color: C.orange, fmt: '36%' }, { label: 'Free depositors', value: 430000, color: C.blue, fmt: '15%' }, { label: 'Referral earnings', value: 200000, color: C.pink, fmt: '7%' }], '₹28.6L', 'owed to players');
+  AM.bars(document.getElementById('c-sla'), { w: 460, h: 215, legend: false, labels: ['< 1h', '1–6h', '6–12h', '12–24h', '> 24h'], series: [{ name: 'Withdrawals', color: C.green, values: [61, 98, 36, 14, 3] }] });
+});
+</script>
+</body>
+</html>

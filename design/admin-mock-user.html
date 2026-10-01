@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Admin — User detail (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin-mock.css">
+<script src="admin-mock.js"></script>
+</head>
+<body data-page="users" data-title="Sana M" data-sub="Player 360° view · everything about one account in one place" data-range="off">
+
+<div id="tools" style="display:contents"><a class="am-btn" href="admin-mock-users.html">← All users</a></div>
+
+<div id="page" style="display:none">
+  <!-- identity -->
+  <div class="am-card" style="margin-bottom:16px">
+    <div style="display:flex; gap:18px; align-items:center; flex-wrap:wrap">
+      <span class="av" style="width:64px;height:64px;font-size:26px;background:#2ecc71">S</span>
+      <div style="flex:1; min-width:240px">
+        <div style="font-size:22px;font-weight:800">Sana M <span class="chip purple">PRO</span> <span class="chip green">Active</span> <span class="chip blue">Referred by Ravi K</span></div>
+        <div class="dim" style="font-size:13px;font-weight:700;margin-top:4px">Player ID <span class="mono">ZJ4CKU2V</span> · s••••••@gmail.com · Referral code <span class="mono">8F3A21C</span> · Joined 12 Aug 2026 · Last seen 2 min ago · Pro since 3 Sep</div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="am-btn primary">± Adjust balance</button><button class="am-btn">👑 Revoke Pro</button><button class="am-btn">✉ Send password reset</button><button class="am-btn danger">🚫 Ban</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="am-grid g5" id="kpis"></div>
+
+  <div class="am-grid g21">
+    <div>
+      <div class="am-card">
+        <div class="am-tabs" data-tabs="u">
+          <button class="on" data-t="over">Overview</button><button data-t="ledger">Wallet ledger</button><button data-t="games">Games</button><button data-t="xfer">Transfers</button><button data-t="refs">Referrals</button><button data-t="notes">Notes &amp; history</button>
+        </div>
+
+        <div data-tab-group="u" data-tab="over">
+          <div class="head"><div><h3>Activity & net result</h3><div class="sub">Matches per day and cumulative P&amp;L</div></div></div>
+          <div id="c-act"></div>
+          <div class="am-grid g3" style="margin:14px 0 0">
+            <div><div class="dim" style="font-size:11px;font-weight:800">FAVOURITE GAME</div><div style="font-weight:800">Ludo · ₹50 tables</div></div>
+            <div><div class="dim" style="font-size:11px;font-weight:800">PLAYS MOSTLY</div><div style="font-weight:800">8–11 pm</div></div>
+            <div><div class="dim" style="font-size:11px;font-weight:800">AVG STAKE / SESSION</div><div style="font-weight:800">₹140</div></div>
+          </div>
+        </div>
+
+        <div data-tab-group="u" data-tab="ledger" style="display:none">
+          <div class="head"><div><h3>Wallet ledger</h3><div class="sub">Every balance change with running balance (needs the new immutable ledger)</div></div><button class="am-btn sm">⬇ Statement PDF</button></div>
+          <div id="t-ledger"></div>
+        </div>
+
+        <div data-tab-group="u" data-tab="games" style="display:none">
+          <div class="head"><div><h3>Match history</h3><div class="sub">Latest 8 of 142 · click a row to replay the result</div></div></div>
+          <div id="t-games"></div>
+        </div>
+
+        <div data-tab-group="u" data-tab="xfer" style="display:none">
+          <div class="head"><div><h3>Transfers</h3><div class="sub">Sent ₹12,500 · received ₹3,200 · 4 counterparties</div></div></div>
+          <div id="t-xfer"></div>
+        </div>
+
+        <div data-tab-group="u" data-tab="refs" style="display:none">
+          <div class="head"><div><h3>Referral network</h3><div class="sub">9 direct · 21 total · earned ₹4,350</div></div></div>
+          <ul class="tree" id="tree"></ul>
+        </div>
+
+        <div data-tab-group="u" data-tab="notes" style="display:none">
+          <div class="field-row" style="align-items:flex-start"><div style="flex:1"><textarea class="input" rows="2" placeholder="Add an internal note (only admins see this)…" style="width:100%"></textarea></div><button class="am-btn primary">Save note</button></div>
+          <div class="timeline" style="margin-top:14px">
+            <div class="ev"><b>Note</b> by finance_ravi: “Verified ID over WhatsApp, OK to raise limit.”<small>2 Oct · 11:02</small></div>
+            <div class="ev"><b>Balance adjusted</b> +₹500 by aghilraj11 · reason: “Tournament prize correction”<small>29 Sep · 16:40</small></div>
+            <div class="ev"><b>Pro granted</b> (purchased ₹500 from wallet)<small>3 Sep · 09:12</small></div>
+            <div class="ev"><b>Account created</b> via referral link of Ravi K<small>12 Aug · 20:31</small></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="am-card" style="margin-bottom:16px">
+        <div class="head"><div><h3>🛡️ Risk profile</h3><div class="sub">Automatic signals, last scan 5 min ago</div></div><span class="chip green">Low · 12</span></div>
+        <div class="progress" style="margin-bottom:12px"><i style="width:12%"></i></div>
+        <dl class="kv">
+          <dt>Linked devices</dt><dd>1</dd><dt>Distinct IPs (30d)</dt><dd>3</dd><dt>Linked accounts</dt><dd>0</dd>
+          <dt>Largest transfer</dt><dd>₹3,000</dd><dt>Withdrawal / deposit ratio</dt><dd>41%</dd><dt>Win rate (cash, 60 games)</dt><dd>58%</dd>
+        </dl>
+      </div>
+      <div class="am-card" style="margin-bottom:16px">
+        <div class="head"><div><h3>⚙️ Limits & overrides</h3><div class="sub">Per-user exceptions</div></div></div>
+        <div class="field-row"><span>Transfer max / day<small>Default ₹20,000</small></span><input value="₹20,000" /></div>
+        <div class="field-row"><span>Withdrawal needs approval<small>Even below the auto threshold</small></span><div class="switch"></div></div>
+        <div class="field-row"><span>Hide from leaderboards</span><div class="switch"></div></div>
+      </div>
+      <div class="am-card">
+        <div class="head"><div><h3>🔐 Account security</h3></div></div>
+        <dl class="kv"><dt>Email verified</dt><dd>✓ Yes</dd><dt>2-factor</dt><dd>Not enabled</dd><dt>Last password change</dt><dd>41 days ago</dd><dt>Active sessions</dt><dd>2 <a href="#">(sign out all)</a></dd></dl>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const C = AM.COLORS;
+  const k = [['Wallet balance', '₹14,820', '🔒 ₹50 held in a live game'], ['Lifetime deposits', '₹38,000', '6 deposits · USDT'], ['Withdrawn', '₹15,600', '3 requests · all paid'],
+    ['Net P&L (games)', '+₹6,240', '142 games · 58% wins'], ['Fees generated', '₹1,184', '10% of cash pots they played']];
+  document.getElementById('kpis').innerHTML = k.map(function (x, i) { return '<div class="am-card kpi"><div class="lbl">' + x[0] + '</div><div class="val ' + (i === 3 ? 'pos' : '') + '">' + x[1] + '</div><div class="meta">' + x[2] + '</div></div>'; }).join('');
+  const L = AM.dayLabels(30), m = AM.series(30, 6, .8, .05, 41, true);
+  let cum = 0; const pnl = AM.series(30, 220, 2.2, 0, 42, false).map(function (v) { cum += v - 190; return cum + 2000; });
+  AM.bars(document.getElementById('c-act'), { labels: L, h: 200, legend: false, series: [{ name: 'Matches', color: C.blue, values: m }] });
+  const ledger = [
+    ['Today 14:11', 'Match win · Ludo ₹50 table', '+₹130', '₹14,820', 'green'], ['Today 13:52', 'Stake held · Ludo ₹50', '🔒 ₹50', '₹14,690', 'yellow'],
+    ['Yesterday', 'Transfer sent → Divya R', '−₹1,500', '₹14,690', 'red'], ['Yesterday', 'Referral commission L1 (Tara C)', '+₹100', '₹16,190', 'green'],
+    ['29 Sep', 'Admin adjustment (reason logged)', '+₹500', '₹16,090', 'blue'], ['27 Sep', 'USDT deposit 180 · rate ₹90', '+₹16,200', '₹15,590', 'green'], ['25 Sep', 'Withdrawal paid', '−₹5,000', '−', 'red']];
+  AM.table(document.getElementById('t-ledger'), [{ l: 'When', k: 0 }, { l: 'Type', k: 1 }, { l: 'Amount', a: 'r', k: function (r) { return '<span class="' + (r[4] === 'red' ? 'neg' : r[4] === 'green' ? 'pos' : '') + '">' + r[2] + '</span>'; } }, { l: 'Balance after', a: 'r', k: 3 }],
+    ledger.map(function (r) { return [r[0], r[1], r[2], r[3], r[4]]; }).map(function (r) { return { 0: r[0], 1: r[1], 2: r[2], 3: r[3], 4: r[4] }; }));
+  AM.table(document.getElementById('t-games'), [{ l: 'Game', k: 'g' }, { l: 'Table', k: 't' }, { l: 'Players', a: 'r', k: 'p' }, { l: 'Result', k: function (r) { return r.w ? AM.chip('Win', 'green') : AM.chip('Loss', 'red'); } }, { l: 'Net', a: 'r', k: function (r) { return '<span class="' + (r.w ? 'pos' : 'neg') + '">' + r.n + '</span>'; } }, { l: 'Ended by', k: 'e' }, { l: 'When', k: function (r) { return '<span class="dim">' + r.when + '</span>'; } }],
+    [{ g: '🎲 Ludo', t: '₹50', p: 4, w: 1, n: '+₹130', e: 'Normal finish', when: 'Today' }, { g: '🎲 Ludo', t: '₹50', p: 4, w: 0, n: '−₹50', e: 'Normal finish', when: 'Today' }, { g: '🃏 Rummy points', t: '₹2/pt', p: 2, w: 1, n: '+₹288', e: 'Declared', when: 'Yesterday' },
+      { g: '🎲 Ludo', t: 'Free', p: 2, w: 1, n: '—', e: 'Opponent left (forfeit)', when: 'Yesterday' }, { g: '🃏 Rummy pool', t: '101 · ₹100', p: 4, w: 0, n: '−₹100', e: 'Eliminated', when: '28 Sep' }]);
+  AM.table(document.getElementById('t-xfer'), [{ l: 'Direction', k: function (r) { return r.d === 'out' ? AM.chip('Sent', 'red') : AM.chip('Received', 'green'); } }, { l: 'Counterparty', k: function (r) { return AM.who(r.n, r.i, r.id); } }, { l: 'Amount', a: 'r', k: 'a' }, { l: 'When', k: function (r) { return '<span class="dim">' + r.w + '</span>'; } }],
+    [{ d: 'out', n: 'Divya R', i: 7, id: AM.PID(9), a: '₹1,500', w: 'Yesterday' }, { d: 'in', n: 'Ravi K', i: 1, id: AM.PID(4), a: '₹3,200', w: '22 Sep' }, { d: 'out', n: 'Kabir A', i: 6, id: AM.PID(12), a: '₹5,000', w: '18 Sep' }, { d: 'out', n: 'Divya R', i: 7, id: AM.PID(9), a: '₹6,000', w: '14 Sep' }]);
+  const n = function (name, tag) { return '<span class="node">' + AM.av(name, name.length) + name + ' <span class="chip ' + (tag === 'PRO' ? 'purple' : '') + '">' + tag + '</span></span>'; };
+  document.getElementById('tree').innerHTML = '<li>' + n('Sana M', 'PRO') + '<ul><li>' + n('Tara C', 'PRO') + ' <span class="pos">+₹100</span><ul><li>' + n('Imran Q', 'Free') + '</li><li>' + n('Lakshmi N', 'PRO') + ' <span class="pos">+₹25</span></li></ul></li><li>' + n('Nikhil T', 'PRO') + ' <span class="pos">+₹100</span></li><li>' + n('Pooja V', 'Free') + '</li><li>' + n('Rohit G', 'Free') + '</li></ul></li>';
+});
+</script>
+</body>
+</html>

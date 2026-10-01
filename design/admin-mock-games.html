@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Admin — Games (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin-mock.css">
+<script src="admin-mock.js"></script>
+</head>
+<body data-page="games" data-title="Games" data-sub="How tables are used, what earns, and whether play is fair">
+
+<div id="tools" style="display:contents"><button class="am-btn">⬇ Export matches</button></div>
+
+<div id="page" style="display:none">
+  <div class="am-tabs" data-tabs="g">
+    <button class="on" data-t="ludo">🎲 Ludo</button><button data-t="rummy">🃏 Rummy</button><button data-t="fair">⚖️ Fairness &amp; health</button>
+  </div>
+
+  <!-- LUDO -->
+  <div data-tab-group="g" data-tab="ludo">
+    <div class="am-grid g4" id="k-ludo"></div>
+    <div class="am-grid g21">
+      <div class="am-card"><div class="head"><div><h3>Matches per day</h3><div class="sub">Cash vs free</div></div></div><div id="c-ludo"></div></div>
+      <div class="am-card"><div class="head"><div><h3>Stake mix</h3><div class="sub">Where the money is played</div></div></div><div id="c-stake"></div></div>
+    </div>
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>🕘 Peak hours</h3><div class="sub">Matches started, by weekday × hour (IST)</div></div></div><div id="c-heat"></div></div>
+      <div class="am-card"><div class="head"><div><h3>How games end</h3><div class="sub">Share of finished matches</div></div></div><div id="c-end"></div></div>
+    </div>
+  </div>
+
+  <!-- RUMMY -->
+  <div data-tab-group="g" data-tab="rummy" style="display:none">
+    <div class="am-grid g4" id="k-rummy"></div>
+    <div class="am-grid g21">
+      <div class="am-card"><div class="head"><div><h3>Hands &amp; matches</h3><div class="sub">Points vs Pool, per day</div></div></div><div id="c-rummy"></div></div>
+      <div class="am-card"><div class="head"><div><h3>Mode &amp; size</h3><div class="sub">What players pick</div></div></div><div id="c-rmode"></div></div>
+    </div>
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>Pool Rummy — hands to finish</h3><div class="sub">Distribution, 101-pool tables</div></div></div><div id="c-hands"></div></div>
+      <div class="am-card"><div class="head"><div><h3>Invalid declares</h3><div class="sub">% of declares that were wrong (rules-trainer insight)</div></div></div><div id="c-inv"></div></div>
+    </div>
+  </div>
+
+  <!-- FAIRNESS -->
+  <div data-tab-group="g" data-tab="fair" style="display:none">
+    <div class="am-grid g3">
+      <div class="am-card"><div class="head"><div><h3>🎲 Dice fairness</h3><div class="sub">Last 250,000 rolls · expected 16.7% each</div></div><span class="chip green">PASS · χ² p=0.62</span></div><div id="c-dice"></div></div>
+      <div class="am-card"><div class="head"><div><h3>🃏 Rummy shuffle</h3><div class="sub">Joker &amp; suit distribution in dealt hands</div></div><span class="chip green">PASS</span></div><div id="c-shuf"></div></div>
+      <div class="am-card"><div class="head"><div><h3>🏆 Outlier win rates</h3><div class="sub">Cash players ≥ 50 games</div></div><span class="chip yellow">2 to review</span></div><div id="t-out"></div></div>
+    </div>
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>⏱ Table health</h3><div class="sub">Time to fill a table · abandon rate</div></div></div><div id="c-fill"></div></div>
+      <div class="am-card"><div class="head"><div><h3>🔌 Disconnects &amp; forfeits</h3><div class="sub">Per 100 matches</div></div></div><div id="c-dc"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const C = AM.COLORS, L = AM.dayLabels(30);
+  const kp = function (id, arr) { document.getElementById(id).innerHTML = arr.map(function (x) { return '<div class="am-card kpi"><div class="lbl">' + x[0] + '</div><div class="val">' + x[1] + '</div><div class="meta"><span class="delta ' + x[3] + '">' + x[2] + '</span>' + x[4] + '</div></div>'; }).join(''); };
+  kp('k-ludo', [['Matches (30d)', '7,600', '+9.4%', 'up', 'vs prev 30d'], ['Cash matches', '3,120', '+12%', 'up', '41% of all'], ['Avg pot (cash)', '₹212', '+₹18', 'up', 'incl. 10% fee'], ['Avg match length', '14 m 20 s', '−0:40', 'up', 'faster = better']]);
+  kp('k-rummy', [['Matches (30d)', '3,580', '+17%', 'up', 'vs prev 30d'], ['Cash matches', '1,650', '+21%', 'up', 'Points 62% · Pool 38%'], ['Avg pot (cash)', '₹286', '+₹31', 'up', 'incl. 10% fee'], ['Forfeit rate', '6.1%', '−0.8', 'up', 'players leaving mid-hand']]);
+  AM.bars(document.getElementById('c-ludo'), { labels: L, stacked: true, series: [{ name: 'Cash', color: C.orange, values: AM.series(30, 100, .5, .8, 71, true) }, { name: 'Free', color: '#ffc58f', values: AM.series(30, 150, .5, .5, 72, true) }] });
+  AM.donut(document.getElementById('c-stake'), [{ label: '₹10 tables', value: 1480, color: C.yellow }, { label: '₹50 tables', value: 1240, color: C.orange }, { label: '₹100 tables', value: 310, color: C.pink }, { label: '₹500+', value: 90, color: C.purple }], '3,120', 'cash matches');
+  const heat = []; for (let d = 0; d < 7; d++) { const row = []; for (let h = 0; h < 24; h++) { const r = AM.rng(d * 29 + h * 7 + 3)(); const base = Math.exp(-Math.pow((h - 21) / 4.2, 2)) * 90 + Math.exp(-Math.pow((h - 13) / 2.5, 2)) * 35; row.push(Math.round((base + 6) * (d > 4 ? 1.35 : 1) * (.8 + r * .4))); } heat.push(row); }
+  AM.heat(document.getElementById('c-heat'), { rows: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], cols: Array.from({ length: 24 }, function (_, i) { return i; }), data: heat });
+  AM.donut(document.getElementById('c-end'), [{ label: 'Normal finish (4 tokens home)', value: 78, color: C.green }, { label: 'Opponent left → forfeit win', value: 14, color: C.yellow }, { label: 'Disconnect timeout', value: 6, color: C.orange }, { label: 'Server restart (refunded)', value: 2, color: C.red }], '78%', 'played to the end');
+  AM.bars(document.getElementById('c-rummy'), { labels: L, stacked: true, series: [{ name: 'Points', color: C.pink, values: AM.series(30, 70, .5, .6, 73, true) }, { name: 'Pool', color: C.purple, values: AM.series(30, 40, .6, .4, 74, true) }] });
+  AM.donut(document.getElementById('c-rmode'), [{ label: 'Points · 2p', value: 1010, color: C.pink }, { label: 'Points · 4p', value: 560, color: '#ffa9c2' }, { label: 'Pool 101 · 2p/4p', value: 640, color: C.purple }, { label: 'Pool 51 / 201', value: 280, color: '#c9b8ff' }], '2,490', 'cash + free');
+  AM.bars(document.getElementById('c-hands'), { w: 460, h: 215, legend: false, labels: ['3', '4', '5', '6', '7', '8', '9', '10+'], series: [{ name: 'Matches', color: C.purple, values: [12, 38, 71, 64, 42, 25, 14, 9] }] });
+  AM.line(document.getElementById('c-inv'), { w: 460, h: 215, labels: AM.dayLabels(14), yfmt: function (v) { return v.toFixed(0) + '%'; }, fmt: function (v) { return v.toFixed(1) + '%'; }, series: [{ name: 'Invalid declares', color: C.red, values: [14, 13.5, 13, 12.2, 12.8, 11.9, 11.2, 10.8, 10.9, 10.1, 9.8, 9.6, 9.1, 8.8] }] });
+  AM.bars(document.getElementById('c-dice'), { w: 420, h: 200, legend: false, labels: ['1', '2', '3', '4', '5', '6'], yfmt: function (v) { return v.toFixed(0) + '%'; }, fmt: function (v) { return v.toFixed(2) + '%'; }, series: [{ name: 'Share of rolls', color: C.blue, values: [16.71, 16.64, 16.69, 16.62, 16.70, 16.64] }] });
+  AM.bars(document.getElementById('c-shuf'), { w: 420, h: 200, legend: false, labels: ['♠', '♥', '♦', '♣', '🃏'], yfmt: function (v) { return v.toFixed(0) + '%'; }, fmt: function (v) { return v.toFixed(2) + '%'; }, series: [{ name: 'Share of dealt cards', color: C.pink, values: [23.1, 23.0, 23.2, 23.0, 7.7] }] });
+  AM.table(document.getElementById('t-out'), [{ l: 'Player', k: function (r) { return AM.who(r.n, r.i); } }, { l: 'Games', a: 'r', k: 'g' }, { l: 'Win %', a: 'r', k: function (r) { return '<span class="neg">' + r.w + '</span>'; } }], [{ n: 'Rohit G', i: 12, g: 74, w: '81%' }, { n: 'Imran Q', i: 14, g: 58, w: '77%' }]);
+  AM.line(document.getElementById('c-fill'), { w: 460, h: 215, labels: AM.dayLabels(14), yfmt: function (v) { return v.toFixed(0) + 's'; }, fmt: function (v) { return v + ' s'; }, series: [{ name: 'Median time to fill', color: C.teal, values: [48, 45, 52, 40, 38, 44, 36, 33, 41, 35, 30, 32, 28, 27] }] });
+  AM.bars(document.getElementById('c-dc'), { w: 460, h: 215, labels: ['Wk 1', 'Wk 2', 'Wk 3', 'Wk 4'], series: [{ name: 'Disconnects', color: C.yellow, values: [9, 8, 6, 5] }, { name: 'Forfeits', color: C.red, values: [7, 6, 6, 4] }] });
+});
+</script>
+</body>
+</html>

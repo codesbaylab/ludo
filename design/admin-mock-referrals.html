@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Admin — Referrals (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin-mock.css">
+<script src="admin-mock.js"></script>
+</head>
+<body data-page="referrals" data-title="Referrals" data-sub="Growth from invites, what it costs, and who is gaming it">
+
+<div id="tools" style="display:contents"><button class="am-btn">⬇ Export commissions</button><a class="am-btn primary" href="admin-mock-settings.html">Edit levels →</a></div>
+
+<div id="page" style="display:none">
+  <div class="am-grid g5" id="kpis"></div>
+
+  <div class="am-grid g21">
+    <div class="am-card"><div class="head"><div><h3>📈 Signups from referral</h3><div class="sub">Share of all new accounts, and how many became Pro</div></div></div><div id="c-trend"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🚀 Referral funnel</h3><div class="sub">Link shared → paying Pro member</div></div></div><div id="c-funnel"></div></div>
+  </div>
+
+  <div class="am-grid g3">
+    <div class="am-card"><div class="head"><div><h3>💸 Commission by level</h3><div class="sub">Paid this period (levels set in Settings)</div></div></div><div id="c-lvl"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🧬 Network depth</h3><div class="sub">Pro members by how deep they sit</div></div></div><div id="c-depth"></div></div>
+    <div class="am-card"><div class="head"><div><h3>💡 ROI of referrals</h3><div class="sub">Commission paid vs revenue it brought</div></div></div>
+      <dl class="kv" style="margin-top:6px">
+        <dt>Pro fees from referred users</dt><dd>₹1,92,000</dd><dt>Commission paid (all levels)</dt><dd>₹48,200</dd><dt>Net from referral growth</dt><dd class="pos">₹1,43,800</dd>
+        <dt>Cost per Pro acquired</dt><dd>₹125</dd><dt>Their 30-day cash play (avg)</dt><dd>₹3,420</dd><dt>Payback</dt><dd class="pos">Immediate</dd></dl>
+    </div>
+  </div>
+
+  <div class="am-grid g21">
+    <div class="am-card"><div class="head"><div><h3>🏅 Top referrers</h3><div class="sub">Ranked by Pro conversions</div></div></div><div id="t-top"></div></div>
+    <div class="am-card">
+      <div class="head"><div><h3>🌳 Network explorer</h3><div class="sub">Click anyone to expand · Sana M</div></div></div>
+      <ul class="tree" id="tree"></ul>
+    </div>
+  </div>
+
+  <div class="am-card">
+    <div class="head"><div><h3>🕵️ Referral abuse signals</h3><div class="sub">Patterns that usually mean fake accounts farming commission</div></div><a class="am-btn sm" href="admin-mock-risk.html">Open in Risk →</a></div>
+    <div class="am-grid g3" style="margin:0">
+      <div class="alert-row high"><span style="font-size:22px">🔁</span><div class="body"><b>Closed loop: 4 accounts</b>A→B→C→D all bought Pro within 11 min, same device.</div></div>
+      <div class="alert-row med"><span style="font-size:22px">⚡</span><div class="body"><b>Burst: 14 invites in 1 h</b>Referrer “Rohit G” — all signups never played a game.</div></div>
+      <div class="alert-row med"><span style="font-size:22px">💤</span><div class="body"><b>Pro bought, never played</b>9 referred Pro members with 0 matches — commission to hold?</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const C = AM.COLORS;
+  const k = [['Links shared', '3,940', '+11%', 'up'], ['Referred signups', '2,810', '+9%', 'up'], ['Became Pro', '702', '+14%', 'up'], ['Commission paid', '₹48,200', '+16%', 'up'], ['Pro referrers', '418', '+6%', 'up']];
+  document.getElementById('kpis').innerHTML = k.map(function (x) { return '<div class="am-card kpi"><div class="lbl">' + x[0] + '</div><div class="val">' + x[1] + '</div><div class="meta"><span class="delta ' + x[3] + '">' + x[2] + '</span>vs prev period</div></div>'; }).join('');
+  const L = AM.dayLabels(30);
+  AM.line(document.getElementById('c-trend'), { labels: L, h: 230, series: [{ name: 'Referral signups', color: C.pink, values: AM.series(30, 34, .5, .5, 81, true) }, { name: 'Of which became Pro', color: C.purple, values: AM.series(30, 9, .7, .3, 82, true) }] });
+  AM.funnel(document.getElementById('c-funnel'), [{ label: 'Links shared', value: 3940, color: C.blue }, { label: 'Clicked → signup page', value: 3120, color: C.teal }, { label: 'Signed up', value: 2810, color: C.green }, { label: 'Became Pro', value: 702, color: C.purple }]);
+  AM.bars(document.getElementById('c-lvl'), { w: 420, h: 215, legend: false, labels: ['Level 1 (20%)', 'Level 2 (5%)', 'Level 3 (2%)'], fmt: AM.inr, yfmt: function (v) { return '₹' + AM.short(v); }, series: [{ name: 'Commission', color: C.orange, values: [37200, 8300, 2700] }] });
+  AM.donut(document.getElementById('c-depth'), [{ label: 'Direct (L1)', value: 520, color: C.green }, { label: 'L2', value: 140, color: C.blue }, { label: 'L3', value: 42, color: C.purple }], '702', 'referred Pro');
+  AM.table(document.getElementById('t-top'), [{ l: '#', k: 'i' }, { l: 'Referrer', k: function (r) { return AM.who(r.n, r.i, '<span class="mono">' + r.id + '</span>'); } }, { l: 'Invites', a: 'r', k: 'inv' }, { l: 'Pro', a: 'r', k: 'p' }, { l: 'Conv.', a: 'r', k: 'c' }, { l: 'Earned', a: 'r', k: function (r) { return '<b class="pos">' + AM.inr(r.e) + '</b>'; } }, { l: 'Quality', a: 'c', k: function (r) { return AM.chip(r.q, r.q === 'High' ? 'green' : r.q === 'Check' ? 'red' : 'yellow'); } }],
+    [1, 2, 3, 4, 5, 6].map(function (i) { return { i: i, n: AM.NAMES[i + 1], id: AM.PID(i + 50), inv: 120 - i * 14, p: 38 - i * 5, c: Math.round((38 - i * 5) / (120 - i * 14) * 100) + '%', e: 9800 - i * 1300, q: i === 5 ? 'Check' : i > 3 ? 'Medium' : 'High' }; }));
+  const n = function (name, tag, amt) { return '<span class="node">' + AM.av(name, name.length) + name + ' <span class="chip ' + (tag === 'PRO' ? 'purple' : '') + '">' + tag + '</span>' + (amt ? ' <span class="pos">' + amt + '</span>' : '') + '</span>'; };
+  document.getElementById('tree').innerHTML = '<li>' + n('Sana M', 'PRO') + '<ul><li>' + n('Tara C', 'PRO', '+₹100') + '<ul><li>' + n('Imran Q', 'Free') + '</li><li>' + n('Lakshmi N', 'PRO', '+₹25') + '</li></ul></li><li>' + n('Nikhil T', 'PRO', '+₹100') + '<ul><li>' + n('Pooja V', 'PRO', '+₹25') + '</li></ul></li><li>' + n('Rohit G', 'Free') + '</li></ul></li>';
+});
+</script>
+</body>
+</html>

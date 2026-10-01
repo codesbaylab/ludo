@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Admin — Users (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin-mock.css">
+<script src="admin-mock.js"></script>
+</head>
+<body data-page="users" data-title="Users" data-sub="9,000 players · search, segment and act on any account" data-range="off">
+
+<div id="tools" style="display:contents"><button class="am-btn">⬇ Export CSV</button><button class="am-btn primary">＋ Invite / create user</button></div>
+
+<div id="page" style="display:none">
+  <div class="am-grid g3">
+    <div class="am-card"><div class="head"><div><h3>🌱 Signups by source</h3><div class="sub">Last 30 days · 1,257 signups</div></div></div><div id="c-src"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🔁 Weekly retention</h3><div class="sub">% of each signup cohort still playing</div></div></div><div id="c-ret"></div></div>
+    <div class="am-card"><div class="head"><div><h3>👛 Wallet balance spread</h3><div class="sub">Players per balance bucket</div></div></div><div id="c-bal"></div></div>
+  </div>
+
+  <div class="am-card">
+    <div class="seg-chips" id="segs">
+      <button class="on">All <b>9,000</b></button><button>New (7d) <b>312</b></button><button>Pro <b>1,286</b></button><button>Free <b>7,714</b></button>
+      <button>Whales ≥ ₹50k <b>38</b></button><button>Depositors <b>2,340</b></button><button>Dormant 30d+ <b>2,905</b></button><button>At risk <b>64</b></button><button>Flagged <b>5</b></button><button>Banned <b>14</b></button>
+    </div>
+    <div class="filters">
+      <div class="am-search" style="min-width:260px"><span>🔍</span><input placeholder="Search name, email, Player ID, referral code…" /></div>
+      <select><option>Plan: any</option><option>Pro</option><option>Free</option></select>
+      <select><option>Status: any</option><option>Active</option><option>Banned</option><option>Flagged</option></select>
+      <select><option>Balance: any</option><option>₹0</option><option>₹1 – 1,000</option><option>₹1,000 – 10,000</option><option>₹10,000+</option></select>
+      <select><option>Joined: any time</option><option>Last 7 days</option><option>Last 30 days</option></select>
+      <select><option>Source: any</option><option>Referral</option><option>Organic</option></select>
+      <select><option>Sort: last active</option><option>Balance ↓</option><option>Net P&amp;L ↓</option><option>Risk ↓</option></select>
+    </div>
+    <div id="bulk" class="alert-row" style="display:none; background:var(--blue-soft); border-color:var(--blue); align-items:center">
+      <div class="body"><b style="display:inline">3 selected</b> &nbsp; <button class="am-btn sm">Export</button> <button class="am-btn sm">Message</button> <button class="am-btn sm">Grant Pro</button> <button class="am-btn sm danger">Ban</button></div>
+    </div>
+    <div id="t-users"></div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const C = AM.COLORS;
+  AM.donut(document.getElementById('c-src'), [
+    { label: 'Organic / direct', value: 540, color: C.blue }, { label: 'Referral link', value: 390, color: C.pink },
+    { label: 'Social (WhatsApp)', value: 220, color: C.green }, { label: 'Other', value: 107, color: C.gray }], '1,257', 'signups');
+  AM.heat(document.getElementById('c-ret'), {
+    rows: ['Aug 25', 'Sep 1', 'Sep 8', 'Sep 15', 'Sep 22'], cols: ['W0', 'W1', 'W2', 'W3', 'W4', 'W5', 'W6', 'W7'],
+    data: [[100, 46, 33, 28, 25, 23, 22, 21], [100, 49, 35, 30, 27, 25, 24, 0], [100, 51, 37, 31, 28, 26, 0, 0], [100, 48, 34, 29, 0, 0, 0, 0], [100, 52, 38, 0, 0, 0, 0, 0]] });
+  AM.bars(document.getElementById('c-bal'), { w: 420, h: 215, legend: false, labels: ['₹0', '<1k', '1–5k', '5–10k', '10–50k', '50k+'], yfmt: AM.short, series: [{ name: 'Players', color: C.orange, values: [3910, 2640, 1420, 650, 342, 38] }] });
+
+  const rows = [];
+  const plans = ['Pro', 'Free', 'Free', 'Pro', 'Free', 'Free', 'Pro', 'Free'];
+  for (let i = 0; i < 12; i++) {
+    const r = AM.rng(i * 31 + 5); const pro = plans[i % 8] === 'Pro';
+    const bal = Math.round((pro ? 2000 : 0) + r() * (pro ? 30000 : 900)), held = r() > .75 ? 50 : 0;
+    const games = Math.round(8 + r() * 140), win = 35 + Math.round(r() * 35);
+    const net = Math.round((r() - .45) * (pro ? 16000 : 600));
+    const risk = i === 2 ? 87 : i === 7 ? 64 : Math.round(r() * 30);
+    rows.push({ i: i, n: AM.NAMES[i], id: AM.PID(i + 3), pro: pro, bal: bal, held: held, games: games, win: win, net: net, dep: pro ? Math.round(r() * 60000) : Math.round(r() * 2000), wd: pro ? Math.round(r() * 30000) : 0, refs: pro ? Math.round(r() * 18) : 0, last: ['2 min ago', '14 min ago', '1 h ago', '3 h ago', 'yesterday', '2 d ago', '5 d ago', '12 d ago'][i % 8], risk: risk, banned: i === 11 });
+  }
+  AM.table(document.getElementById('t-users'), [
+    { l: '<input type="checkbox" class="all">', k: function () { return '<input type="checkbox" class="row">'; } },
+    { l: 'Player', k: function (r) { return '<a href="admin-mock-user.html" style="text-decoration:none;color:inherit">' + AM.who(r.n, r.i, '<span class="mono">' + r.id + '</span>') + '</a>'; } },
+    { l: 'Plan', k: function (r) { return r.pro ? AM.chip('PRO', 'purple') : AM.chip('Free'); } },
+    { l: 'Status', k: function (r) { return r.banned ? AM.chip('Banned', 'red') : r.risk > 60 ? AM.chip('Flagged', 'yellow') : AM.chip('Active', 'green'); } },
+    { l: 'Wallet', a: 'r', k: function (r) { return AM.inr(r.bal) + (r.held ? '<small class="dim" style="display:block">🔒 ' + AM.inr(r.held) + ' held</small>' : ''); } },
+    { l: 'Games', a: 'r', k: 'games' }, { l: 'Win %', a: 'r', k: function (r) { return r.win + '%'; } },
+    { l: 'Net P&L', a: 'r', k: function (r) { return '<span class="' + (r.net >= 0 ? 'pos' : 'neg') + '">' + (r.net >= 0 ? '+' : '−') + AM.inr(Math.abs(r.net)) + '</span>'; } },
+    { l: 'Deposited', a: 'r', k: function (r) { return AM.inr(r.dep); } }, { l: 'Withdrawn', a: 'r', k: function (r) { return AM.inr(r.wd); } },
+    { l: 'Invites', a: 'r', k: 'refs' }, { l: 'Last active', k: function (r) { return '<span class="dim">' + r.last + '</span>'; } },
+    { l: 'Risk', a: 'c', k: function (r) { return AM.chip(r.risk, r.risk > 60 ? 'red' : r.risk > 30 ? 'yellow' : 'green'); } },
+    { l: '', k: function () { return '<button class="am-btn sm">⋯</button>'; } }
+  ], rows, { pager: '9,000', wide: true });
+  const all = document.querySelector('.all'), bulk = document.getElementById('bulk');
+  const upd = function () { const n = document.querySelectorAll('.row:checked').length; bulk.style.display = n ? '' : 'none'; bulk.querySelector('b').textContent = n + ' selected'; };
+  document.querySelectorAll('.row').forEach(function (c) { c.addEventListener('change', upd); });
+  all.addEventListener('change', function () { document.querySelectorAll('.row').forEach(function (c) { c.checked = all.checked; }); upd(); });
+  const w = document.querySelector('.tbl-wrap'); if (w) w.style.maxWidth = '100%';
+});
+</script>
+</body>
+</html>

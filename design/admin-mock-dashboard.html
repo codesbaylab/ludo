@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Admin — Dashboard (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin-mock.css">
+<script src="admin-mock.js"></script>
+</head>
+<body data-page="dashboard" data-title="Dashboard" data-sub="Platform health at a glance · updated 2 min ago">
+
+<div id="tools" style="display:contents"><button class="am-btn">⟳ Refresh</button><button class="am-btn primary">⬇ Export report</button></div>
+
+<div id="page" style="display:none">
+  <!-- KPI strip -->
+  <div class="am-grid g4" id="kpis"></div>
+
+  <div class="am-grid g21">
+    <div class="am-card">
+      <div class="head"><div><h3>💰 Platform revenue</h3><div class="sub">Match fees (10%) + Pro memberships, per day</div></div><span class="chip green" id="rev-total"></span></div>
+      <div id="c-revenue"></div>
+    </div>
+    <div class="am-card">
+      <div class="head"><div><h3>🧑‍🤝‍🧑 Active players</h3><div class="sub">Daily vs weekly actives</div></div></div>
+      <div id="c-active"></div>
+    </div>
+  </div>
+
+  <div class="am-grid g3">
+    <div class="am-card">
+      <div class="head"><div><h3>🔁 Cash flow</h3><div class="sub">USDT deposits vs withdrawals (₹)</div></div></div>
+      <div id="c-cash"></div>
+    </div>
+    <div class="am-card">
+      <div class="head"><div><h3>🎮 Game mix</h3><div class="sub">Matches played by game</div></div></div>
+      <div id="c-mix"></div>
+    </div>
+    <div class="am-card">
+      <div class="head"><div><h3>🚀 Conversion funnel</h3><div class="sub">Signup → paying player</div></div></div>
+      <div id="c-funnel"></div>
+    </div>
+  </div>
+
+  <div class="am-grid g21">
+    <div class="am-card">
+      <div class="head"><div><h3>🔔 Needs your attention</h3><div class="sub">Items waiting on an admin</div></div><a class="am-btn sm" href="admin-mock-risk.html">Open risk queue →</a></div>
+      <div class="alert-row high"><span style="font-size:22px">🚨</span><div class="body"><b>Possible multi-account ring · 4 accounts</b>Same device fingerprint, transfers circling between them (₹18,400 in 24h).</div><a class="am-btn sm" href="admin-mock-risk.html">Review</a></div>
+      <div class="alert-row med"><span style="font-size:22px">⏳</span><div class="body"><b>3 withdrawals waiting · ₹41,500</b>Oldest has been waiting 19 h (SLA is 24 h).</div><a class="am-btn sm" href="admin-mock-finance.html">Process</a></div>
+      <div class="alert-row med"><span style="font-size:22px">🛰️</span><div class="body"><b>Deposit watcher lagging 6 min</b>TronGrid responses are slow; last confirmed scan 14:02.</div><a class="am-btn sm" href="admin-mock-settings.html">System</a></div>
+      <div class="alert-row"><span style="font-size:22px">📉</span><div class="body"><b>Pro conversion dipped 1.4 pts week-on-week</b>Mostly from users who never deposited — consider a first-deposit nudge.</div><a class="am-btn sm" href="admin-mock-users.html">Segment</a></div>
+    </div>
+    <div class="am-card">
+      <div class="head"><div><h3>🟢 Live right now</h3><div class="sub">From the game server</div></div><span class="chip green">server online</span></div>
+      <div class="am-grid g3" style="margin-bottom:10px;gap:10px">
+        <div><div class="dim" style="font-size:11px;font-weight:800">PLAYERS</div><div style="font-size:24px;font-weight:800">128</div></div>
+        <div><div class="dim" style="font-size:11px;font-weight:800">TABLES</div><div style="font-size:24px;font-weight:800">41</div></div>
+        <div><div class="dim" style="font-size:11px;font-weight:800">IN PLAY ₹</div><div style="font-size:24px;font-weight:800">38k</div></div>
+      </div>
+      <div id="live"></div>
+    </div>
+  </div>
+
+  <div class="am-grid g2">
+    <div class="am-card"><div class="head"><div><h3>🏆 Top players</h3><div class="sub">By net winnings this period</div></div></div><div id="t-top"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🧾 Recent activity</h3><div class="sub">Across the whole platform</div></div></div><div id="feed" class="timeline"></div></div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const C = AM.COLORS;
+  AM.range(function (n) {
+    const L = AM.dayLabels(n);
+    const ludoFee = AM.series(n, 5200, .5, 22, 11, true), rummyFee = AM.series(n, 2600, .6, 18, 12, true), pro = AM.series(n, 3000, .9, 15, 13, false);
+    const dau = AM.series(n, 420, .3, 3, 14, true), wau = dau.map(function (v, i) { return Math.round(v * (2.4 + .15 * Math.sin(i / 3))); });
+    const dep = AM.series(n, 52000, .7, 380, 15, true), wd = AM.series(n, 31000, .8, 290, 16, true);
+    const rev = AM.sum(ludoFee) + AM.sum(rummyFee) + AM.sum(pro);
+    const sign = AM.series(n, 38, .6, .3, 17, true);
+
+    const spk = function (a) { return a.slice(-14); };
+    const kpis = [
+      ['Revenue', AM.inr(rev), '+12.4%', 'up', AM.spark(spk(ludoFee.map(function (v, i) { return v + rummyFee[i] + pro[i]; })), C.orange), 'vs previous ' + n + ' days'],
+      ['Daily active players', AM.num(dau[dau.length - 1]), '+4.1%', 'up', AM.spark(spk(dau), C.blue), 'WAU ' + AM.num(wau[wau.length - 1])],
+      ['New signups', AM.num(AM.sum(sign)), '+8.9%', 'up', AM.spark(spk(sign), C.green), '31% via referral'],
+      ['Pro members', '1,286', '+2.2%', 'up', AM.spark([40, 44, 43, 49, 52, 55, 54, 60, 63, 66, 64, 70, 72, 75], C.purple), '14.2% of all users'],
+      ['USDT deposits', AM.inr(AM.sum(dep)), '+6.0%', 'up', AM.spark(spk(dep), C.green), AM.num(AM.sum(dep) / 3400) + ' deposits'],
+      ['Withdrawals paid', AM.inr(AM.sum(wd)), '−3.1%', 'down', AM.spark(spk(wd), C.red), '3 pending · ₹41.5k'],
+      ['Net cash flow', AM.inr(AM.sum(dep) - AM.sum(wd)), '+22.7%', 'up', AM.spark(spk(dep.map(function (v, i) { return v - wd[i]; })), C.teal), 'deposits − withdrawals'],
+      ['Wallet liabilities', AM.inr(2860000), '+1.9%', 'flat', AM.spark([70, 71, 72, 71, 73, 74, 74, 75, 76, 76, 77, 77, 78, 79], C.yellow), '₹38k locked in live games']
+    ];
+    document.getElementById('kpis').innerHTML = kpis.map(function (k) {
+      return '<div class="am-card kpi"><div class="lbl">' + k[0] + '</div><div class="val">' + k[1] + '</div><div class="meta"><span class="delta ' + k[3] + '">' + k[2] + '</span>' + k[5] + '</div>' + k[4] + '</div>';
+    }).join('');
+    document.getElementById('rev-total').textContent = AM.inr(rev) + ' total';
+    AM.bars(document.getElementById('c-revenue'), { labels: L, stacked: true, fmt: AM.inr, yfmt: function (v) { return '₹' + AM.short(v); }, series: [
+      { name: 'Ludo fees', color: C.orange, values: ludoFee }, { name: 'Rummy fees', color: C.pink, values: rummyFee }, { name: 'Pro memberships', color: C.purple, values: pro }] });
+    AM.line(document.getElementById('c-active'), { w: 400, h: 245, labels: L, series: [{ name: 'DAU', color: C.blue, values: dau }, { name: 'WAU', color: C.teal, values: wau, area: false, dash: true }] });
+    AM.bars(document.getElementById('c-cash'), { w: 420, labels: L.slice(-14), h: 230, yfmt: function (v) { return '₹' + AM.short(v); }, fmt: AM.inr, series: [{ name: 'Deposits', color: C.green, values: dep.slice(-14) }, { name: 'Withdrawals', color: C.red, values: wd.slice(-14) }] });
+  });
+  AM.donut(document.getElementById('c-mix'), [
+    { label: 'Ludo · cash', value: 3120, color: C.orange }, { label: 'Ludo · free', value: 4480, color: '#ffc58f' },
+    { label: 'Rummy · cash', value: 1650, color: C.pink }, { label: 'Rummy · free', value: 1930, color: '#ffa9c2' }], '11.2k', 'matches');
+  AM.funnel(document.getElementById('c-funnel'), [
+    { label: 'Signed up', value: 9000, color: C.blue }, { label: 'Played a free game', value: 6120, color: C.teal },
+    { label: 'Deposited', value: 2340, color: C.green }, { label: 'Became Pro', value: 1286, color: C.purple }, { label: 'Played cash ≥ 5×', value: 702, color: C.orange }]);
+  document.getElementById('live').innerHTML = [
+    ['Ludo ₹50 · 4p', 'QA Alice, Ravi K, Sana M, Jilna P', 'round 3 · ₹180 pot', 'green'],
+    ['Rummy Pool 101 · 2p', 'Arjun D, Meera S', 'hand 4 · ₹180 pot', 'pink'],
+    ['Ludo free · 2p', 'Kabir A, Divya R', 'turn 22', 'blue'],
+    ['Rummy Points ₹2 · 2p', 'Nikhil T, Pooja V', 'hand 1 · up to ₹320', 'pink']
+  ].map(function (r) { return '<div class="list-row"><span class="chip ' + (r[3] === 'pink' ? 'orange' : r[3]) + '">●</span><div class="grow">' + r[0] + '<small>' + r[1] + '</small></div><span class="dim">' + r[2] + '</span></div>'; }).join('');
+  AM.table(document.getElementById('t-top'), [
+    { l: '#', k: function (r) { return r.i; } }, { l: 'Player', k: function (r) { return AM.who(r.n, r.i, r.id); } },
+    { l: 'Matches', a: 'r', k: 'm' }, { l: 'Win rate', a: 'r', k: 'w' }, { l: 'Net', a: 'r', k: function (r) { return '<span class="pos">+' + AM.inr(r.net) + '</span>'; } }],
+    [1, 2, 3, 4, 5].map(function (i) { return { i: i, n: AM.NAMES[i + 1], id: AM.PID(i + 20), m: 80 - i * 9, w: (68 - i * 4) + '%', net: 18400 / i }; }));
+  document.getElementById('feed').innerHTML = [
+    ['Ravi K bought <b>Pro</b> — ₹500 · referred by Sana M (+₹100 commission)', '2 min ago'],
+    ['Arjun D requested a <b>withdrawal</b> of ₹12,000', '9 min ago'],
+    ['Meera S deposited <b>180 USDT</b> (₹16,200 credited)', '21 min ago'],
+    ['Kabir A sent ₹1,500 to Divya R <b>(transfer)</b>', '34 min ago'],
+    ['Admin <b>aghilraj11</b> changed Pro fee ₹450 → ₹500', '1 h ago'],
+    ['New signup: Tara C <b>via referral</b> (Sana M)', '1 h ago']
+  ].map(function (e) { return '<div class="ev">' + e[0] + '<small>' + e[1] + '</small></div>'; }).join('');
+});
+</script>
+</body>
+</html>

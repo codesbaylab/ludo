@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Admin — Reports (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin-mock.css">
+<script src="admin-mock.js"></script>
+</head>
+<body data-page="reports" data-title="Reports" data-sub="Pick a report, tune it, download it — or have it emailed on a schedule" data-range="off">
+
+<div id="tools" style="display:contents"><button class="am-btn">📅 Scheduled (4)</button></div>
+
+<div id="page" style="display:none">
+  <div class="am-grid g12">
+    <div class="am-card">
+      <div class="head"><div><h3>📚 Report library</h3><div class="sub">Ready-made, auditable reports</div></div></div>
+      <div class="seg-chips"><button class="on">All</button><button>Finance</button><button>Players</button><button>Games</button><button>Compliance</button></div>
+      <div id="lib"></div>
+    </div>
+
+    <div>
+      <div class="am-card" style="margin-bottom:16px">
+        <div class="head"><div><h3 id="rep-title">🧾 Daily revenue statement</h3><div class="sub">Every fee and membership, by day and by game · ready for your accountant</div></div><span class="chip green">Finance</span></div>
+        <div class="am-grid g3" style="margin-bottom:12px">
+          <div><div class="dim" style="font-size:11px;font-weight:800;margin-bottom:4px">DATE RANGE</div><select class="input"><option>Last 30 days</option><option>This month</option><option>Last month</option><option>Custom…</option></select></div>
+          <div><div class="dim" style="font-size:11px;font-weight:800;margin-bottom:4px">GROUP BY</div><select class="input"><option>Day</option><option>Week</option><option>Month</option><option>Game</option></select></div>
+          <div><div class="dim" style="font-size:11px;font-weight:800;margin-bottom:4px">COMPARE WITH</div><select class="input"><option>Previous period</option><option>Same period last month</option><option>None</option></select></div>
+        </div>
+        <div class="dim" style="font-size:11px;font-weight:800;margin-bottom:6px">COLUMNS</div>
+        <div class="seg-chips" id="cols"><button class="on">Date</button><button class="on">Ludo fees</button><button class="on">Rummy fees</button><button class="on">Pro fees</button><button class="on">Commission</button><button>Deposits</button><button>Withdrawals</button><button>New users</button><button>Active users</button></div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <button class="am-btn primary">▶ Run &amp; preview</button><button class="am-btn">⬇ CSV</button><button class="am-btn">⬇ Excel</button><button class="am-btn">⬇ PDF</button>
+          <span class="dim" style="font-size:12px;font-weight:700">Generated from the ledger · includes a signed totals checksum</span>
+        </div>
+      </div>
+
+      <div class="am-card" style="margin-bottom:16px">
+        <div class="head"><div><h3>Preview</h3><div class="sub">First 6 rows of 30 · totals at the bottom</div></div></div>
+        <div id="prev"></div>
+      </div>
+
+      <div class="am-card">
+        <div class="head"><div><h3>⏰ Schedule this report</h3><div class="sub">Delivered by email as an attachment</div></div></div>
+        <div class="am-grid g3" style="margin-bottom:0">
+          <div><div class="dim" style="font-size:11px;font-weight:800;margin-bottom:4px">FREQUENCY</div><select class="input"><option>Every day · 8:00 am</option><option>Every Monday</option><option>1st of the month</option></select></div>
+          <div><div class="dim" style="font-size:11px;font-weight:800;margin-bottom:4px">SEND TO</div><input class="input" value="finance@yourcompany.com" /></div>
+          <div style="display:flex;align-items:flex-end"><button class="am-btn green" style="width:100%;justify-content:center">Save schedule</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="am-card">
+    <div class="head"><div><h3>🕘 Recent downloads &amp; scheduled runs</h3><div class="sub">Every export is logged in the audit trail</div></div></div>
+    <div id="t-runs"></div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const lib = [['🧾', 'Daily revenue statement', 'Fees + Pro by day and game', 'Finance', 1], ['📊', 'Monthly P&L', 'Revenue, commission, bonuses, net', 'Finance'], ['🏦', 'Liability snapshot', 'Who is owed what, as of a date', 'Finance'], ['⬆️', 'Withdrawal register', 'Every request, approver, tx hash, SLA', 'Finance'], ['⬇️', 'Deposit register', 'On-chain deposits matched to credits', 'Finance'],
+    ['🔁', 'Transfer log', 'Player-to-player moves with counterparties', 'Compliance'], ['🎁', 'Referral commissions', 'By referrer, level and invitee', 'Players'], ['👤', 'User statement', 'One player’s full wallet history', 'Players'], ['🎲', 'Game fairness audit', 'Dice/shuffle stats, outliers, forfeits', 'Games'], ['🏛️', 'Tax / TDS summary', 'Winnings paid & fees for the tax filing', 'Compliance'], ['🛡️', 'Risk case register', 'Alerts, actions taken, outcomes', 'Compliance'], ['📈', 'Cohort & retention', 'Signup cohorts and LTV', 'Players']];
+  document.getElementById('lib').innerHTML = lib.map(function (l) { return '<div class="list-row" style="cursor:pointer;' + (l[4] ? 'background:var(--paper-2);border-radius:14px;padding:10px;border:2px solid var(--accent)' : '') + '"><span style="font-size:22px">' + l[0] + '</span><div class="grow">' + l[1] + '<small>' + l[2] + '</small></div><span class="chip">' + l[3] + '</span></div>'; }).join('');
+  const rows = []; const L = AM.dayLabels(30).slice(-6).reverse();
+  L.forEach(function (d, i) { const r = AM.rng(i + 7); const lf = 5000 + Math.round(r() * 3000), rf = 2000 + Math.round(r() * 1800), pf = 1500 + Math.round(r() * 3500), cm = Math.round(pf * .22); rows.push({ d: d + ', 2026', lf: lf, rf: rf, pf: pf, cm: cm }); });
+  AM.table(document.getElementById('prev'), [{ l: 'Date', k: 'd' }, { l: 'Ludo fees', a: 'r', k: function (r) { return AM.inr(r.lf); } }, { l: 'Rummy fees', a: 'r', k: function (r) { return AM.inr(r.rf); } }, { l: 'Pro fees', a: 'r', k: function (r) { return AM.inr(r.pf); } }, { l: 'Commission', a: 'r', k: function (r) { return '<span class="neg">−' + AM.inr(r.cm) + '</span>'; } }, { l: 'Net', a: 'r', k: function (r) { return '<b>' + AM.inr(r.lf + r.rf + r.pf - r.cm) + '</b>'; } }], rows.concat([{ d: '<b>Total (30 days)</b>', lf: 163300, rf: 84700, pf: 93500, cm: 48200 }].map(function (t) { return { d: t.d, lf: t.lf, rf: t.rf, pf: t.pf, cm: t.cm }; })));
+  AM.table(document.getElementById('t-runs'), [{ l: 'Report', k: 'r' }, { l: 'Range', k: 'g' }, { l: 'Run by', k: 'b' }, { l: 'Type', k: function (r) { return AM.chip(r.t, r.t === 'Scheduled' ? 'blue' : ''); } }, { l: 'Format', k: 'f' }, { l: 'When', k: function (r) { return '<span class="dim">' + r.w + '</span>'; } }, { l: '', a: 'r', k: function () { return '<button class="am-btn sm">⬇</button>'; } }],
+    [{ r: 'Daily revenue statement', g: 'Last 30 days', b: 'aghilraj11', t: 'Manual', f: 'PDF', w: '12 min ago' }, { r: 'Withdrawal register', g: 'Sep 2026', b: 'finance_ravi', t: 'Manual', f: 'CSV', w: '2 h ago' }, { r: 'Daily revenue statement', g: 'Yesterday', b: 'system', t: 'Scheduled', f: 'CSV', w: 'today 8:00' }, { r: 'Liability snapshot', g: '30 Sep', b: 'system', t: 'Scheduled', f: 'XLSX', w: 'today 8:00' }, { r: 'Risk case register', g: 'Q3 2026', b: 'compliance_nina', t: 'Manual', f: 'PDF', w: 'yesterday' }]);
+});
+</script>
+</body>
+</html>
