@@ -24,7 +24,7 @@
 <body>
 <div class="app">
   <div class="topbar">
-    <a href="lobby.html" class="nav-item" style="flex-direction:row; gap:6px; color:var(--text-dim);">← Back</a>
+    <a href="lobby.html" class="icon-btn" aria-label="Back" title="Back" style="text-decoration:none; font-size:20px; font-weight:800;">←</a>
     <h1 style="font-size:18px;">Wallet</h1>
     <div style="width:30px;"></div>
   </div>
@@ -48,10 +48,10 @@
     <!-- Pro membership -->
     <div class="card" id="pro" style="margin-top:14px; text-align:center; padding:22px 16px; display:none;"></div>
 
-    <div style="display:flex; gap:10px; margin-top:14px;">
-      <button class="btn btn-primary" id="btn-deposit">⬇️ Deposit</button>
-      <button class="btn btn-secondary" id="btn-withdraw">⬆️ Withdraw</button>
-      <button class="btn btn-secondary" id="btn-send">➡️ Send</button>
+    <div class="wallet-actions">
+      <button type="button" class="wallet-action" id="btn-deposit"><span class="wa-ic" style="background:var(--green-soft);">⬇️</span>Deposit</button>
+      <button type="button" class="wallet-action" id="btn-withdraw"><span class="wa-ic" style="background:var(--yellow-soft);">⬆️</span>Withdraw</button>
+      <button type="button" class="wallet-action" id="btn-send"><span class="wa-ic" style="background:var(--blue-soft);">➡️</span>Send</button>
     </div>
 
     <!-- Send panel -->
@@ -471,6 +471,14 @@
     withdrawPanel.style.display = 'none';
     await loadWalletAndTransactions();
   });
+
+  // Highlight whichever action's panel is open.
+  function syncActions() {
+    document.getElementById('btn-deposit').classList.toggle('active', depositPanel.style.display === 'block');
+    document.getElementById('btn-withdraw').classList.toggle('active', withdrawPanel.style.display === 'block');
+    document.getElementById('btn-send').classList.toggle('active', sendPanel.style.display === 'block');
+  }
+  document.querySelectorAll('.wallet-action').forEach(b => b.addEventListener('click', syncActions));
 
   (async () => {
     const { data: { session } } = await ludoSupabase.auth.getSession();

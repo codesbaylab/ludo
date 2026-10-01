@@ -475,3 +475,22 @@ a:has(> .btn) { display: block; }
 .dlg-actions .btn { flex: 1; }
 .dlg.tone-danger .btn-primary { background: linear-gradient(135deg, #ff7a7a, #ff4d4d); }
 .dlg.tone-success .btn-primary { background: linear-gradient(135deg, #46d98a, #22b866); }
+
+/* ---- Compact round header buttons (back / log out) ---- */
+.icon-btn {
+  width: 38px; height: 38px; flex: none; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--paper); border: 2px solid var(--border); color: var(--text-dim);
+  cursor: pointer; padding: 0; font-family: inherit; box-shadow: 0 3px 8px rgba(255, 140, 100, .12);
+}
+.icon-btn:active { transform: scale(.94); }
+
+/* ---- Wallet quick actions: three equal tiles, icon over label ---- */
+.wallet-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+.wallet-action {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 12px 6px; border-radius: var(--radius-md); background: var(--paper);
+  border: 2px solid var(--border); color: var(--text); font: inherit; font-size: 13px; font-weight: 800; cursor: pointer;
+}
+.wallet-action .wa-ic { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 19px; }
+.wallet-action.active { border-color: var(--accent); box-shadow: 0 4px 12px rgba(255, 138, 61, .25); }

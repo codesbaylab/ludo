@@ -39,12 +39,13 @@
 <div class="app">
   <div class="topbar">
     <div class="brand">
+      <a href="lobby.html" class="icon-btn" aria-label="Back" title="Back" style="text-decoration:none; font-size:20px; font-weight:800;">←</a>
       <div class="dice">🃏</div>
       <h1 style="font-size:20px;">Ludo Online</h1>
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
       <a href="wallet.html" class="wallet-chip" id="wallet-chip">💰 ₹250.00</a>
-      <div class="avatar" id="user-avatar">A</div>
+      <button type="button" class="icon-btn" id="user-avatar" aria-label="Log out" title="Log out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
   </div>
 
@@ -226,7 +227,6 @@
     if (wallet) document.getElementById('wallet-chip').textContent = `💰 ₹${Number(wallet.balance).toFixed(2)}`;
     const { data: profile } = await ludoSupabase.from('profiles').select('display_name').eq('id', session.user.id).single();
     const name = profile?.display_name || session.user.email || 'Player';
-    document.getElementById('user-avatar').textContent = name[0].toUpperCase();
 
     const { data: recent } = await ludoSupabase
       .from('rummy_match_players')
@@ -424,6 +424,12 @@
       document.getElementById('join-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
       document.getElementById('join-code-input').focus({ preventScroll: true });
     });
+  });
+
+  document.getElementById('user-avatar').addEventListener('click', async () => {
+    if (!(await ludoConfirm({ tone: 'info', icon: '👋', title: 'Log out?', message: 'You’ll need to log in again to play.', confirmText: 'Log out', cancelText: 'Stay' }))) return;
+    await ludoSupabase.auth.signOut();
+    location.href = 'login.html';
   });
 
   document.querySelectorAll('.mode-btn').forEach((btn) => {

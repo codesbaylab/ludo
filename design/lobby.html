@@ -35,7 +35,7 @@
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
       <a href="wallet.html" class="wallet-chip" id="wallet-chip">💰 …</a>
-      <div class="avatar" id="user-avatar" title="Sign out" style="cursor:pointer;">?</div>
+      <button type="button" class="icon-btn" id="user-avatar" aria-label="Log out" title="Log out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
   </div>
 
@@ -215,7 +215,6 @@
 
     const name = profile?.display_name || session.user.email || 'Player';
     document.getElementById('welcome-name').textContent = `${name} 👋`;
-    document.getElementById('user-avatar').textContent = name[0].toUpperCase();
     document.getElementById('wallet-chip').textContent = `💰 ₹${Number(wallet?.balance ?? 0).toFixed(2)}`;
 
     // Cash tables are Pro-only (enforced server-side in the room's join check
@@ -287,7 +286,7 @@
   });
 
   document.getElementById('user-avatar').addEventListener('click', async () => {
-    if (!(await ludoConfirm({ tone: 'info', icon: '👋', title: 'Sign out?', message: 'You’ll need to log in again to play.', confirmText: 'Sign out', cancelText: 'Stay' }))) return;
+    if (!(await ludoConfirm({ tone: 'info', icon: '👋', title: 'Log out?', message: 'You’ll need to log in again to play.', confirmText: 'Log out', cancelText: 'Stay' }))) return;
     await ludoSupabase.auth.signOut();
     location.href = 'login.html';
   });
