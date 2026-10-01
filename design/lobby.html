@@ -263,6 +263,18 @@
 
   // Join a friend's private room by its 6-character code (waiting-room.html
   // does the actual joinById and reports wrong/full codes itself).
+  // The "Join with code" tile used to link to #join-box, which put the hash in the page URL —
+  // an installed app then re-opened at that URL and auto-scrolled down to the code box. Scroll
+  // there without touching the URL, and clear any stale hash left from before.
+  if (location.hash) { history.replaceState(null, '', location.pathname + location.search); window.scrollTo(0, 0); }
+  document.querySelectorAll('a[href="#join-box"]').forEach((a) => {
+    a.addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('join-box').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.getElementById('join-code-input').focus({ preventScroll: true });
+    });
+  });
+
   document.getElementById('join-room-link').addEventListener('click', (e) => {
     e.preventDefault();
     const code = document.getElementById('join-code-input').value.trim().toUpperCase();

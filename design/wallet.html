@@ -305,6 +305,10 @@
     await loadWalletAndTransactions();
   });
 
+  // #pro only exists to jump here from the lock prompts; don't leave it in the URL (an installed app
+  // would re-open at it and auto-scroll).
+  if (location.hash) setTimeout(() => history.replaceState(null, '', location.pathname + location.search), 1500);
+
   // ---- Pro membership ----
   // One-time fee (admin-configurable) charged from the wallet balance by the
   // purchase_pro() RPC — atomic: balance check, deduction, Pro flag and any
