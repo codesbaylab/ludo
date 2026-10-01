@@ -71,6 +71,19 @@
       <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;" id="referral-rewards-list"></div>
     </div>
 
+    <div class="section-title">Balance Transfers</div>
+    <div class="card" style="margin-bottom:10px;">
+      <p class="hint" style="margin:0 0 10px;">Players send balance to each other by Player ID. No fee. Limits apply to the sender.</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
+        <div class="field" style="margin:0;"><label>Min (₹)</label><input class="input" type="number" min="1" step="1" id="tf-min" /></div>
+        <div class="field" style="margin:0;"><label>Max / transfer</label><input class="input" type="number" min="1" step="1" id="tf-max" /></div>
+        <div class="field" style="margin:0;"><label>Max / 24h</label><input class="input" type="number" min="1" step="1" id="tf-daily" /></div>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="btn-save-transfer-limits" style="margin-top:10px;">Save limits</button>
+      <div style="font-weight:800; margin:14px 0 8px;">Recent transfers</div>
+      <div style="display:flex; flex-direction:column; gap:8px;" id="transfers-list"></div>
+    </div>
+
     <div class="section-title">Crypto Deposits (USDT / TRC-20)</div>
     <div class="card" style="margin-bottom:10px;">
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -389,6 +402,33 @@
     if (error) { ludoError(error.message); return; }
     ludoAlert({ tone: 'success', title: 'Saved', message: 'Pro fee updated. It applies to new purchases only.', confirmText: 'Done' });
   });
+  function renderTransfers(transfers) {
+    const list = document.getElementById('transfers-list');
+    list.innerHTML = transfers.length ? '' : '<p class="hint" style="margin:0;">No transfers yet.</p>';
+    transfers.forEach(t => {
+      const nameOf = (id) => (usersById[id] && usersById[id].display_name) || 'Player';
+      const row = document.createElement('div');
+      row.className = 'player-chip';
+      row.innerHTML = '<div class="name"></div><span style="font-weight:800;">₹' + Number(t.amount).toFixed(2) + '</span>';
+      row.querySelector('.name').textContent = `${nameOf(t.sender_id)} → ${nameOf(t.recipient_id)} · ${ludoTimeAgo(t.created_at)}`;
+      list.appendChild(row);
+    });
+  }
+  document.getElementById('btn-save-transfer-limits').addEventListener('click', async () => {
+    const min = Number(document.getElementById('tf-min').value);
+    const max = Number(document.getElementById('tf-max').value);
+    const daily = Number(document.getElementById('tf-daily').value);
+    if (!(min > 0 && max >= min && daily >= max)) {
+      ludoAlert({ tone: 'warn', icon: '✏️', title: 'Check your input', message: 'Limits must satisfy: minimum > 0, minimum ≤ max per transfer ≤ max per 24 hours.' });
+      return;
+    }
+    const btn = document.getElementById('btn-save-transfer-limits');
+    btn.disabled = true;
+    const { error } = await ludoSupabase.rpc('admin_set_transfer_limits', { p_min: min, p_max: max, p_daily: daily });
+    btn.disabled = false;
+    if (error) { ludoError(error.message); return; }
+    ludoAlert({ tone: 'success', title: 'Saved', message: 'Transfer limits updated.', confirmText: 'Done' });
+  });
   function renderReferralRewards(rewards) {
     document.getElementById('ref-stat-pro').textContent = cachedProfiles.filter(p => p.is_pro).length;
     document.getElementById('ref-stat-paid').textContent = '₹' + rewards.reduce((a, r) => a + Number(r.amount), 0).toFixed(0);
@@ -417,7 +457,7 @@
 
     document.getElementById('admin-avatar').textContent = 'A';
 
-    const [stats, { data: profiles }, { data: wallets }, { data: allMatchPlayers }, { data: matches }, { data: cryptoSettings }, { data: cryptoDeposits }, { data: withdrawals }, { data: appSettings }, { data: levelRows }, { data: rewards }] = await Promise.all([
+    const [stats, { data: profiles }, { data: wallets }, { data: allMatchPlayers }, { data: matches }, { data: cryptoSettings }, { data: cryptoDeposits }, { data: withdrawals }, { data: appSettings }, { data: levelRows }, { data: rewards }, { data: transfers }] = await Promise.all([
       ludoSupabase.rpc('get_platform_stats').then(r => r.data?.[0] || { total_users: 0, total_matches: 0, total_revenue: 0 }),
       ludoSupabase.from('profiles').select('id, display_name, is_admin, is_banned, is_pro'),
       ludoSupabase.from('wallets').select('user_id, balance'),
@@ -426,9 +466,10 @@
       ludoSupabase.from('crypto_settings').select('usdt_inr_rate').eq('id', true).single(),
       ludoSupabase.from('crypto_deposits').select('user_id, tx_hash, amount_usdt, inr_credited, detected_at').order('detected_at', { ascending: false }),
       ludoSupabase.from('crypto_withdrawals').select('id, user_id, amount_inr, destination_address, status, tx_hash, admin_note, requested_at').order('requested_at', { ascending: false }),
-      ludoSupabase.from('app_settings').select('pro_fee').eq('id', true).single(),
+      ludoSupabase.from('app_settings').select('pro_fee, transfer_min, transfer_max, transfer_daily_max').eq('id', true).single(),
       ludoSupabase.from('referral_levels').select('level, percent').order('level'),
       ludoSupabase.from('referral_rewards').select('referrer_id, invitee_id, level, amount, created_at').order('created_at', { ascending: false }),
+      ludoSupabase.from('transfers').select('sender_id, recipient_id, amount, created_at').order('created_at', { ascending: false }).limit(50),
     ]);
 
     document.getElementById('stat-users').textContent = stats.total_users;
@@ -459,6 +500,10 @@
     levelPercents = (levelRows || []).map(l => Number(l.percent));
     renderLevels();
     renderReferralRewards(rewards || []);
+    document.getElementById('tf-min').value = appSettings?.transfer_min ?? 10;
+    document.getElementById('tf-max').value = appSettings?.transfer_max ?? 5000;
+    document.getElementById('tf-daily').value = appSettings?.transfer_daily_max ?? 20000;
+    renderTransfers(transfers || []);
 
     renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, '');
     renderCryptoDeposits(cryptoDeposits || []);

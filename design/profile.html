@@ -31,6 +31,7 @@
       <div class="avatar" style="width:72px; height:72px; font-size:28px; margin:0 auto 14px;" id="profile-avatar">…</div>
       <h2 style="font-size:20px;" id="profile-name">…</h2>
       <p style="font-size:13px; color:var(--text-dim); font-weight:600; margin-top:4px;" id="profile-email"></p>
+      <p style="font-size:12px; color:var(--text-dim); font-weight:700; margin-top:6px;">Player ID: <span id="profile-playerid" style="font-family:monospace; letter-spacing:1px; color:var(--text);"></span></p>
     </div>
 
     <div class="stat-row" style="margin-top:16px;">
@@ -95,13 +96,14 @@
     if (!session) { location.href = 'login.html'; return; }
 
     const { data: profile } = await ludoSupabase
-      .from('profiles').select('display_name, is_pro, referral_code').eq('id', session.user.id).single();
+      .from('profiles').select('display_name, is_pro, referral_code, player_id').eq('id', session.user.id).single();
 
     const name = profile?.display_name || session.user.email || 'Player';
     document.getElementById('profile-avatar').textContent = name[0].toUpperCase();
     document.getElementById('profile-name').textContent = name;
     if (profile?.is_pro) document.getElementById('profile-name').insertAdjacentHTML('beforeend', ' <span class="badge badge-ready" style="vertical-align:middle;">PRO</span>');
     document.getElementById('profile-email').textContent = session.user.email || '';
+    document.getElementById('profile-playerid').textContent = profile?.player_id || '';
 
     const stats = await ludoFetchStats(session.user.id);
     document.getElementById('stat-games').textContent = stats.gamesPlayed;

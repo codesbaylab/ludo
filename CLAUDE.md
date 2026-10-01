@@ -41,6 +41,18 @@ by a Supabase project for auth/wallet-ledger/match-history.
   same room; Rummy host+guest dealt in the same table). **Gotcha**: don't anchor python string edits on
   `.table-type-btn'/.mode-btn forEach` in `rummy-lobby.html` — the same selector also appears inside
   `render()`, and a handler inserted there is re-registered on every render (caught by a double popup).
+- **Balance transfers (player -> player)**: everyone can send AND receive (the point: people who can't
+  deposit USDT get balance from those who can, so anyone can afford Pro). Recipient is identified by an
+  8-char `profiles.player_id` (no ambiguous chars, unique, auto-generated at signup, protected from client
+  edits by the same trigger as `is_pro`). `lookup_player()` returns only the display name (so a typo is
+  caught); `transfer_balance(player_id, amount)` is atomic (locks both wallets in a fixed order to avoid
+  deadlocks), no fee, enforces admin-set `app_settings.transfer_min/max/daily_max` (24h rolling sum) and
+  refuses self/banned/unknown/overdraft. `transfers` ledger (RLS: parties + admin; no client writes);
+  `my_transfers()` joins the other party's name for history. UI: `wallet.html` (Player ID card + Send panel +
+  history), `profile.html` (shows Player ID), `admin.html` (limits + recent transfers). Verified in a
+  rolled-back DB transaction and end-to-end in Chrome (incl. a free user receiving money and buying Pro with it).
+  **Known gap (pre-existing, not specific to transfers):** wallets have no non-negative check and stakes are
+  not held during a match, so a player can transfer/withdraw their balance mid-match and go negative on a loss.
 
 ## Structure
 

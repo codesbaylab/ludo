@@ -35,12 +35,38 @@
       <div style="font-size:12px; opacity:.85; font-weight:600;">🔒 ₹0 locked in active games</div>
     </div>
 
+    <!-- Your Player ID: what others use to send you money -->
+    <div class="card" style="margin-top:14px; padding:12px 16px; display:flex; align-items:center; gap:10px;">
+      <div style="flex:1;">
+        <div class="hint" style="margin:0;">Your Player ID — share it to receive money</div>
+        <div id="my-player-id" style="font-size:20px; font-weight:800; letter-spacing:2px; font-family:monospace;">…</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="btn-copy-player-id" style="width:auto;">📋 Copy</button>
+    </div>
+
     <!-- Pro membership -->
     <div class="card" id="pro" style="margin-top:14px; text-align:center; padding:22px 16px; display:none;"></div>
 
     <div style="display:flex; gap:10px; margin-top:14px;">
       <button class="btn btn-primary" id="btn-deposit">⬇️ Deposit</button>
       <button class="btn btn-secondary" id="btn-withdraw">⬆️ Withdraw</button>
+      <button class="btn btn-secondary" id="btn-send">➡️ Send</button>
+    </div>
+
+    <!-- Send panel -->
+    <div class="card" id="panel-send" style="margin-top:16px; display:none;">
+      <div class="section-title" style="margin-top:0;">Send money to a player</div>
+      <div class="field">
+        <label>Recipient's Player ID</label>
+        <input class="input" id="send-player-id" maxlength="8" placeholder="e.g. K7M2XQ9P" autocapitalize="characters" autocomplete="off" style="font-family:monospace; letter-spacing:2px; text-transform:uppercase;" />
+        <p class="hint" id="send-lookup" style="margin:6px 0 0; min-height:18px;"></p>
+      </div>
+      <div class="field">
+        <label>Amount (₹)</label>
+        <input class="input" type="number" id="send-amount" placeholder="e.g. 500" min="1" step="1" />
+        <p class="hint" id="send-limits" style="margin:6px 0 0;"></p>
+      </div>
+      <button class="btn btn-primary" id="btn-do-send" disabled>Send</button>
     </div>
 
     <!-- Deposit panel -->
@@ -101,11 +127,13 @@
   const withdrawBtn = document.getElementById('btn-withdraw');
   const depositPanel = document.getElementById('panel-deposit');
   const withdrawPanel = document.getElementById('panel-withdraw');
+  const sendPanel = document.getElementById('panel-send');
   let depositAddressLoaded = false;
 
   depositBtn.addEventListener('click', () => {
     depositPanel.style.display = depositPanel.style.display === 'none' ? 'block' : 'none';
     withdrawPanel.style.display = 'none';
+    sendPanel.style.display = 'none';
     // Fetched lazily (only once the panel is actually opened) rather than on
     // page load — it's a network round trip to the game server, which can
     // have a Render cold-start delay, so no need to pay that cost for a
@@ -118,6 +146,7 @@
   withdrawBtn.addEventListener('click', () => {
     withdrawPanel.style.display = withdrawPanel.style.display === 'none' ? 'block' : 'none';
     depositPanel.style.display = 'none';
+    sendPanel.style.display = 'none';
   });
 
   // Same override pattern as board.html/game.js's ?server= — lets local dev
@@ -194,6 +223,88 @@
 
   let currentUserId = null;
 
+
+  // ---- Player ID + send money ----
+  let walletBalance = 0;
+  let myPlayerId = '';
+  let transferLimits = { min: 10, max: 5000, daily: 20000 };
+  let lookedUpName = null;
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+  const fmtINR = (n) => '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+
+  async function loadPlayerIdAndLimits() {
+    const [{ data: profile }, { data: settings }] = await Promise.all([
+      ludoSupabase.from('profiles').select('player_id').eq('id', currentUserId).single(),
+      ludoSupabase.from('app_settings').select('transfer_min, transfer_max, transfer_daily_max').eq('id', true).single(),
+    ]);
+    myPlayerId = profile?.player_id || '';
+    document.getElementById('my-player-id').textContent = myPlayerId || '—';
+    if (settings) transferLimits = { min: Number(settings.transfer_min), max: Number(settings.transfer_max), daily: Number(settings.transfer_daily_max) };
+    document.getElementById('send-limits').textContent = `${fmtINR(transferLimits.min)} – ${fmtINR(transferLimits.max)} per transfer · up to ${fmtINR(transferLimits.daily)} per 24 hours`;
+  }
+  document.getElementById('btn-copy-player-id').addEventListener('click', async (e) => {
+    try { await navigator.clipboard.writeText(myPlayerId); e.target.textContent = 'Copied!'; } catch { e.target.textContent = 'Copy failed'; }
+    setTimeout(() => { e.target.textContent = '📋 Copy'; }, 1500);
+  });
+  document.getElementById('btn-send').addEventListener('click', () => {
+    sendPanel.style.display = sendPanel.style.display === 'none' ? 'block' : 'none';
+    depositPanel.style.display = 'none';
+    withdrawPanel.style.display = 'none';
+  });
+
+  const sendIdInput = document.getElementById('send-player-id');
+  const sendAmountInput = document.getElementById('send-amount');
+  const sendBtn = document.getElementById('btn-do-send');
+  function updateSendEnabled() {
+    sendBtn.disabled = !(lookedUpName && Number(sendAmountInput.value) > 0);
+  }
+  let lookupSeq = 0;
+  sendIdInput.addEventListener('input', async () => {
+    sendIdInput.value = sendIdInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const lookupEl = document.getElementById('send-lookup');
+    lookedUpName = null;
+    updateSendEnabled();
+    if (sendIdInput.value.length < 8) { lookupEl.textContent = ''; return; }
+    const seq = ++lookupSeq;
+    lookupEl.style.color = ''; lookupEl.textContent = 'Checking…';
+    const { data, error } = await ludoSupabase.rpc('lookup_player', { p_player_id: sendIdInput.value });
+    if (seq !== lookupSeq) return; // a newer keystroke superseded this lookup
+    if (error || !data?.found) { lookupEl.style.color = 'var(--red)'; lookupEl.textContent = '✗ No player found with that ID'; return; }
+    if (data.is_self) { lookupEl.style.color = 'var(--red)'; lookupEl.textContent = '✗ That is your own Player ID'; return; }
+    lookedUpName = data.name;
+    lookupEl.style.color = 'var(--green)';
+    lookupEl.textContent = `✓ ${data.name}`;
+    updateSendEnabled();
+  });
+  sendAmountInput.addEventListener('input', updateSendEnabled);
+  sendBtn.addEventListener('click', async () => {
+    const amount = Number(sendAmountInput.value);
+    const playerId = sendIdInput.value;
+    if (amount < transferLimits.min || amount > transferLimits.max) {
+      ludoAlert({ tone: 'warn', icon: '✏️', title: 'Check the amount', message: `Transfers must be between ${fmtINR(transferLimits.min)} and ${fmtINR(transferLimits.max)}.` });
+      return;
+    }
+    if (amount > walletBalance) {
+      ludoAlert({ tone: 'warn', icon: '💰', title: 'Not enough balance', message: `You have ${fmtINR(walletBalance)} available.` });
+      return;
+    }
+    const ok = await ludoConfirm({ tone: 'info', icon: '➡️', title: 'Send money?', message: "Transfers can't be undone. Check the name before you confirm.",
+      detail: [['To', lookedUpName], ['Player ID', playerId], ['Amount', fmtINR(amount)], ['Balance after', fmtINR(walletBalance - amount)]],
+      confirmText: 'Send', cancelText: 'Cancel' });
+    if (!ok) return;
+    sendBtn.disabled = true;
+    const { data, error } = await ludoSupabase.rpc('transfer_balance', { p_player_id: playerId, p_amount: amount });
+    if (error) { ludoError(error.message); updateSendEnabled(); return; }
+    await ludoAlert({ tone: 'success', title: 'Money sent', message: `${fmtINR(data.amount)} sent to ${data.to}.`, confirmText: 'Done' });
+    sendIdInput.value = ''; sendAmountInput.value = ''; lookedUpName = null;
+    document.getElementById('send-lookup').textContent = '';
+    sendPanel.style.display = 'none';
+    updateSendEnabled();
+    await loadWalletAndTransactions();
+  });
+
   // ---- Pro membership ----
   // One-time fee (admin-configurable) charged from the wallet balance by the
   // purchase_pro() RPC — atomic: balance check, deduction, Pro flag and any
@@ -239,12 +350,14 @@
   }
 
   async function loadWalletAndTransactions() {
-    const [{ data: wallet }, matches, cryptoDeposits, { data: withdrawals }] = await Promise.all([
+    const [{ data: wallet }, matches, cryptoDeposits, { data: withdrawals }, { data: transfers }] = await Promise.all([
       ludoSupabase.from('wallets').select('balance').eq('user_id', currentUserId).single(),
       ludoFetchMatches(currentUserId, 20),
       ludoFetchCryptoDeposits(currentUserId, 20),
       ludoSupabase.from('crypto_withdrawals').select('amount_inr, destination_address, status, tx_hash, requested_at').eq('user_id', currentUserId).order('requested_at', { ascending: false }).limit(20),
+      ludoSupabase.rpc('my_transfers', { p_limit: 20 }),
     ]);
+    walletBalance = Number(wallet?.balance ?? 0);
     document.getElementById('wallet-balance').textContent = `₹${Number(wallet?.balance ?? 0).toFixed(2)}`;
     loadProCard(Number(wallet?.balance ?? 0)).catch(err => console.error('[ludo] pro card failed:', err));
 
@@ -294,6 +407,17 @@
         delta: -Number(w.amount_inr),
       });
     });
+    (transfers || []).forEach(t => {
+      const sent = t.direction === 'sent';
+      entries.push({
+        time: t.created_at,
+        icon: sent ? '➡️' : '⬅️',
+        iconBg: sent ? 'linear-gradient(135deg, #8ec5ff, #4da3ff)' : 'linear-gradient(135deg, #7fe3a6, #2ecc71)',
+        title: sent ? `Sent to ${escapeHtml(t.counterparty)}` : `Received from ${escapeHtml(t.counterparty)}`,
+        subtitle: `${ludoTimeAgo(t.created_at)} · Player transfer`,
+        delta: sent ? -Number(t.amount) : Number(t.amount),
+      });
+    });
     entries.sort((a, b) => new Date(b.time) - new Date(a.time));
 
     const list = document.getElementById('transactions-list');
@@ -310,7 +434,7 @@
             <div class="name">${e.title}</div>
             <div class="status">${e.subtitle}</div>
           </div>
-          <span class="badge ${e.delta >= 0 ? 'badge-ready' : 'badge-waiting'}">${e.delta >= 0 ? '+' : ''}₹${e.delta}</span>
+          <span class="badge ${e.delta >= 0 ? 'badge-ready' : 'badge-waiting'}">${e.delta >= 0 ? '+' : '-'}₹${Math.abs(e.delta)}</span>
         `;
         list.appendChild(row);
       });
@@ -344,6 +468,7 @@
     const { data: { session } } = await ludoSupabase.auth.getSession();
     if (!session) { location.href = 'login.html'; return; }
     currentUserId = session.user.id;
+    loadPlayerIdAndLimits().catch(err => console.error('[ludo] player id failed:', err));
     await loadWalletAndTransactions();
   })();
 </script>
