@@ -652,6 +652,7 @@
           joined = await client.joinOrCreate('rummy', {
             name: profile?.display_name || session.user.email || 'Player',
             userId: session.user.id,
+            accessToken: session.access_token,
             mode: MODE,
             playerCount: PLAYER_COUNT,
             pointValue,
@@ -659,6 +660,10 @@
             entryFee,
           });
         } catch (err) {
+          if (err && err.code === 4403) {
+            document.getElementById('connecting-status').innerHTML = 'Cash tables are for Pro members. <a href="wallet.html#pro">Go Pro</a>';
+            return;
+          }
           if (attempt === 1) {
             document.getElementById('connecting-status').textContent = 'Waking up the game server — this can take a couple of minutes…';
           }

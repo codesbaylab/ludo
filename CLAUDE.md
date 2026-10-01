@@ -1101,6 +1101,44 @@ moved out of the per-user deposit addresses.
   was reviewed against the exact working pattern `admin_adjust_wallet_balance`/`admin_set_user_banned`
   already use in production.
 
+## Pro membership + multi-level referral
+
+Free plan = free tables only (stake 0), never touches the wallet. Pro = one-time, non-refundable
+fee (admin-set, `app_settings.pro_fee`, default ₹500) charged from the wallet; unlocks cash
+tables (Ludo stake > 0 and every Rummy cash table) and the referral link. Migrations
+`pro_membership_and_referrals`, `referral_code_without_pgcrypto`, `revoke_anon_on_withdrawal_rpcs`.
+
+- **`purchase_pro()`** (SECURITY DEFINER, one transaction): locks profile + wallet, checks balance,
+  deducts the fee, sets `is_pro`/`pro_since`/`pro_fee_paid`/`referral_code`, then walks the
+  `referred_by` chain one `referral_levels` row per step paying `round(fee * percent / 100, 2)` to
+  each upline that is Pro and not banned (a non-Pro upline just earns nothing at their level; the
+  walk continues). `referral_rewards` has `unique (invitee_id, level)` + `on conflict do nothing`,
+  same idempotency pattern as crypto deposits. Verified in a rolled-back transaction: double purchase
+  blocked, unfunded blocked, 2-level chain paid exactly 100/25 on a 500 fee.
+- **Protected profile columns**: the existing `prevent_is_admin_self_update` trigger now also
+  reverts client changes to `is_pro`, `pro_since`, `pro_fee_paid`, `referral_code`, `referred_by`
+  unless `service_role`; RPCs get past it with the same `set_config('request.jwt.claim.role',
+  'service_role', true)` trick `admin_set_is_admin` uses.
+- **Signup capture**: `login.html?ref=CODE` (kept in localStorage) → `signUp` metadata `ref_code` →
+  `handle_new_user()` sets `referred_by` only if the code belongs to a Pro member; anything else is
+  silently ignored. New wallets now start at ₹0 (the fake ₹240 default is gone; existing balances
+  were NOT reset).
+- **Admin RPCs**: `admin_set_pro_fee`, `admin_set_referral_levels(jsonb)` (replaces all levels
+  atomically, max 10, total <= 100%), `admin_set_user_pro` (grant/revoke, no fee, no payouts).
+  `admin.html` has a "Pro & Referrals" section (fee, levels editor, payouts) + Grant/Revoke Pro per user.
+- **Server enforcement**: `authorizeJoin()` in `server/src/supabase.ts`, called by `LudoRoom.onJoin`
+  (when `stake > 0`) and `RummyRoom.onJoin` (always). For real-money joins it REQUIRES a Supabase
+  `accessToken` join option and verifies it with `auth.getUser` (a bare client-supplied `userId` is
+  not trusted there — otherwise a free user could claim a Pro user's id); free play still accepts the
+  legacy `userId`. Rejection is `ServerError(4403 'pro_required' | 4401)`, which every client join
+  loop treats as non-retryable and shows "Cash tables are for Pro members". Banned still just
+  `client.leave()`s. No-ops without a service-role key (local dev/tests), like `persistResult`.
+  **Not verified against a live Supabase from this sandbox** — reviewed + tsc + sims only.
+- **UI**: lobby locks cash tiles for free users (→ `wallet.html#pro`), `stake-confirm.html`
+  redirects free users there for stake > 0 and shows the real balance, `wallet.html` has the upgrade
+  card, `profile.html` has the Refer & Earn panel (Pro only; `my_referral_summary()` RPC).
+- `design/pro-referral-mockup.html` is the approved design mockup, left in place (unlinked).
+
 ## Running it
 
 Frontend alone (no live multiplayer): serve `design/` statically, e.g. `python -m http.server`

@@ -25,3 +25,42 @@ export function getSupabase(): SupabaseClient | null {
   }
   return client;
 }
+
+export type JoinCheck =
+  | { ok: true; userId?: string }
+  | { ok: false; reason: 'banned' | 'pro_required' | 'auth_required' };
+
+/**
+ * Shared join gate for every room. `requirePro` is true for anything that
+ * moves real money (Ludo tables with a stake, every Rummy cash table).
+ *
+ * Real-money joins must present a Supabase access token, which is verified
+ * here — a bare client-supplied `userId` is NOT trusted for them, since a
+ * free user could otherwise claim a Pro user's id. Free play keeps accepting
+ * the legacy unverified `userId` (it only labels the seat; no money moves).
+ * With no service-role key configured (local dev/tests) nothing can be
+ * checked, so this no-ops exactly like `persistResult` does.
+ */
+export async function authorizeJoin(
+  options: { userId?: string; accessToken?: string },
+  requirePro: boolean
+): Promise<JoinCheck> {
+  const supabase = getSupabase();
+  if (!supabase) return { ok: true, userId: options.userId };
+
+  let userId = options.userId;
+  if (options.accessToken) {
+    const { data, error } = await supabase.auth.getUser(options.accessToken);
+    if (error || !data.user) return { ok: false, reason: 'auth_required' };
+    userId = data.user.id;
+  } else if (requirePro) {
+    return { ok: false, reason: 'auth_required' };
+  }
+
+  if (userId) {
+    const { data } = await supabase.from('profiles').select('is_banned, is_pro').eq('id', userId).single();
+    if (data?.is_banned) return { ok: false, reason: 'banned' };
+    if (requirePro && !data?.is_pro) return { ok: false, reason: 'pro_required' };
+  }
+  return { ok: true, userId };
+}

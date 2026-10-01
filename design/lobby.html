@@ -10,6 +10,8 @@
 <style>
   .server-status { margin: 10px 0 4px; }
   .server-gated.disabled { opacity:.45; filter:grayscale(.4); pointer-events:none; }
+  .tile.locked { opacity:.62; position:relative; }
+  .tile.locked::after { content:"🔒"; position:absolute; top:10px; right:12px; font-size:18px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase-client.js"></script>
@@ -38,6 +40,7 @@
   <div style="padding: 8px 20px;">
     <p style="color:var(--text-dim); font-size:14px; font-weight:600;">Welcome back,</p>
     <h2 style="font-size:23px; margin-top:2px;" id="welcome-name">…</h2>
+    <span class="badge badge-waiting" id="plan-badge" style="margin-top:4px;">FREE PLAN</span>
 
     <div class="stat-row" style="margin-top:18px;">
       <div class="stat"><div class="num" id="stat-games">…</div><div class="lbl">Games Played</div></div>
@@ -89,6 +92,11 @@
     </div>
 
     <div class="section-title">Cash Tables 💵</div>
+    <div class="card" id="cash-pro-card" style="display:none; text-align:center; margin-bottom:12px;">
+      <div style="font-weight:800;">🔒 Cash tables are for Pro members</div>
+      <p class="hint" style="margin:4px 0 10px;">Go Pro once and play for real money.</p>
+      <a href="wallet.html#pro"><button class="btn btn-primary">Go Pro</button></a>
+    </div>
     <div class="action-grid">
       <a class="tile tile-cash server-gated" href="stake-confirm.html?stake=10">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
@@ -194,7 +202,7 @@
 
     const { data: profile } = await ludoSupabase
       .from('profiles')
-      .select('display_name')
+      .select('display_name, is_pro')
       .eq('id', session.user.id)
       .single();
     const { data: wallet } = await ludoSupabase
@@ -207,6 +215,21 @@
     document.getElementById('welcome-name').textContent = `${name} 👋`;
     document.getElementById('user-avatar').textContent = name[0].toUpperCase();
     document.getElementById('wallet-chip').textContent = `💰 ₹${Number(wallet?.balance ?? 0).toFixed(2)}`;
+
+    // Cash tables are Pro-only (enforced server-side in the room's join check
+    // too — this is just the UI). Free users get the tiles locked and
+    // pointed at the upgrade card instead of dead-ending in the waiting room.
+    if (profile?.is_pro) {
+      document.getElementById('plan-badge').textContent = 'PRO';
+      document.getElementById('plan-badge').className = 'badge badge-ready';
+    } else {
+      document.querySelectorAll('.tile-cash').forEach(t => {
+        t.classList.remove('server-gated');
+        t.classList.add('locked');
+        t.href = 'wallet.html#pro';
+      });
+      document.getElementById('cash-pro-card').style.display = 'block';
+    }
 
     const stats = await ludoFetchStats(session.user.id);
     document.getElementById('stat-games').textContent = stats.gamesPlayed;

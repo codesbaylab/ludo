@@ -41,6 +41,35 @@
       <div class="stat"><div class="num" id="stat-revenue">…</div><div class="lbl">Fee Revenue</div></div>
     </div>
 
+    <div class="section-title">Pro &amp; Referrals</div>
+    <div class="card" style="margin-bottom:10px;">
+      <div style="font-weight:800; margin-bottom:8px;">Pro membership fee</div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <input class="input" type="number" min="0" step="1" id="pro-fee-input" style="flex:1;" />
+        <button class="btn btn-secondary btn-sm" id="btn-save-pro-fee">Save</button>
+      </div>
+      <p class="hint" style="margin:6px 0 0;">Applies to new purchases only.</p>
+    </div>
+    <div class="card" style="margin-bottom:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <div style="font-weight:800;">Referral levels</div>
+        <button class="btn btn-secondary btn-sm" id="btn-add-level">+ Add level</button>
+      </div>
+      <p class="hint" style="margin:0 0 8px;">Commission is a % of the Pro fee, paid to each upline level when someone buys Pro. Levels are 1, 2, 3… in order; total can't exceed 100%.</p>
+      <div id="levels-list"></div>
+      <div class="hint" id="levels-total" style="margin:8px 0;"></div>
+      <button class="btn btn-primary" id="btn-save-levels" style="width:100%;">Save levels</button>
+      <p class="hint" style="margin:8px 0 0;">Changes apply to future purchases only; past payouts are never altered.</p>
+    </div>
+    <div class="card" style="margin-bottom:10px;">
+      <div style="font-weight:800; margin-bottom:8px;">Referral payouts</div>
+      <div class="stat-row">
+        <div class="stat"><div class="num" id="ref-stat-pro">…</div><div class="lbl">Pro users</div></div>
+        <div class="stat"><div class="num" id="ref-stat-paid">…</div><div class="lbl">Paid out</div></div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;" id="referral-rewards-list"></div>
+    </div>
+
     <div class="section-title">Crypto Deposits (USDT / TRC-20)</div>
     <div class="card" style="margin-bottom:10px;">
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -116,6 +145,7 @@
           <div class="name">
             ${p.display_name || 'Player'}
             ${p.is_admin ? ' <span class="badge badge-host">Admin</span>' : ''}
+            ${p.is_pro ? ' <span class="badge badge-ready">PRO</span>' : ''}
             ${p.is_banned ? ' <span class="badge" style="background:var(--red-soft); color:var(--red);">Banned</span>' : ''}
           </div>
           <div class="status"><span data-balance>₹${Number(walletByUser[p.id] ?? 0).toFixed(2)}</span> · ${stats.games} games · ${stats.wins} wins</div>
@@ -123,6 +153,7 @@
         <input type="number" class="input" placeholder="±₹" style="width:70px; padding:8px;" data-adjust-input />
         <button class="btn btn-secondary btn-sm" data-adjust-btn>Apply</button>
         <button class="btn btn-secondary btn-sm" data-ban-btn>${p.is_banned ? 'Unban' : 'Ban'}</button>
+        <button class="btn btn-secondary btn-sm" data-pro-btn>${p.is_pro ? 'Revoke Pro' : 'Grant Pro'}</button>
         <button class="btn btn-secondary btn-sm" data-admin-btn ${isSelf ? 'disabled title="Cannot change your own admin access"' : ''}>${p.is_admin ? 'Demote' : 'Promote'}</button>
       `;
       row.querySelector('[data-adjust-btn]').addEventListener('click', async () => {
@@ -146,6 +177,17 @@
         btn.disabled = false;
         if (error) { alert('Failed: ' + error.message); return; }
         p.is_banned = nextBanned;
+        renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, document.getElementById('user-search').value);
+      });
+      row.querySelector('[data-pro-btn]').addEventListener('click', async () => {
+        const nextPro = !p.is_pro;
+        if (!confirm(`${nextPro ? 'Grant Pro to' : 'Revoke Pro from'} ${p.display_name || 'this player'}?${nextPro ? ' No fee is charged and no referral commission is paid.' : ''}`)) return;
+        const btn = row.querySelector('[data-pro-btn]');
+        btn.disabled = true;
+        const { error } = await ludoSupabase.rpc('admin_set_user_pro', { p_user_id: p.id, p_is_pro: nextPro });
+        btn.disabled = false;
+        if (error) { alert('Failed: ' + error.message); return; }
+        p.is_pro = nextPro;
         renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, document.getElementById('user-search').value);
       });
       row.querySelector('[data-admin-btn]').addEventListener('click', async () => {
@@ -296,6 +338,71 @@
     input.value = '';
   });
 
+
+  // ---- Pro fee + referral levels ----
+  let levelPercents = [];
+  function renderLevels() {
+    const list = document.getElementById('levels-list');
+    list.innerHTML = '';
+    levelPercents.forEach((pct, i) => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex; gap:10px; align-items:center; margin-bottom:6px;';
+      row.innerHTML = `<div style="width:64px; font-weight:800;">Level ${i + 1}</div>
+        <input class="input" type="number" min="0.01" max="100" step="0.01" value="${pct}" style="flex:1;" />
+        <span style="font-weight:700;">%</span>
+        <button class="btn btn-ghost btn-sm" style="color:var(--red);">✕</button>`;
+      row.querySelector('input').addEventListener('input', (e) => { levelPercents[i] = Number(e.target.value); updateLevelsTotal(); });
+      row.querySelector('button').addEventListener('click', () => { levelPercents.splice(i, 1); renderLevels(); });
+      list.appendChild(row);
+    });
+    updateLevelsTotal();
+  }
+  function updateLevelsTotal() {
+    const total = levelPercents.reduce((a, b) => a + (Number(b) || 0), 0);
+    const el = document.getElementById('levels-total');
+    el.textContent = levelPercents.length ? `Total paid out per Pro purchase: ${total}%` : 'No levels — referrals pay nothing.';
+    el.style.color = total > 100 ? 'var(--red)' : '';
+  }
+  document.getElementById('btn-add-level').addEventListener('click', () => {
+    if (levelPercents.length >= 10) { alert('At most 10 levels.'); return; }
+    levelPercents.push(1);
+    renderLevels();
+  });
+  document.getElementById('btn-save-levels').addEventListener('click', async () => {
+    if (levelPercents.some(p => !(Number(p) > 0 && Number(p) <= 100))) { alert('Each level needs a percentage above 0 and up to 100.'); return; }
+    const btn = document.getElementById('btn-save-levels');
+    btn.disabled = true;
+    const { error } = await ludoSupabase.rpc('admin_set_referral_levels', { p_levels: levelPercents.map(percent => ({ percent: Number(percent) })) });
+    btn.disabled = false;
+    if (error) { alert('Failed: ' + error.message); return; }
+    alert('Referral levels saved.');
+  });
+  document.getElementById('btn-save-pro-fee').addEventListener('click', async () => {
+    const input = document.getElementById('pro-fee-input');
+    const fee = Number(input.value);
+    if (input.value === '' || fee < 0) { alert('Enter a fee of zero or more.'); return; }
+    const btn = document.getElementById('btn-save-pro-fee');
+    btn.disabled = true;
+    const { error } = await ludoSupabase.rpc('admin_set_pro_fee', { p_fee: fee });
+    btn.disabled = false;
+    if (error) { alert('Failed: ' + error.message); return; }
+    alert('Pro fee saved.');
+  });
+  function renderReferralRewards(rewards) {
+    document.getElementById('ref-stat-pro').textContent = cachedProfiles.filter(p => p.is_pro).length;
+    document.getElementById('ref-stat-paid').textContent = '₹' + rewards.reduce((a, r) => a + Number(r.amount), 0).toFixed(0);
+    const list = document.getElementById('referral-rewards-list');
+    list.innerHTML = rewards.length ? '' : '<p class="hint" style="margin:0;">No referral payouts yet.</p>';
+    rewards.slice(0, 50).forEach(r => {
+      const nameOf = (id) => (usersById[id] && usersById[id].display_name) || 'Player';
+      const row = document.createElement('div');
+      row.className = 'player-chip';
+      row.innerHTML = '<div class="name"></div><span style="color:var(--green); font-weight:800;">+₹' + Number(r.amount).toFixed(2) + '</span>';
+      row.querySelector('.name').textContent = `${nameOf(r.referrer_id)} ← ${nameOf(r.invitee_id)} · L${r.level} · ${ludoTimeAgo(r.created_at)}`;
+      list.appendChild(row);
+    });
+  }
+
   (async () => {
     const { data: { session } } = await ludoSupabase.auth.getSession();
     if (!session) { location.href = 'login.html'; return; }
@@ -309,15 +416,18 @@
 
     document.getElementById('admin-avatar').textContent = 'A';
 
-    const [stats, { data: profiles }, { data: wallets }, { data: allMatchPlayers }, { data: matches }, { data: cryptoSettings }, { data: cryptoDeposits }, { data: withdrawals }] = await Promise.all([
+    const [stats, { data: profiles }, { data: wallets }, { data: allMatchPlayers }, { data: matches }, { data: cryptoSettings }, { data: cryptoDeposits }, { data: withdrawals }, { data: appSettings }, { data: levelRows }, { data: rewards }] = await Promise.all([
       ludoSupabase.rpc('get_platform_stats').then(r => r.data?.[0] || { total_users: 0, total_matches: 0, total_revenue: 0 }),
-      ludoSupabase.from('profiles').select('id, display_name, is_admin, is_banned'),
+      ludoSupabase.from('profiles').select('id, display_name, is_admin, is_banned, is_pro'),
       ludoSupabase.from('wallets').select('user_id, balance'),
       ludoSupabase.from('match_players').select('match_id, user_id, color, result'),
       ludoSupabase.from('matches').select('id, stake, status, winner_id, finished_at').order('created_at', { ascending: false }),
       ludoSupabase.from('crypto_settings').select('usdt_inr_rate').eq('id', true).single(),
       ludoSupabase.from('crypto_deposits').select('user_id, tx_hash, amount_usdt, inr_credited, detected_at').order('detected_at', { ascending: false }),
       ludoSupabase.from('crypto_withdrawals').select('id, user_id, amount_inr, destination_address, status, tx_hash, admin_note, requested_at').order('requested_at', { ascending: false }),
+      ludoSupabase.from('app_settings').select('pro_fee').eq('id', true).single(),
+      ludoSupabase.from('referral_levels').select('level, percent').order('level'),
+      ludoSupabase.from('referral_rewards').select('referrer_id, invitee_id, level, amount, created_at').order('created_at', { ascending: false }),
     ]);
 
     document.getElementById('stat-users').textContent = stats.total_users;
@@ -343,6 +453,11 @@
     cachedProfiles.forEach(p => { usersById[p.id] = p; });
 
     cachedWithdrawals = withdrawals || [];
+
+    document.getElementById('pro-fee-input').value = appSettings?.pro_fee ?? 0;
+    levelPercents = (levelRows || []).map(l => Number(l.percent));
+    renderLevels();
+    renderReferralRewards(rewards || []);
 
     renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, '');
     renderCryptoDeposits(cryptoDeposits || []);

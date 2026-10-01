@@ -34,6 +34,9 @@
       <div style="font-size:12px; opacity:.85; font-weight:600;">🔒 ₹0 locked in active games</div>
     </div>
 
+    <!-- Pro membership -->
+    <div class="card" id="pro" style="margin-top:14px; text-align:center; padding:22px 16px; display:none;"></div>
+
     <div style="display:flex; gap:10px; margin-top:14px;">
       <button class="btn btn-primary" id="btn-deposit">⬇️ Deposit</button>
       <button class="btn btn-secondary" id="btn-withdraw">⬆️ Withdraw</button>
@@ -190,6 +193,50 @@
 
   let currentUserId = null;
 
+  // ---- Pro membership ----
+  // One-time fee (admin-configurable) charged from the wallet balance by the
+  // purchase_pro() RPC — atomic: balance check, deduction, Pro flag and any
+  // referral payouts all happen in one transaction server-side.
+  async function loadProCard(balance) {
+    const proEl = document.getElementById('pro');
+    const [{ data: profile }, { data: settings }] = await Promise.all([
+      ludoSupabase.from('profiles').select('is_pro').eq('id', currentUserId).single(),
+      ludoSupabase.from('app_settings').select('pro_fee').eq('id', true).single(),
+    ]);
+    proEl.style.display = 'block';
+    if (profile?.is_pro) {
+      proEl.innerHTML = '<span class="badge badge-ready">PRO MEMBER</span><p class="hint" style="margin:8px 0 0;">Cash tables and referrals are unlocked.</p>';
+      return;
+    }
+    const fee = Number(settings?.pro_fee ?? 0);
+    const enough = balance >= fee;
+    proEl.innerHTML = `
+      <span class="badge badge-waiting">PRO MEMBERSHIP</span>
+      <div style="font-size:34px; font-weight:800; margin-top:10px;">₹${fee.toFixed(0)}</div>
+      <div class="hint" style="margin:2px 0 12px;">One-time · non-refundable</div>
+      <div style="text-align:left; font-size:13px; font-weight:700; line-height:1.9;">
+        ✓ Play cash tables for real money<br>✓ Win and withdraw USDT<br>✓ Refer friends and earn commission<br>✓ Pro badge on your profile
+      </div>
+      <button class="btn btn-primary" id="btn-buy-pro" style="width:100%; margin-top:14px;" ${enough ? '' : 'disabled'}>Buy Pro · ₹${fee.toFixed(0)} from wallet</button>
+      <p class="hint" id="pro-error" style="display:none; color:var(--red); margin:8px 0 0;"></p>
+      ${enough ? '<p class="hint" style="margin:8px 0 0;">₹' + fee.toFixed(0) + ' will be deducted from your wallet balance.</p>'
+               : '<p class="hint" style="margin:8px 0 0;">Not enough balance yet — deposit first.</p><button class="btn btn-secondary" id="btn-pro-deposit" style="width:100%; margin-top:8px;">Deposit USDT first</button>'}
+    `;
+    document.getElementById('btn-pro-deposit')?.addEventListener('click', () => depositBtn.click());
+    document.getElementById('btn-buy-pro')?.addEventListener('click', async (e) => {
+      if (!confirm(`Buy Pro for ₹${fee.toFixed(0)}? This is a one-time, non-refundable charge.`)) return;
+      e.target.disabled = true;
+      const { error } = await ludoSupabase.rpc('purchase_pro');
+      if (error) {
+        const errEl = document.getElementById('pro-error');
+        errEl.textContent = error.message; errEl.style.display = 'block';
+        e.target.disabled = false;
+        return;
+      }
+      await loadWalletAndTransactions();
+    });
+  }
+
   async function loadWalletAndTransactions() {
     const [{ data: wallet }, matches, cryptoDeposits, { data: withdrawals }] = await Promise.all([
       ludoSupabase.from('wallets').select('balance').eq('user_id', currentUserId).single(),
@@ -198,6 +245,7 @@
       ludoSupabase.from('crypto_withdrawals').select('amount_inr, destination_address, status, tx_hash, requested_at').eq('user_id', currentUserId).order('requested_at', { ascending: false }).limit(20),
     ]);
     document.getElementById('wallet-balance').textContent = `₹${Number(wallet?.balance ?? 0).toFixed(2)}`;
+    loadProCard(Number(wallet?.balance ?? 0)).catch(err => console.error('[ludo] pro card failed:', err));
 
     const stakedMatches = matches.filter(m => m.matches.stake > 0);
     const counts = await ludoFetchPlayerCounts(stakedMatches.map(m => m.matches.id));

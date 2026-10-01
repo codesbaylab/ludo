@@ -121,6 +121,18 @@
     redirectAfterLogin(data.user.id);
   });
 
+
+  // Referral link: login.html?ref=CODE. Remembered in localStorage so it
+  // survives a reload / tab switch before the visitor actually submits the
+  // signup form. The handle_new_user() trigger resolves it server-side (only
+  // a real Pro member's code is accepted; anything else is silently ignored).
+  let refCode = new URLSearchParams(location.search).get('ref');
+  try {
+    if (refCode) localStorage.setItem('ludoRef', refCode);
+    else refCode = localStorage.getItem('ludoRef');
+  } catch {}
+  if (new URLSearchParams(location.search).get('ref')) tabSignup.click();
+
   formSignup.addEventListener('submit', async (e) => {
     e.preventDefault();
     setBusy(formSignup, true);
@@ -129,7 +141,7 @@
     const password = document.getElementById('signup-password').value;
     const { error } = await ludoSupabase.auth.signUp({
       email, password,
-      options: { data: { display_name: displayName } },
+      options: { data: { display_name: displayName, ref_code: refCode || undefined } },
     });
     setBusy(formSignup, false);
     if (error) { showMessage(error.message, true); return; }

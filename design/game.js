@@ -679,10 +679,15 @@
           joined = await client.joinOrCreate('ludo', {
             name: profile?.display_name || session.user.email || 'Player',
             userId: session.user.id,
+            accessToken: session.access_token,
             stake: joinStake,
             playerCount: joinPlayerCount,
           });
         } catch (err) {
+          if (err && err.code === 4403) {
+            connectingStatus.innerHTML = 'Cash tables are for Pro members. <a href="wallet.html#pro">Go Pro</a>';
+            return;
+          }
           if (attempt === 1) {
             connectingStatus.textContent = 'Waking up the game server — this can take a couple of minutes…';
           }

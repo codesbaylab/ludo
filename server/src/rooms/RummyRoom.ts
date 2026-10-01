@@ -1,12 +1,13 @@
-import { Room, Client } from 'colyseus';
+import { Room, Client, ServerError } from 'colyseus';
 import { ArraySchema } from '@colyseus/schema';
 import { RummyState, RummyPlayerState, CardState } from './schema/RummyState';
 import * as Engine from '../rummy/engine';
-import { getSupabase } from '../supabase';
+import { getSupabase, authorizeJoin } from '../supabase';
 
 interface JoinOptions {
   name?: string;
   userId?: string;
+  accessToken?: string; // verified server-side; every Rummy table here is real-money, so Pro is required.
 }
 
 interface CreateOptions {
@@ -102,16 +103,17 @@ export class RummyRoom extends Room<RummyState> {
   async onJoin(client: Client, options: JoinOptions = {}) {
     // Same real-money ban check as LudoRoom.onJoin, checked before reserving
     // a slot so a banned user can never occupy a seat even briefly.
-    if (options.userId) {
-      const supabase = getSupabase();
-      if (supabase) {
-        const { data } = await supabase.from('profiles').select('is_banned').eq('id', options.userId).single();
-        if (data?.is_banned) {
-          client.leave();
-          return;
-        }
+    const check = await authorizeJoin(options, true);
+    if (!check.ok) {
+      if (check.reason === 'banned') {
+        client.leave();
+        return;
       }
+      // Distinct, non-retryable rejection the client turns into a message —
+      // cash tables need a verified Pro member (see authorizeJoin).
+      throw new ServerError(check.reason === 'pro_required' ? 4403 : 4401, check.reason);
     }
+    const verifiedUserId = check.userId;
 
     const slot = this.state.players.find((p) => !p.connected);
     if (!slot) {
@@ -122,7 +124,7 @@ export class RummyRoom extends Room<RummyState> {
     slot.sessionId = client.sessionId;
     slot.name = (options.name || `Player ${seatIdx + 1}`).slice(0, 24);
     slot.connected = true;
-    if (options.userId) this.sessionUserIds[client.sessionId] = options.userId;
+    if (verifiedUserId) this.sessionUserIds[client.sessionId] = verifiedUserId;
 
     if (this.state.players.every((p) => p.connected)) {
       this.state.started = true;

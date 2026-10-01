@@ -39,6 +39,9 @@
       <div class="stat"><div class="num" id="stat-winrate">…</div><div class="lbl">Win Rate</div></div>
     </div>
 
+    <div class="section-title">Refer &amp; Earn</div>
+    <div id="refer-section"><p class="hint" style="margin:0;">Loading…</p></div>
+
     <div class="section-title">Account</div>
     <div style="display:flex; flex-direction:column; gap:10px;">
       <a href="wallet.html" class="player-chip" style="text-decoration:none; color:inherit;">
@@ -92,18 +95,74 @@
     if (!session) { location.href = 'login.html'; return; }
 
     const { data: profile } = await ludoSupabase
-      .from('profiles').select('display_name').eq('id', session.user.id).single();
+      .from('profiles').select('display_name, is_pro, referral_code').eq('id', session.user.id).single();
 
     const name = profile?.display_name || session.user.email || 'Player';
     document.getElementById('profile-avatar').textContent = name[0].toUpperCase();
     document.getElementById('profile-name').textContent = name;
+    if (profile?.is_pro) document.getElementById('profile-name').insertAdjacentHTML('beforeend', ' <span class="badge badge-ready" style="vertical-align:middle;">PRO</span>');
     document.getElementById('profile-email').textContent = session.user.email || '';
 
     const stats = await ludoFetchStats(session.user.id);
     document.getElementById('stat-games').textContent = stats.gamesPlayed;
     document.getElementById('stat-wins').textContent = stats.wins;
     document.getElementById('stat-winrate').textContent = `${stats.winRate}%`;
+
+    renderReferSection(profile).catch(err => {
+      console.error('[ludo] refer section failed:', err);
+      document.getElementById('refer-section').innerHTML = '<p class="hint" style="margin:0;">Could not load referral info.</p>';
+    });
   })();
+
+
+  // Referral link + earnings. Pro members only — free users see a locked card
+  // pointing at the upgrade (the code itself doesn't exist until you go Pro).
+  const fmtINR = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  async function renderReferSection(profile) {
+    const el = document.getElementById('refer-section');
+    if (!profile?.is_pro || !profile.referral_code) {
+      el.innerHTML = `
+        <div class="card" style="text-align:center; opacity:.8; padding:22px 16px;">
+          <div style="font-size:30px;">🎁</div>
+          <div style="font-weight:800; margin-top:6px;">Invite friends, earn commission</div>
+          <p class="hint" style="margin:6px 0 12px;">Your link appears here once you go Pro.</p>
+          <a href="wallet.html#pro"><button class="btn btn-primary">Go Pro to unlock</button></a>
+        </div>`;
+      return;
+    }
+    const link = new URL('login.html', location.href).href.split('#')[0] + '?ref=' + encodeURIComponent(profile.referral_code);
+    const { data: sum, error } = await ludoSupabase.rpc('my_referral_summary');
+    if (error) throw error;
+    const levels = (sum.levels || []).map(l => `<tr><td>Level ${l.level}</td><td>${Number(l.percent)}%</td><td>${l.people}</td><td>${fmtINR(l.earned)}</td></tr>`).join('');
+    const recent = (sum.recent || []).map(r => `
+      <div class="player-chip"><div class="name">${escapeHtml(r.invitee)} · Level ${r.level}</div><span style="color:var(--green); font-weight:800;">+${fmtINR(r.amount)}</span></div>`).join('');
+    el.innerHTML = `
+      <div class="card">
+        <div class="hint" style="margin:0 0 6px;">Your referral link</div>
+        <div style="display:flex; gap:8px; align-items:center; background:var(--paper); border:2px dashed var(--accent); border-radius:var(--radius-md); padding:10px 12px;">
+          <code id="ref-link" style="flex:1; font-size:12px; font-weight:700; word-break:break-all;">${escapeHtml(link)}</code>
+          <button class="btn btn-sm btn-primary" id="ref-copy" style="width:auto;">Copy</button>
+        </div>
+        ${navigator.share ? '<button class="btn btn-secondary" id="ref-share" style="width:100%; margin-top:10px;">Share link</button>' : ''}
+        <div class="stat-row" style="margin-top:14px;">
+          <div class="stat"><div class="num">${sum.invited}</div><div class="lbl">Invited</div></div>
+          <div class="stat"><div class="num">${sum.went_pro}</div><div class="lbl">Went Pro</div></div>
+          <div class="stat"><div class="num">${fmtINR(sum.earned)}</div><div class="lbl">Earned</div></div>
+        </div>
+      </div>
+      ${levels ? `<div class="section-title">Earnings by level</div><div class="card"><table style="width:100%; border-collapse:collapse; font-size:13px; font-weight:700;"><tr style="color:var(--text-dim); font-size:11px; text-align:left;"><th>Level</th><th>Rate</th><th>People</th><th>Earned</th></tr>${levels}</table></div>` : ''}
+      ${recent ? `<div class="section-title">Recent rewards</div><div style="display:flex; flex-direction:column; gap:8px;">${recent}</div>` : ''}`;
+    document.getElementById('ref-copy').addEventListener('click', async (e) => {
+      try { await navigator.clipboard.writeText(link); e.target.textContent = 'Copied!'; } catch { e.target.textContent = 'Copy failed'; }
+      setTimeout(() => { e.target.textContent = 'Copy'; }, 1500);
+    });
+    document.getElementById('ref-share')?.addEventListener('click', () => {
+      navigator.share({ title: 'Ludo Online', text: 'Join me on Ludo Online!', url: link }).catch(() => {});
+    });
+  }
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
 
   document.getElementById('logout-btn').addEventListener('click', async () => {
     await ludoSupabase.auth.signOut();

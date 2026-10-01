@@ -1,4 +1,4 @@
-import { Room, Client } from 'colyseus';
+import { Room, Client, ServerError } from 'colyseus';
 import { LudoState, PlayerState, TokenState } from './schema/LudoState';
 import {
   Color,
@@ -8,11 +8,12 @@ import {
   isSafeAbsoluteIndex,
   movableTokenIndices,
 } from '../rules';
-import { getSupabase } from '../supabase';
+import { getSupabase, authorizeJoin } from '../supabase';
 
 interface JoinOptions {
   name?: string;
   userId?: string; // Supabase auth user id, once Phase C wires client auth. Optional for now.
+  accessToken?: string; // Supabase access token — required (and verified) for any stake > 0 table.
 }
 
 interface CreateOptions {
@@ -94,16 +95,17 @@ export class LudoRoom extends Room<LudoState> {
     // is a real, playing participant. Real-money stakes are on the line, so
     // this is enforced here (the authoritative room), not just by hiding
     // the "Play" buttons client-side.
-    if (options.userId) {
-      const supabase = getSupabase();
-      if (supabase) {
-        const { data } = await supabase.from('profiles').select('is_banned').eq('id', options.userId).single();
-        if (data?.is_banned) {
-          client.leave();
-          return;
-        }
+    const check = await authorizeJoin(options, this.state.stake > 0);
+    if (!check.ok) {
+      if (check.reason === 'banned') {
+        client.leave();
+        return;
       }
+      // Distinct, non-retryable rejection the client turns into a message —
+      // cash tables need a verified Pro member (see authorizeJoin).
+      throw new ServerError(check.reason === 'pro_required' ? 4403 : 4401, check.reason);
     }
+    const verifiedUserId = check.userId;
 
     const slot = this.state.players.find((p) => !p.connected);
     if (!slot) {
@@ -113,7 +115,7 @@ export class LudoRoom extends Room<LudoState> {
     slot.sessionId = client.sessionId;
     slot.name = (options.name || `Player ${this.state.players.indexOf(slot) + 1}`).slice(0, 24);
     slot.connected = true;
-    if (options.userId) this.sessionUserIds[client.sessionId] = options.userId;
+    if (verifiedUserId) this.sessionUserIds[client.sessionId] = verifiedUserId;
 
     if (this.state.players.every((p) => p.connected)) {
       this.state.started = true;
