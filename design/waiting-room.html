@@ -188,7 +188,10 @@
         // board.html then resumes it with client.reconnect() instead of
         // taking a fresh joinOrCreate seat, which would otherwise double up.
         sessionStorage.setItem('ludoReconnectToken', room.reconnectionToken);
-        setTimeout(() => { location.href = `board.html?stake=${stake}&players=${playerCount}`; }, 700);
+        setTimeout(() => {
+          room.send('handoff'); // see LudoRoom's 'handoff' handler
+          setTimeout(() => { location.href = `board.html?stake=${stake}&players=${playerCount}`; }, 250);
+        }, 700);
       }
     });
 

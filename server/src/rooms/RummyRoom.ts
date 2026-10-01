@@ -95,6 +95,13 @@ export class RummyRoom extends Room<RummyState> {
       entryFee: state.entryFee,
     });
 
+    // Waiting room -> board handoff: the old page's socket close can take ~10s to
+    // reach us through Render's proxy (we'd only notice via ping timeout), and
+    // until onLeave runs there is no reconnection window for the board to
+    // resume into. So the client asks us to drop that connection ourselves —
+    // terminate() closes the socket server-side at once, which runs the normal
+    // unconsented onLeave -> allowReconnection path immediately.
+    this.onMessage('handoff', (client) => (client as any).ref?.terminate?.());
     this.onMessage('draw', (client, message) => this.handleDraw(client, message));
     this.onMessage('discard', (client, message) => this.handleDiscard(client, message));
     this.onMessage('declare', (client, message) => this.handleDeclare(client, message));

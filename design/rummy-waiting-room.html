@@ -176,7 +176,10 @@
         const dest = mode === 'pool'
           ? `rummy-cash-board.html?mode=pool&players=${playerCount}&pool=${poolLimit}&entry=${entryFee}`
           : `rummy-cash-board.html?mode=points&players=${playerCount}&value=${pointValue}`;
-        setTimeout(() => { location.href = dest; }, 700);
+        setTimeout(() => {
+          room.send('handoff'); // see RummyRoom's 'handoff' handler
+          setTimeout(() => { location.href = dest; }, 250);
+        }, 700);
       }
     });
 
