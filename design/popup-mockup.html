@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Ludo Online — Popup Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  body { background: linear-gradient(160deg, var(--bg-a), var(--bg-b)); min-height: 100vh; }
+  .notice { background:#fff1cc; border-bottom:2px solid var(--yellow); text-align:center; padding:10px 16px; font-size:13px; font-weight:700; }
+  .wrap { max-width: 460px; margin: 0 auto; padding: 18px 16px 60px; }
+  .wrap h2 { margin: 18px 0 4px; font-size: 16px; }
+  .wrap p.cap { margin: 0 0 10px; font-size: 12px; color: var(--text-dim); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .grid .btn { width: 100%; }
+
+  /* ---- Dialog component (this is what ships as ui-dialog.js) ---- */
+  .dlg-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(58, 44, 34, .45);
+    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center; padding: 20px;
+    opacity: 0; transition: opacity .18s ease;
+  }
+  .dlg-overlay.open { opacity: 1; }
+  .dlg {
+    width: 100%; max-width: 360px; background: var(--paper);
+    border-radius: var(--radius-lg); padding: 26px 22px 20px; text-align: center;
+    box-shadow: 0 24px 60px rgba(58, 44, 34, .35);
+    transform: translateY(14px) scale(.94); transition: transform .22s cubic-bezier(.2, .9, .3, 1.2);
+    border: 2px solid var(--border);
+  }
+  .dlg-overlay.open .dlg { transform: none; }
+  .dlg-icon {
+    width: 64px; height: 64px; margin: -52px auto 12px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 30px;
+    border: 4px solid var(--paper); box-shadow: 0 8px 18px rgba(58, 44, 34, .18);
+  }
+  .tone-accent .dlg-icon { background: linear-gradient(135deg, #ffc93c, #ff8a3d); }
+  .tone-danger .dlg-icon { background: linear-gradient(135deg, #ff8a8a, #ff5c5c); }
+  .tone-warn   .dlg-icon { background: linear-gradient(135deg, #ffe08a, #ffc93c); }
+  .tone-success .dlg-icon { background: linear-gradient(135deg, #7fe3a6, #2ecc71); }
+  .tone-info   .dlg-icon { background: linear-gradient(135deg, #8ec5ff, #4da3ff); }
+  .dlg h3 { margin: 0 0 6px; font-size: 20px; }
+  .dlg .dlg-msg { margin: 0; font-size: 14px; color: var(--text-dim); font-weight: 600; line-height: 1.45; }
+  .dlg .dlg-detail {
+    margin: 14px 0 0; background: var(--paper-2); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 10px 14px; text-align: left;
+    font-size: 13px; font-weight: 700;
+  }
+  .dlg .dlg-detail .row { display: flex; justify-content: space-between; padding: 3px 0; }
+  .dlg .dlg-detail .row span:first-child { color: var(--text-dim); font-weight: 600; }
+  .dlg-actions { display: flex; gap: 10px; margin-top: 18px; }
+  .dlg-actions .btn { flex: 1; }
+  .tone-danger .btn-primary { background: linear-gradient(135deg, #ff7a7a, #ff4d4d); }
+  .tone-success .btn-primary { background: linear-gradient(135deg, #46d98a, #22b866); }
+</style>
+</head>
+<body>
+<div class="notice">Design mockup only — tap the buttons to try each popup. Nothing here changes any data.</div>
+
+<div class="wrap">
+  <h2>Confirm popups</h2>
+  <p class="cap">Replace the plain browser “OK / Cancel” boxes.</p>
+  <div class="grid">
+    <button class="btn btn-primary" data-demo="buyPro">Buy Pro</button>
+    <button class="btn btn-secondary" data-demo="leave">Leave match</button>
+    <button class="btn btn-secondary" data-demo="signout">Sign out</button>
+    <button class="btn btn-secondary" data-demo="declare">Invalid declare</button>
+    <button class="btn btn-secondary" data-demo="ban">Admin: ban user</button>
+    <button class="btn btn-secondary" data-demo="paid">Admin: mark paid</button>
+  </div>
+
+  <h2>Message popups</h2>
+  <p class="cap">Replace the plain browser alerts (errors, saved, validation).</p>
+  <div class="grid">
+    <button class="btn btn-secondary" data-demo="error">Error</button>
+    <button class="btn btn-secondary" data-demo="success">Success</button>
+    <button class="btn btn-secondary" data-demo="validation">Validation</button>
+    <button class="btn btn-secondary" data-demo="pro-required">Pro required</button>
+  </div>
+</div>
+
+<script>
+  // Tiny promise-based dialog: ludoDialog({...}) resolves true (confirm) or false (cancel/dismiss).
+  function ludoDialog({ tone = 'accent', icon = '❓', title, message, detail = [], confirmText = 'OK', cancelText = null }) {
+    return new Promise((resolve) => {
+      const overlay = document.createElement('div');
+      overlay.className = 'dlg-overlay';
+      overlay.innerHTML = `
+        <div class="dlg tone-${tone}" role="dialog" aria-modal="true">
+          <div class="dlg-icon">${icon}</div>
+          <h3></h3>
+          <p class="dlg-msg"></p>
+          ${detail.length ? '<div class="dlg-detail">' + detail.map(d => `<div class="row"><span>${d[0]}</span><span>${d[1]}</span></div>`).join('') + '</div>' : ''}
+          <div class="dlg-actions">
+            ${cancelText ? '<button class="btn btn-secondary" data-cancel></button>' : ''}
+            <button class="btn btn-primary" data-ok></button>
+          </div>
+        </div>`;
+      overlay.querySelector('h3').textContent = title;
+      overlay.querySelector('.dlg-msg').textContent = message;
+      overlay.querySelector('[data-ok]').textContent = confirmText;
+      if (cancelText) overlay.querySelector('[data-cancel]').textContent = cancelText;
+
+      const close = (value) => {
+        document.removeEventListener('keydown', onKey);
+        overlay.classList.remove('open');
+        setTimeout(() => overlay.remove(), 200);
+        resolve(value);
+      };
+      const onKey = (e) => { if (e.key === 'Escape') close(false); if (e.key === 'Enter') close(true); };
+      overlay.addEventListener('click', (e) => { if (e.target === overlay && cancelText) close(false); });
+      overlay.querySelector('[data-ok]').addEventListener('click', () => close(true));
+      overlay.querySelector('[data-cancel]')?.addEventListener('click', () => close(false));
+      document.addEventListener('keydown', onKey);
+      document.body.appendChild(overlay);
+      requestAnimationFrame(() => overlay.classList.add('open'));
+      overlay.querySelector('[data-ok]').focus();
+    });
+  }
+
+  const demos = {
+    buyPro: () => ludoDialog({ tone: 'accent', icon: '👑', title: 'Go Pro?', message: 'Unlock cash tables, withdrawals and referrals.',
+      detail: [['Membership fee', '₹500'], ['Balance after', '₹700.00'], ['Type', 'One-time · non-refundable']], confirmText: 'Buy Pro', cancelText: 'Not now' }),
+    leave: () => ludoDialog({ tone: 'danger', icon: '🚪', title: 'Leave this match?', message: 'The other player will see that you left and may win by forfeit.',
+      confirmText: 'Leave match', cancelText: 'Keep playing' }),
+    signout: () => ludoDialog({ tone: 'info', icon: '👋', title: 'Sign out?', message: 'You’ll need to log in again to play.', confirmText: 'Sign out', cancelText: 'Stay' }),
+    declare: () => ludoDialog({ tone: 'warn', icon: '⚠️', title: 'Not a valid hand yet', message: 'No arrangement of these 14 cards forms a valid declare. Declaring anyway costs the 80-point penalty.',
+      confirmText: 'Declare anyway', cancelText: 'Keep playing' }),
+    ban: () => ludoDialog({ tone: 'danger', icon: '🚫', title: 'Ban ravi_k?', message: 'They will be blocked from joining any game.', confirmText: 'Ban user', cancelText: 'Cancel' }),
+    paid: () => ludoDialog({ tone: 'warn', icon: '💸', title: 'Mark as paid?', message: 'Only confirm if you already sent the USDT yourself.',
+      detail: [['Amount', '₹1,000.00'], ['To', 'TXyz…9fK2']], confirmText: 'Yes, I sent it', cancelText: 'Cancel' }),
+    error: () => ludoDialog({ tone: 'danger', icon: '❌', title: 'Something went wrong', message: 'insufficient balance', confirmText: 'Got it' }),
+    success: () => ludoDialog({ tone: 'success', icon: '✅', title: 'Saved', message: 'Pro fee updated. It applies to new purchases only.', confirmText: 'Done' }),
+    validation: () => ludoDialog({ tone: 'warn', icon: '✏️', title: 'Check your input', message: 'Each level needs a percentage above 0 and up to 100.', confirmText: 'OK' }),
+    'pro-required': () => ludoDialog({ tone: 'accent', icon: '🔒', title: 'Pro members only', message: 'Cash tables are for Pro members. Go Pro once and play for real money.',
+      confirmText: 'Go Pro', cancelText: 'Maybe later' }),
+  };
+  document.querySelectorAll('[data-demo]').forEach(b => b.addEventListener('click', () => demos[b.dataset.demo]()));
+</script>
+</body>
+</html>
