@@ -86,6 +86,11 @@ by a Supabase project for auth/wallet-ledger/match-history.
   loops). Deliberately NOT on boards/waiting rooms (a reload would drop a player mid-match). New non-game pages
   should include it after `supabase-client.js`. Also: never link to `#anchors` for in-page jumps (the hash persists
   in the installed app's URL and re-scrolls on reopen) — scroll in JS instead (see lobby "Join with code").
+- **Cache-busting at deploy**: `.github/workflows/pages.yml` rewrites every `styles.css` / `game.js` /
+  `supabase-client.js` / `ui-dialog.js` / `app-update.js` / `rummy-rules.js` reference in `design/*.html` to
+  `…?v=<commit>` before upload (GitHub Pages sends `max-age=600`; without this a browser could pair NEW html with the
+  OLD stylesheet right after a deploy — unstyled buttons). Local files stay unstamped. **A new shared asset must be
+  added to that sed list** or it will be cached for 10 minutes.
 
 ## Structure
 

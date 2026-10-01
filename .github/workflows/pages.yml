@@ -23,6 +23,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
+      # GitHub Pages lets browsers reuse styles.css / *.js for 10 minutes, so right after a deploy a
+      # browser could pair the NEW html with the OLD stylesheet (unstyled buttons etc.). Stamp every
+      # asset link with this commit so a new deploy always means new URLs.
+      - name: Stamp asset URLs with the commit (cache-busting)
+        run: |
+          V="${GITHUB_SHA::8}"
+          sed -i -E "s#(href|src)=\"(styles\.css|game\.js|supabase-client\.js|ui-dialog\.js|app-update\.js|rummy-rules\.js)\"#\1=\"\2?v=$V\"#g" design/*.html
+          grep -c "?v=$V" design/login.html
       - uses: actions/upload-pages-artifact@v3
         with:
           path: design
