@@ -79,6 +79,13 @@ by a Supabase project for auth/wallet-ledger/match-history.
   require Pro. Verified live in Chrome with non-Pro, ₹0 accounts (wallets untouched, no match rows written).
 - **Leave warnings**: Rummy cash/free board Exit asks "Leave this table?" (cash wording mentions losing the
   stake), the practice board asks "Leave this game?"; both via `ludoConfirm`.
+- **Installed-app staleness**: an iOS home-screen app resumes the last page frozen in memory and a cold start can
+  reuse a cached copy (GitHub Pages sends `max-age=600`), so after a deploy the PWA could keep showing the OLD UI.
+  `design/app-update.js` (loaded on every non-game page) compares `document.lastModified` with a fresh no-store
+  HEAD's `Last-Modified` on open / return-to-foreground / bfcache restore and reloads once (max once per minute, no
+  loops). Deliberately NOT on boards/waiting rooms (a reload would drop a player mid-match). New non-game pages
+  should include it after `supabase-client.js`. Also: never link to `#anchors` for in-page jumps (the hash persists
+  in the installed app's URL and re-scrolls on reopen) — scroll in JS instead (see lobby "Join with code").
 
 ## Structure
 
