@@ -585,7 +585,9 @@
       e.preventDefault();
       document.getElementById('connecting-status').textContent = 'Leaving table…';
       document.getElementById('connecting-overlay').classList.add('open');
-      await room.leave(true);
+      // Capped wait: room.leave() resolves only when the server's close frame comes back,
+      // which can lag ~20s through Render's proxy (LEAVE_ROOM itself is already sent).
+      await Promise.race([room.leave(true), new Promise((resolve) => setTimeout(resolve, 1500))]);
       location.href = 'rummy-lobby.html';
     });
 
