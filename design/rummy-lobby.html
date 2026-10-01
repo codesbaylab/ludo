@@ -272,29 +272,6 @@
     document.getElementById('type-banner').style.borderColor = isCash ? 'var(--green)' : 'var(--yellow)';
     document.getElementById('type-banner').style.color = isCash ? '#0f6b47' : '#8a6d00';
 
-    // Private tables: both buttons need a session + Pro, same gate as Start Table.
-  async function requireCashAccess() {
-    const { data: { session } } = await ludoSupabase.auth.getSession();
-    if (!session) { location.href = 'login.html'; return false; }
-    await proReady;
-    if (!isPro) { promptGoPro(); return false; }
-    return true;
-  }
-  document.getElementById('create-private-link').addEventListener('click', async (e) => {
-    e.preventDefault();
-    if (!(await requireCashAccess())) return;
-    location.href = document.getElementById('create-private-link').href;
-  });
-  document.getElementById('join-code-btn').addEventListener('click', async () => {
-    const code = document.getElementById('join-code-input').value.trim().toUpperCase();
-    if (!/^[A-Z0-9]{6}$/.test(code)) {
-      ludoAlert({ tone: 'warn', icon: '🔑', title: 'Enter the table code', message: 'Table codes are 6 characters, like ABC123.' });
-      return;
-    }
-    if (!(await requireCashAccess())) return;
-    location.href = `rummy-waiting-room.html?code=${encodeURIComponent(code)}`;
-  });
-
   document.querySelectorAll('.mode-btn').forEach((btn) => {
       const selected = btn.dataset.mode === state.mode;
       btn.classList.toggle('btn-primary', selected);
@@ -374,6 +351,29 @@
     document.getElementById('create-private-link').href = document.getElementById('start-link').href + '&room=create';
     updateCashGating();
   }
+
+  // Private tables: both buttons need a session + Pro, same gate as Start Table.
+  async function requireCashAccess() {
+    const { data: { session } } = await ludoSupabase.auth.getSession();
+    if (!session) { location.href = 'login.html'; return false; }
+    await proReady;
+    if (!isPro) { promptGoPro(); return false; }
+    return true;
+  }
+  document.getElementById('create-private-link').addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (!(await requireCashAccess())) return;
+    location.href = document.getElementById('create-private-link').href;
+  });
+  document.getElementById('join-code-btn').addEventListener('click', async () => {
+    const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(code)) {
+      ludoAlert({ tone: 'warn', icon: '🔑', title: 'Enter the table code', message: 'Table codes are 6 characters, like ABC123.' });
+      return;
+    }
+    if (!(await requireCashAccess())) return;
+    location.href = `rummy-waiting-room.html?code=${encodeURIComponent(code)}`;
+  });
 
   document.querySelectorAll('.table-type-btn').forEach((btn) => {
     btn.addEventListener('click', async () => {

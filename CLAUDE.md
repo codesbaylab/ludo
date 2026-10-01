@@ -29,6 +29,18 @@ by a Supabase project for auth/wallet-ledger/match-history.
   back to a fresh join); (2) the board's Exit caps its wait on `room.leave()` at 1.5s instead of waiting for
   the echoed close (was ~20s) — LEAVE_ROOM has already been sent. Any future "await the other side's close"
   logic will hit this on Render.
+- **Private rooms (Ludo + Rummy cash)**: lobby "Create Room" / Rummy "Create Private Table" call
+  `client.create(room, {..., private: true})`; the room sets `this.roomId = newRoomCode()`
+  (`server/src/roomCode.ts`, 6 chars, no 0/O/1/I/L) and `setPrivate(true)`, so `joinOrCreate` never puts
+  strangers in it. Guests join with `client.joinById(code)` (`?code=` on `waiting-room.html` /
+  `rummy-waiting-room.html`; a guest adopts the host's table size/mode/stakes from room state). Wrong code ->
+  "not found", full/started -> "locked" (shown at once, no 2-minute retry loop). The code is passed on to the
+  board (`&code=`) so a failed handoff re-joins THAT room by code, not `joinOrCreate`. Ludo private rooms are
+  free-play only; Rummy cash join/create is Pro-gated like everything else. Verified end-to-end in Chrome
+  against the live server (create, stranger isolation, join by code, wrong code, full room, forfeit in the
+  same room; Rummy host+guest dealt in the same table). **Gotcha**: don't anchor python string edits on
+  `.table-type-btn'/.mode-btn forEach` in `rummy-lobby.html` — the same selector also appears inside
+  `render()`, and a handler inserted there is re-registered on every render (caught by a double popup).
 
 ## Structure
 
