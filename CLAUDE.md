@@ -22,6 +22,13 @@ by a Supabase project for auth/wallet-ledger/match-history.
   `ludoError`; styles in `styles.css` `.dlg-*`). Approved design: `design/popup-mockup.html`. Any new
   page needing a dialog must include `<script src="ui-dialog.js">`; callers `await` the confirm, so
   the enclosing handler must be `async`.
+- **Render's proxy delays WebSocket close frames (both directions) by ~10-20s** — found by a real-browser
+  test against the live server, invisible locally. Handled in code: (1) the waiting-room -> board handoff
+  sends a `'handoff'` message right before navigating and the room does `client.ref.terminate()` so
+  `onLeave -> allowReconnection` runs immediately (otherwise the board's resume failed for ~10s, then fell
+  back to a fresh join); (2) the board's Exit caps its wait on `room.leave()` at 1.5s instead of waiting for
+  the echoed close (was ~20s) — LEAVE_ROOM has already been sent. Any future "await the other side's close"
+  logic will hit this on Render.
 
 ## Structure
 
