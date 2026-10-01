@@ -645,18 +645,22 @@
     const handoffToken = sessionStorage.getItem('ludoReconnectToken');
     if (handoffToken) {
       sessionStorage.removeItem('ludoReconnectToken');
+      // ~14s total: over a real network (esp. a phone PWA) the server can take
+      // well past 2s to notice the old socket closed, and until it does it has
+      // no reconnection window open for this token.
+      const HANDOFF_ATTEMPTS = 20;
       connectingStatus.textContent = 'Resuming your seat…';
       // No hard ordering guarantee between waiting-room.html's leave() and
       // this page's boot, so the server may not have processed the leave
       // (and opened its reconnection window) yet — a bare single attempt
       // measurably races and fails. A few quick retries absorb that without
       // meaningfully delaying the common case where it's already ready.
-      for (let attempt = 1; attempt <= 5 && !joined; attempt++) {
+      for (let attempt = 1; attempt <= HANDOFF_ATTEMPTS && !joined; attempt++) {
         try {
           joined = await client.reconnect(handoffToken);
         } catch (err) {
-          if (attempt === 5) console.error('[ludo] handoff reconnect failed, falling back to a fresh join:', err);
-          else await new Promise(resolve => setTimeout(resolve, 400));
+          if (attempt === HANDOFF_ATTEMPTS) console.error('[ludo] handoff reconnect failed, falling back to a fresh join:', err);
+          else await new Promise(resolve => setTimeout(resolve, 700));
         }
       }
     }
