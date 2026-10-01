@@ -462,8 +462,8 @@
     const invalidBy = snapshot.lastHandInvalidDeclareBy;
     const winnerIdx = snapshot.lastHandWinnerIdx;
     const headline = invalidBy !== -1
-      ? (invalidBy === mySeatIdx ? `❌ Invalid declare — you take the ${RummyRules.MAX_PENALTY}-point penalty.` : `❌ ${snapshot.players[invalidBy].name} declared invalidly and takes the ${RummyRules.MAX_PENALTY}-point penalty.`)
-      : (winnerIdx === mySeatIdx ? '🏆 You declare — you win this hand!' : `🏆 ${snapshot.players[winnerIdx].name} declares and wins this hand.`);
+      ? (invalidBy === mySeatIdx ? `❌ Invalid declare — you take the ${RummyRules.MAX_PENALTY}-point penalty.` : `❌ ${snapshot.players[invalidBy]?.name ?? 'A player'} declared invalidly and takes the ${RummyRules.MAX_PENALTY}-point penalty.`)
+      : (winnerIdx === mySeatIdx ? '🏆 You declare — you win this hand!' : `🏆 ${snapshot.players[winnerIdx]?.name ?? 'Your opponent'} declares and wins this hand.`);
 
     if (snapshot.matchOver) {
       if (MODE === 'points') {

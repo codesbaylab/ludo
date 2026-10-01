@@ -226,6 +226,12 @@ export class RummyRoom extends Room<RummyState> {
 
     this.clearTimers();
     const points = this.state.players.map((_, i) => (i === winnerIdx ? 0 : Engine.MAX_PENALTY));
+    // Record the result the same way a normal finishHand does — the client's
+    // result popup reads these (a forfeit used to leave winnerIdx at -1 and crash it).
+    this.state.lastHandWinnerIdx = winnerIdx;
+    this.state.lastHandPoints = new ArraySchema<number>();
+    points.forEach((p) => this.state.lastHandPoints.push(p));
+    this.state.phase = 'hand-over';
 
     if (this.mode === 'points') {
       this.finishHandPoints(points, winnerIdx);
