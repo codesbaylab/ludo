@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="supabase-client.js"></script>
+<script src="ui-dialog.js"></script>
 <meta name="theme-color" content="#ff8a3d">
 <style>
   .table-type-picker { display:flex; gap:8px; margin: 0 0 10px; }
@@ -191,6 +192,24 @@
   const VALUE_LABEL = { 1: '₹1 / point', 2: '₹2 / point', 5: '₹5 / point' };
   const POINTS_CAP = 80;
 
+  // Cash tables are Pro-only (the room's join check enforces it too). Blocked
+  // here at selection, before a free player can even switch to the cash view.
+  let isPro = false;
+  const proReady = (async () => {
+    const { data: { session } } = await ludoSupabase.auth.getSession();
+    if (session) {
+      const { data } = await ludoSupabase.from('profiles').select('is_pro').eq('id', session.user.id).single();
+      isPro = !!data?.is_pro;
+    }
+    if (!isPro) document.querySelector('.table-type-btn[data-type="cash"]').textContent = '🔒 Cash Table (Pro)';
+  })();
+  async function promptGoPro() {
+    const go = await ludoConfirm({ tone: 'accent', icon: '🔒', title: 'Pro members only',
+      message: 'Cash tables are for Pro members. Go Pro once and play for real money.',
+      confirmText: 'Go Pro', cancelText: 'Maybe later' });
+    if (go) location.href = 'wallet.html#pro';
+  }
+
   // Real balance/name once signed in — the demo ₹250.00 chip only stays for
   // a signed-out visitor previewing the practice picker. Cash Tables here
   // touch a real wallet now, unlike the rest of this page.
@@ -315,7 +334,11 @@
   }
 
   document.querySelectorAll('.table-type-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
+      if (btn.dataset.type === 'cash') {
+        await proReady;
+        if (!isPro) { promptGoPro(); return; }
+      }
       state.tableType = btn.dataset.type;
       render();
     });
@@ -330,6 +353,8 @@
     e.preventDefault();
     const { data: { session } } = await ludoSupabase.auth.getSession();
     if (!session) { location.href = 'login.html'; return; }
+    await proReady;
+    if (!isPro) { promptGoPro(); return; }
     location.href = document.getElementById('start-link').href;
   });
 
