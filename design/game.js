@@ -623,6 +623,15 @@
         return;
       } catch (err) {
         console.error(`[ludo] reconnect attempt ${attempt} failed:`, err);
+        // "disposed" / "not found" never recovers (match over, or the server restarted
+        // and lost the room) — say so now instead of retrying for a minute.
+        if (/disposed|not found/i.test(err && err.message || '')) {
+          reconnecting = false;
+          connectingOverlay.classList.remove('open');
+          await ludoAlert({ tone: 'warn', icon: '🔌', title: 'Match ended', message: 'The match has ended, or the game server restarted. If it didn\'t finish, your stake was not charged.', confirmText: 'Back to lobby' });
+          location.href = 'lobby.html';
+          return;
+        }
         await new Promise(resolve => setTimeout(resolve, RECONNECT_DELAY_MS));
       }
     }

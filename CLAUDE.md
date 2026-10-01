@@ -53,6 +53,23 @@ by a Supabase project for auth/wallet-ledger/match-history.
   rolled-back DB transaction and end-to-end in Chrome (incl. a free user receiving money and buying Pro with it).
   **Known gap (pre-existing, not specific to transfers):** wallets have no non-negative check and stakes are
   not held during a match, so a player can transfer/withdraw their balance mid-match and go negative on a loss.
+- **Stake holds (money safety)**: `wallets.held` reserves a cash seat's worst-case loss at JOIN time
+  (Ludo = stake, Rummy Pool = entry fee, Rummy Points = 80 pts x point value) via the service-role-only
+  `hold_funds()`; available = `balance - held`. `request_withdrawal`, `transfer_balance`, `purchase_pro` and the
+  join check only see available funds, and `wallets.balance >= 0` is a CHECK constraint. Settlement uses
+  `settle_wallet(user, delta, release)` (applies the result AND releases the hold in one statement; clamps at 0
+  rather than dropping the settlement). Holds are released when a seat empties before the game starts, in
+  `onDispose` (match never settled => refunded, balance was never touched), and for everyone via
+  `release_all_holds()` at server boot (rooms are in-memory, so after a restart every hold is stale — single
+  process only; revisit if the server is ever scaled to multiple instances). Join is refused with
+  `ServerError(4402 'insufficient_funds')` which every client join loop shows with a wallet link. The hold is
+  taken BEFORE any seat state is touched (the await would otherwise let two joins grab the same slot).
+  Verified live in Chrome: refused join, pre-start release, reserved funds can't be transferred/withdrawn,
+  Ludo + Rummy forfeit settlements exact (Alice 100 -10 stake; Bob +8; Rummy 80 pts => -80 / +72 after 10% fee).
+  **Fixed along the way**: the Rummy forfeit path never set `lastHandWinnerIdx`/`lastHandPoints`, so the client's
+  result popup crashed on `players[-1]`.
+- **"Match ended" popup**: when a board's reconnect error says "disposed"/"not found" (match over or server
+  restarted) it stops retrying and shows a popup that returns to the lobby (`game.js`, `rummy-cash-board.html`).
 
 ## Structure
 

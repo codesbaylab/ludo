@@ -607,6 +607,14 @@
             attachRoomHandlers(newRoom);
             return;
           } catch (err) {
+            // "disposed" / "not found" never recovers (match over, or the server restarted).
+            if (/disposed|not found/i.test((err && err.message) || '')) {
+              reconnecting = false;
+              document.getElementById('connecting-overlay').classList.remove('open');
+              await ludoAlert({ tone: 'warn', icon: '🔌', title: 'Match ended', message: 'The match has ended, or the game server restarted. If it didn\'t finish, your stake was not charged.', confirmText: 'Back to Rummy lobby' });
+              location.href = 'rummy-lobby.html';
+              return;
+            }
             if (attempt === 20) {
               document.getElementById('connecting-status').textContent = 'Could not reconnect to the game server.';
             }
@@ -635,12 +643,12 @@
     if (handoffToken) {
       sessionStorage.removeItem('rummyReconnectToken');
       document.getElementById('connecting-status').textContent = 'Resuming your seat…';
-      for (let attempt = 1; attempt <= 5 && !joined; attempt++) {
+      for (let attempt = 1; attempt <= 20 && !joined; attempt++) {
         try {
           joined = await client.reconnect(handoffToken);
         } catch (err) {
-          if (attempt === 5) console.error('[rummy] handoff reconnect failed, falling back to a fresh join:', err);
-          else await new Promise((resolve) => setTimeout(resolve, 400));
+          if (attempt === 20) console.error('[rummy] handoff reconnect failed, falling back to a fresh join:', err);
+          else await new Promise((resolve) => setTimeout(resolve, 700));
         }
       }
     }
