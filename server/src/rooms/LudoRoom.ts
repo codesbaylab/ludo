@@ -9,6 +9,7 @@ import {
   movableTokenIndices,
 } from '../rules';
 import { getSupabase, authorizeJoin } from '../supabase';
+import { newRoomCode } from '../roomCode';
 
 interface JoinOptions {
   name?: string;
@@ -17,6 +18,8 @@ interface JoinOptions {
 }
 
 interface CreateOptions {
+  // true = private table joined by code only (see onCreate).
+  private?: boolean;
   stake?: number;
   // 2 or 4; defaults to 4 (a full table) when omitted or out of range.
   playerCount?: number;
@@ -71,6 +74,13 @@ export class LudoRoom extends Room<LudoState> {
 
     const playerCount = COLORS_BY_PLAYER_COUNT[options.playerCount!] ? options.playerCount! : 4;
     this.maxClients = playerCount;
+    // Private table (created via the lobby's "Create Room"): a short shareable
+    // code as the roomId, and hidden from automatic matchmaking so joinOrCreate
+    // never drops strangers into it — friends join it by code (joinById) only.
+    if (options.private) {
+      this.roomId = newRoomCode();
+      this.setPrivate(true);
+    }
 
     const state = new LudoState();
     state.stake = options.stake ?? 0;

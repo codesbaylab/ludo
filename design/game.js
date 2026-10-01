@@ -570,6 +570,10 @@
   const joinStake = stakeParam === null ? 50 : Math.max(0, Number(stakeParam) || 0);
   const playersParam = Number(new URLSearchParams(location.search).get('players'));
   const joinPlayerCount = [2, 4].includes(playersParam) ? playersParam : 4;
+  // Set by waiting-room.html for private rooms, so a failed handoff falls back to
+  // re-joining THAT room by code instead of joinOrCreate (which would drop a
+  // private-room player into a random public table).
+  const privateRoomCode = (new URLSearchParams(location.search).get('code') || '').toUpperCase();
 
   let room = null;
   let myPlayerIdx = -1;
@@ -679,14 +683,21 @@
       // minutes before giving up for real.
       for (let attempt = 1; attempt <= 30 && !joined; attempt++) {
         try {
-          joined = await client.joinOrCreate('ludo', {
+          const fallbackOptions = {
             name: profile?.display_name || session.user.email || 'Player',
             userId: session.user.id,
             accessToken: session.access_token,
             stake: joinStake,
             playerCount: joinPlayerCount,
-          });
+          };
+          joined = privateRoomCode
+            ? await client.joinById(privateRoomCode, fallbackOptions)
+            : await client.joinOrCreate('ludo', fallbackOptions);
         } catch (err) {
+          if (privateRoomCode && err && /not found|locked|full/i.test(err.message || '')) {
+            connectingStatus.innerHTML = 'This private room is no longer available. <a href="lobby.html">Back to lobby</a>';
+            return;
+          }
           if (err && err.code === 4403) {
             connectingStatus.innerHTML = 'Cash tables are for Pro members. <a href="wallet.html#pro">Go Pro</a>';
             return;

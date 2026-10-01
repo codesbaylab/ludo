@@ -60,7 +60,7 @@
         <div class="tile-title">Quick Match</div>
         <div class="tile-sub">Auto-join players</div>
       </a>
-      <a class="tile tile-create server-gated" href="stake-confirm.html?stake=0">
+      <a class="tile tile-create server-gated" href="stake-confirm.html?stake=0&room=create">
         <div class="tile-icon">➕</div>
         <div class="tile-title">Create Room</div>
         <div class="tile-sub">Play with friends</div>
@@ -76,9 +76,9 @@
 
     <div class="card" id="join-box" style="margin-top:12px;">
       <div class="field" style="margin-bottom:12px;">
-        <input class="input input-code" maxlength="6" placeholder="ABC123" />
+        <input class="input input-code" id="join-code-input" maxlength="6" placeholder="ABC123" autocapitalize="characters" autocomplete="off" />
       </div>
-      <a href="stake-confirm.html?stake=0" class="server-gated"><button class="btn btn-secondary" id="join-room-btn">Join Room</button></a>
+      <a href="#" id="join-room-link" class="server-gated"><button class="btn btn-secondary" id="join-room-btn">Join Room</button></a>
     </div>
 
     <div class="section-title">Other Games</div>
@@ -260,6 +260,18 @@
       });
     }
   })();
+
+  // Join a friend's private room by its 6-character code (waiting-room.html
+  // does the actual joinById and reports wrong/full codes itself).
+  document.getElementById('join-room-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(code)) {
+      ludoAlert({ tone: 'warn', icon: '🔑', title: 'Enter the room code', message: 'Room codes are 6 characters, like ABC123.' });
+      return;
+    }
+    location.href = `waiting-room.html?stake=0&code=${encodeURIComponent(code)}`;
+  });
 
   document.getElementById('user-avatar').addEventListener('click', async () => {
     if (!(await ludoConfirm({ tone: 'info', icon: '👋', title: 'Sign out?', message: 'You’ll need to log in again to play.', confirmText: 'Sign out', cancelText: 'Stay' }))) return;

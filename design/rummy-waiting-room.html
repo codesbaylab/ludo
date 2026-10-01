@@ -28,6 +28,14 @@
   </div>
 
   <div style="padding: 10px 20px;">
+    <div class="room-code-box" id="room-code-box" style="display:none;">
+      <div>
+        <div style="font-size:11px; color:#a3521f; font-weight:800; text-transform:uppercase;">Room Code</div>
+        <div class="code" id="room-code">…</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" id="copy-code-btn">📋 Copy</button>
+    </div>
+
     <div class="card" id="stake-card" style="margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, var(--green-soft), var(--paper));">
       <div id="stake-left">
         <div style="font-size:12px; color:var(--text-dim); font-weight:700;">Points Value</div>
@@ -65,15 +73,21 @@
 </div>
 <script>
   const qp = new URLSearchParams(location.search);
-  const mode = qp.get('mode') === 'pool' ? 'pool' : 'points';
+  // Private tables: ?room=create makes one (host), ?code=ABC123 joins one (guest — the
+  // table's mode/size/stakes then come from the room itself, not this URL).
+  const joinCode = (qp.get('code') || '').trim().toUpperCase();
+  const createPrivate = qp.get('room') === 'create';
+  const isPrivate = !!joinCode || createPrivate;
+  let mode = qp.get('mode') === 'pool' ? 'pool' : 'points';
   const playersParam = Number(qp.get('players'));
-  const playerCount = [2, 4].includes(playersParam) ? playersParam : 4;
-  const pointValue = [1, 2, 5].includes(Number(qp.get('value'))) ? Number(qp.get('value')) : 1;
-  const poolLimit = [51, 101, 201].includes(Number(qp.get('pool'))) ? Number(qp.get('pool')) : 101;
-  const entryFee = [50, 100, 200].includes(Number(qp.get('entry'))) ? Number(qp.get('entry')) : 100;
+  let playerCount = [2, 4].includes(playersParam) ? playersParam : 4;
+  let pointValue = [1, 2, 5].includes(Number(qp.get('value'))) ? Number(qp.get('value')) : 1;
+  let poolLimit = [51, 101, 201].includes(Number(qp.get('pool'))) ? Number(qp.get('pool')) : 101;
+  let entryFee = [50, 100, 200].includes(Number(qp.get('entry'))) ? Number(qp.get('entry')) : 100;
   // Same default/override pattern as design/game.js and waiting-room.html.
   const SERVER_URL = qp.get('server') || 'wss://ludo-x96u.onrender.com';
 
+  function renderSettings() {
   document.getElementById('max-players-value').textContent = String(playerCount);
 
   if (mode === 'pool') {
@@ -88,6 +102,8 @@
     document.getElementById('stake-left-value').textContent = `₹${pointValue} / point`;
     document.getElementById('stake-right-value').textContent = `₹${pointValue * 80}`;
   }
+  }
+  renderSettings();
 
   function renderPlayers(snapshot, mySessionId) {
     const connected = snapshot.players.filter(p => p.connected).length;
@@ -127,7 +143,7 @@
     // always enough after a multi-day idle period).
     for (let attempt = 1; attempt <= 30 && !room; attempt++) {
       try {
-        room = await client.joinOrCreate('rummy', {
+        const joinOptions = {
           name: profile?.display_name || session.user.email || 'Player',
           userId: session.user.id,
           accessToken: session.access_token,
@@ -136,8 +152,20 @@
           pointValue,
           poolLimit,
           entryFee,
-        });
+        };
+        room = joinCode ? await client.joinById(joinCode, joinOptions)
+          : createPrivate ? await client.create('rummy', { ...joinOptions, private: true })
+          : await client.joinOrCreate('rummy', joinOptions);
       } catch (err) {
+        // A wrong/finished/full code will never start working — say so right away.
+        if (joinCode && err && /not found|locked|full/i.test(err.message || '')) {
+          const gone = /not found/i.test(err.message);
+          document.getElementById('players-title').textContent = gone ? 'Table not found' : 'Table is full';
+          document.getElementById('start-hint').innerHTML = gone
+            ? `No table with code <b>${joinCode}</b> — check the code, or the game may have already ended. <a href="rummy-lobby.html">Back to Rummy lobby</a>`
+            : 'That table is already full or has started. <a href="rummy-lobby.html">Back to Rummy lobby</a>';
+          return;
+        }
         if (err && err.code === 4403) {
           document.getElementById('players-title').textContent = 'Pro membership required';
           document.getElementById('start-hint').innerHTML = 'Cash tables are for Pro members. <a href="wallet.html#pro">Go Pro</a>';
@@ -157,6 +185,15 @@
       }
     }
 
+    if (isPrivate) {
+      document.getElementById('room-code-box').style.display = '';
+      document.getElementById('room-code').textContent = room.roomId;
+      document.getElementById('copy-code-btn').addEventListener('click', () => {
+        navigator.clipboard?.writeText(room.roomId).catch(() => {});
+      });
+      if (createPrivate) document.getElementById('start-hint').textContent = 'Share this table code with your friends — the hand starts as soon as everyone has joined.';
+    }
+
     document.getElementById('leave-link').addEventListener('click', () => {
       room.leave(true); // consented — frees the seat immediately.
     });
@@ -165,6 +202,12 @@
     room.onStateChange(state => {
       const snapshot = state.toJSON();
       renderPlayers(snapshot, room.sessionId);
+      if (joinCode && snapshot.mode && (mode !== snapshot.mode || playerCount !== snapshot.playerCount || pointValue !== snapshot.pointValue || poolLimit !== snapshot.poolLimit || entryFee !== snapshot.entryFee)) {
+        // Guest: adopt the host's table settings and show them.
+        mode = snapshot.mode; playerCount = snapshot.playerCount;
+        pointValue = snapshot.pointValue || pointValue; poolLimit = snapshot.poolLimit || poolLimit; entryFee = snapshot.entryFee || entryFee;
+        renderSettings();
+      }
 
       if (!navigated && snapshot.started) {
         navigated = true;
@@ -176,9 +219,10 @@
         const dest = mode === 'pool'
           ? `rummy-cash-board.html?mode=pool&players=${playerCount}&pool=${poolLimit}&entry=${entryFee}`
           : `rummy-cash-board.html?mode=points&players=${playerCount}&value=${pointValue}`;
+        const destUrl = isPrivate ? dest + '&code=' + room.roomId : dest;
         setTimeout(() => {
           room.send('handoff'); // see RummyRoom's 'handoff' handler
-          setTimeout(() => { location.href = dest; }, 250);
+          setTimeout(() => { location.href = destUrl; }, 250);
         }, 700);
       }
     });

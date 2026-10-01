@@ -3,6 +3,7 @@ import { ArraySchema } from '@colyseus/schema';
 import { RummyState, RummyPlayerState, CardState } from './schema/RummyState';
 import * as Engine from '../rummy/engine';
 import { getSupabase, authorizeJoin } from '../supabase';
+import { newRoomCode } from '../roomCode';
 
 interface JoinOptions {
   name?: string;
@@ -11,6 +12,8 @@ interface JoinOptions {
 }
 
 interface CreateOptions {
+  // true = private table joined by code only (see onCreate).
+  private?: boolean;
   mode?: 'points' | 'pool';
   playerCount?: number;
   pointValue?: number;
@@ -64,6 +67,13 @@ export class RummyRoom extends Room<RummyState> {
     this.mode = options.mode === 'pool' ? 'pool' : 'points';
     const playerCount = [2, 4].includes(options.playerCount!) ? options.playerCount! : 4;
     this.maxClients = playerCount;
+    // Private table (created via the lobby's "Create Room"): a short shareable
+    // code as the roomId, and hidden from automatic matchmaking so joinOrCreate
+    // never drops strangers into it — friends join it by code (joinById) only.
+    if (options.private) {
+      this.roomId = newRoomCode();
+      this.setPrivate(true);
+    }
 
     this.drawTimeoutMs = options.drawTimeoutMs ?? 20000;
     this.discardTimeoutMs = options.discardTimeoutMs ?? 20000;

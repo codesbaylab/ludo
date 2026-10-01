@@ -127,9 +127,9 @@
 
     <div class="card" id="join-box" style="margin-top:12px;">
       <div class="field" style="margin-bottom:12px;">
-        <input class="input input-code" maxlength="6" placeholder="ABC123" />
+        <input class="input input-code" id="join-code-input" maxlength="6" placeholder="ABC123" autocapitalize="characters" autocomplete="off" />
       </div>
-      <button class="btn btn-secondary" disabled>Join Table (preview only)</button>
+      <button class="btn btn-secondary" id="join-code-btn">Join Table with code</button>
     </div>
 
     <div class="section-title">Table Size</div>
@@ -177,6 +177,7 @@
     <div style="margin-top:16px; display:flex; flex-direction:column; gap:10px;">
       <span class="badge badge-waiting" id="cash-server-status" style="display:none; align-self:center;">⏳ Checking game server…</span>
       <a id="start-link" href="rummy-board.html?players=2&value=1"><button class="btn btn-primary" id="start-btn">Start Table (vs. computer players)</button></a>
+      <a id="create-private-link" href="#" style="display:none;"><button class="btn btn-secondary" style="width:100%; margin-top:10px;">🔑 Create Private Table (get a code)</button></a>
       <a href="lobby.html"><button class="btn btn-ghost">← Back to Lobby</button></a>
       <p class="hint" style="margin:0;" id="mode-hint">You'll play a full round against computer opponents with the real rules enforced — no real money changes hands, and table matchmaking with other people isn't wired up yet.</p>
     </div>
@@ -271,7 +272,30 @@
     document.getElementById('type-banner').style.borderColor = isCash ? 'var(--green)' : 'var(--yellow)';
     document.getElementById('type-banner').style.color = isCash ? '#0f6b47' : '#8a6d00';
 
-    document.querySelectorAll('.mode-btn').forEach((btn) => {
+    // Private tables: both buttons need a session + Pro, same gate as Start Table.
+  async function requireCashAccess() {
+    const { data: { session } } = await ludoSupabase.auth.getSession();
+    if (!session) { location.href = 'login.html'; return false; }
+    await proReady;
+    if (!isPro) { promptGoPro(); return false; }
+    return true;
+  }
+  document.getElementById('create-private-link').addEventListener('click', async (e) => {
+    e.preventDefault();
+    if (!(await requireCashAccess())) return;
+    location.href = document.getElementById('create-private-link').href;
+  });
+  document.getElementById('join-code-btn').addEventListener('click', async () => {
+    const code = document.getElementById('join-code-input').value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{6}$/.test(code)) {
+      ludoAlert({ tone: 'warn', icon: '🔑', title: 'Enter the table code', message: 'Table codes are 6 characters, like ABC123.' });
+      return;
+    }
+    if (!(await requireCashAccess())) return;
+    location.href = `rummy-waiting-room.html?code=${encodeURIComponent(code)}`;
+  });
+
+  document.querySelectorAll('.mode-btn').forEach((btn) => {
       const selected = btn.dataset.mode === state.mode;
       btn.classList.toggle('btn-primary', selected);
       btn.classList.toggle('btn-secondary', !selected);
@@ -325,6 +349,10 @@
     });
     document.querySelectorAll('.entry-btn').forEach((b) => { b.textContent = `${cur}${b.dataset.entry}`; });
     document.getElementById('wallet-chip').style.display = isCash ? '' : 'none';
+    // Codes / private tables only exist for real-player Cash tables (practice is vs. bots).
+    document.getElementById('join-box').style.display = isCash ? '' : 'none';
+    document.querySelectorAll('a[href="#join-box"]').forEach((a) => { a.style.display = isCash ? '' : 'none'; });
+    document.getElementById('create-private-link').style.display = isCash ? '' : 'none';
     document.getElementById('sum-value').textContent = `${cur}${state.value} / point`;
     document.getElementById('sum-players').textContent = `${state.players} Players`;
     document.getElementById('sum-maxloss').textContent = `${cur}${state.value * POINTS_CAP}`;
@@ -343,6 +371,7 @@
         ? `rummy-board.html?mode=pool&players=${state.players}&pool=${state.pool}&entry=${state.entry}`
         : `rummy-board.html?mode=points&players=${state.players}&value=${state.value}`;
 
+    document.getElementById('create-private-link').href = document.getElementById('start-link').href + '&room=create';
     updateCashGating();
   }
 

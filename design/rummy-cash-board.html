@@ -650,7 +650,7 @@
       const pointValue = [1, 2, 5].includes(Number(qp.get('value'))) ? Number(qp.get('value')) : 1;
       for (let attempt = 1; attempt <= 30 && !joined; attempt++) {
         try {
-          joined = await client.joinOrCreate('rummy', {
+          const fallbackOptions = {
             name: profile?.display_name || session.user.email || 'Player',
             userId: session.user.id,
             accessToken: session.access_token,
@@ -659,8 +659,18 @@
             pointValue,
             poolLimit,
             entryFee,
-          });
+          };
+          // Private tables (waiting-room passes ?code=) re-join THAT table by code,
+          // never joinOrCreate (which would drop the player into a public one).
+          const privateCode = (qp.get('code') || '').toUpperCase();
+          joined = privateCode
+            ? await client.joinById(privateCode, fallbackOptions)
+            : await client.joinOrCreate('rummy', fallbackOptions);
         } catch (err) {
+          if (qp.get('code') && err && /not found|locked|full/i.test(err.message || '')) {
+            document.getElementById('connecting-status').innerHTML = 'This private table is no longer available. <a href="rummy-lobby.html">Back to Rummy lobby</a>';
+            return;
+          }
           if (err && err.code === 4403) {
             document.getElementById('connecting-status').innerHTML = 'Cash tables are for Pro members. <a href="wallet.html#pro">Go Pro</a>';
             return;

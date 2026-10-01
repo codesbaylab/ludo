@@ -77,20 +77,21 @@
   const stakeParam = new URLSearchParams(location.search).get('stake');
   const stake = stakeParam === null ? 50 : Math.max(0, Number(stakeParam) || 0);
   const isFree = stake <= 0;
+  const createRoom = new URLSearchParams(location.search).get('room') === 'create'; // private room via lobby's Create Room
   const initialPlayers = [2, 4].includes(Number(new URLSearchParams(location.search).get('players')))
     ? Number(new URLSearchParams(location.search).get('players'))
     : 4;
   let playerCount = initialPlayers;
 
   function render() {
-    document.getElementById('confirm-link').href = `waiting-room.html?stake=${stake}&players=${playerCount}`;
+    document.getElementById('confirm-link').href = `waiting-room.html?stake=${stake}&players=${playerCount}${createRoom ? '&room=create' : ''}`;
 
     if (isFree) {
-      document.getElementById('table-title').textContent = 'Quick Match';
-      document.getElementById('table-subtitle').textContent = `${playerCount} players · free — no stakes`;
+      document.getElementById('table-title').textContent = createRoom ? 'Create Private Room' : 'Quick Match';
+      document.getElementById('table-subtitle').textContent = createRoom ? `${playerCount} players · you get a code to share with friends` : `${playerCount} players · free — no stakes`;
       document.getElementById('pricing-card').style.display = 'none';
       document.getElementById('wallet-card').style.display = 'none';
-      document.getElementById('confirm-btn').textContent = 'Start Match';
+      document.getElementById('confirm-btn').textContent = createRoom ? 'Create Room' : 'Start Match';
       document.getElementById('confirm-hint').textContent = 'No stakes in a free match — just pick your table size and go.';
     } else {
       const pot = stake * playerCount;
