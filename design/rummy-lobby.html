@@ -312,14 +312,27 @@
       btn.classList.toggle('btn-secondary', !selected);
     });
 
-    document.getElementById('sum-value').textContent = VALUE_LABEL[state.value];
+    // Practice is play-money: coins (🪙), never ₹, and no wallet chip. Only the
+    // real Cash Table view talks in rupees / shows the real balance.
+    const cur = isCash ? '₹' : '🪙 ';
+    const SUBS = isCash
+      ? { 1: 'Casual · low risk', 2: 'Standard stakes', 5: 'High stakes' }
+      : { 1: 'Small swings', 2: 'Medium swings', 5: 'Big swings' };
+    document.querySelectorAll('.points-tile[data-value]').forEach((tile) => {
+      const v = Number(tile.dataset.value);
+      tile.querySelector('.tile-title').textContent = `${cur}${v} / point`;
+      tile.querySelector('.tile-sub').textContent = SUBS[v];
+    });
+    document.querySelectorAll('.entry-btn').forEach((b) => { b.textContent = `${cur}${b.dataset.entry}`; });
+    document.getElementById('wallet-chip').style.display = isCash ? '' : 'none';
+    document.getElementById('sum-value').textContent = `${cur}${state.value} / point`;
     document.getElementById('sum-players').textContent = `${state.players} Players`;
-    document.getElementById('sum-maxloss').textContent = `₹${state.value * POINTS_CAP}`;
+    document.getElementById('sum-maxloss').textContent = `${cur}${state.value * POINTS_CAP}`;
 
     document.getElementById('sum-pool').textContent = `${state.pool} Pool`;
     document.getElementById('sum-pool-players').textContent = `${state.players} Players`;
-    document.getElementById('sum-entry').textContent = `₹${state.entry}`;
-    document.getElementById('sum-pot').textContent = `₹${state.entry * state.players}`;
+    document.getElementById('sum-entry').textContent = `${cur}${state.entry}`;
+    document.getElementById('sum-pot').textContent = `${cur}${state.entry * state.players}`;
 
     document.getElementById('start-btn').textContent = isCash ? 'Start Table (real players, real money)' : 'Start Table (vs. computer players)';
     document.getElementById('start-link').href = isCash

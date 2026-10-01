@@ -563,9 +563,9 @@
       <a href="rummy-lobby.html" class="back-link">← Exit</a>
       <div class="rummy-title">
         <div class="name" id="game-title">Points Rummy</div>
-        <div class="sub" id="table-sub">₹1 / point · 4 players</div>
+        <div class="sub" id="table-sub">🪙 1 / point · 4 players</div>
       </div>
-      <a href="wallet.html" class="wallet-chip">💰 ₹250.00</a>
+      <a href="wallet.html" class="wallet-chip" style="display:none;">💰</a>
     </div>
 
     <div class="card pool-standings" id="pool-standings" style="display:none;">
@@ -706,8 +706,8 @@
 
   document.getElementById('game-title').textContent = MODE === 'pool' ? 'Pool Rummy' : 'Points Rummy';
   document.getElementById('table-sub').textContent = MODE === 'pool'
-    ? `${poolLimit} Pool · ₹${entryFee} entry · ${playerCount} players`
-    : `₹${pointsValue} / point · ${playerCount} players`;
+    ? `${poolLimit} Pool · 🪙 ${entryFee} entry · ${playerCount} players`
+    : `🪙 ${pointsValue} / point · ${playerCount} players`;
   document.getElementById('pool-standings').style.display = MODE === 'pool' ? '' : 'none';
   ['opp-1', 'opp-2', 'opp-3'].forEach(slot => {
     const used = Object.values(SLOT_FOR_PLAYER).includes(slot);
@@ -1335,7 +1335,7 @@
     const rows = scores.map(s => {
       const amount = s.points * pointsValue;
       const isWinnerRow = invalidDeclareBy === undefined && s.idx === winnerIdx;
-      const amtText = isWinnerRow ? `+₹${totalPot}` : amount > 0 ? `-₹${amount}` : '₹0';
+      const amtText = isWinnerRow ? `+🪙 ${totalPot}` : amount > 0 ? `-🪙 ${amount}` : '🪙 0';
       const amtClass = isWinnerRow || amount === 0 ? 'amt-pos' : 'amt-neg';
       return `<div class="score-row"><span>${s.idx === 0 ? 'You' : s.name}</span><span class="${amtClass}">${s.points} pts · ${amtText}</span></div>`;
     }).join('');
@@ -1399,7 +1399,7 @@
     const pot = entryFee * playerCount;
     const rows = poolPlayers.map(p => {
       const isSurvivor = p.idx === survivor.idx;
-      const amtText = isSurvivor ? `+₹${pot}` : `-₹${entryFee}`;
+      const amtText = isSurvivor ? `+🪙 ${pot}` : `-🪙 ${entryFee}`;
       return `<div class="score-row"><span>${p.idx === 0 ? 'You' : p.name} — ${p.cumulative} pts</span><span class="${isSurvivor ? 'amt-pos' : 'amt-neg'}">${amtText}</span></div>`;
     }).join('');
     const title = survivor.idx === 0 ? '🏆 You win the pool!' : `🏆 ${survivor.name} wins the pool!`;
