@@ -70,6 +70,15 @@ by a Supabase project for auth/wallet-ledger/match-history.
   result popup crashed on `players[-1]`.
 - **"Match ended" popup**: when a board's reconnect error says "disposed"/"not found" (match over or server
   restarted) it stops retrying and shows a popup that returns to the lobby (`game.js`, `rummy-cash-board.html`).
+- **Free Rummy with real players**: a third table type in `rummy-lobby.html` ("👥 Free · Real players"; the old
+  one is "vs Computer"). `free: true` is a create/join option AND `RummyState.free`; `RummyRoom` then needs no
+  Pro, takes no stake hold (`holdAmount()` = 0) and skips both `persist*Match` (no wallet, no history rows),
+  and `filterBy` includes `free` so matchmaking never mixes free and cash tables (clients always send the flag
+  as true/false). Quick match, private rooms and join-by-code all work for free; a guest joining by code adopts
+  the room's `free` flag from state. UI shows play coins (🪙), never ₹, and no wallet chip. Cash tables still
+  require Pro. Verified live in Chrome with non-Pro, ₹0 accounts (wallets untouched, no match rows written).
+- **Leave warnings**: Rummy cash/free board Exit asks "Leave this table?" (cash wording mentions losing the
+  stake), the practice board asks "Leave this game?"; both via `ludoConfirm`.
 
 ## Structure
 
