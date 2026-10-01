@@ -2,6 +2,9 @@
   "name": "ludo-server",
   "version": "0.1.1",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "description": "Authoritative realtime Ludo match server (Colyseus) + Supabase result persistence",
   "main": "build/index.js",
   "scripts": {
