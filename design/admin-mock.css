@@ -49,6 +49,12 @@ body.am .am-banner {
 .am-btn.sm { padding: 5px 10px; font-size: 12px; border-radius: 11px; }
 .am-btn.green { background: var(--green-soft); border-color: var(--green); color: #178a4c; }
 
+.am-top .needs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; font-size: 12px; font-weight: 800; color: var(--text-dim); }
+.am-top .needs a { text-decoration: none; }
+.phase { border-left: 5px solid var(--accent); }
+.dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), var(--accent-2)); }
+.dot.soft { background: #ffd9b8; }
+
 /* ---------- layout helpers ---------- */
 .am-grid { display: grid; gap: 16px; margin-bottom: 16px; }
 .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ludo Admin — Foundations & Roadmap (mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin-mock.css">
+<script src="admin-mock.js"></script>
+</head>
+<body data-page="roadmap" data-title="Foundations &amp; Roadmap" data-sub="What the app must start recording before each page can show real numbers — and the order to build it" data-range="off">
+
+<div id="page" style="display:none">
+  <div class="am-grid g4" id="kpis"></div>
+
+  <!-- FOUNDATIONS -->
+  <div class="am-card" style="margin-bottom:16px">
+    <div class="head"><div><h3>🧱 The 7 foundations</h3><div class="sub">Each one is a small, testable piece of backend. Nothing here changes how players play.</div></div></div>
+    <div id="found"></div>
+  </div>
+
+  <!-- DEPENDENCY MATRIX -->
+  <div class="am-card" style="margin-bottom:16px">
+    <div class="head"><div><h3>🔗 Which page needs what</h3><div class="sub">● required · ○ improves it (works without)</div></div></div>
+    <div id="matrix"></div>
+  </div>
+
+  <!-- ROADMAP -->
+  <div class="am-card" style="margin-bottom:16px">
+    <div class="head"><div><h3>🗺 Build order</h3><div class="sub">Each phase ships on its own, is tested against the real database and in a real browser, and gives you something usable.</div></div></div>
+    <div id="phases"></div>
+  </div>
+
+  <div class="am-grid g2">
+    <div class="am-card">
+      <div class="head"><div><h3>🙋 Decisions I need from you</h3><div class="sub">Defaults in bold if you just say “go”</div></div></div>
+      <div id="decisions"></div>
+    </div>
+    <div class="am-card">
+      <div class="head"><div><h3>🛡 How each phase is verified</h3><div class="sub">Same standard as the Pro / holds work</div></div></div>
+      <div class="list-row"><span class="chip green">1</span><div class="grow">Database tests in a rolled-back transaction<small>every rule: ledger always sums to the wallet, audit rows can’t be edited, role limits hold</small></div></div>
+      <div class="list-row"><span class="chip green">2</span><div class="grow">Tamper tests as a normal player<small>can’t read the ledger of others, can’t call admin actions, can’t forge audit rows</small></div></div>
+      <div class="list-row"><span class="chip green">3</span><div class="grow">Real-browser run against the live site<small>test accounts, real games, then everything is deleted again</small></div></div>
+      <div class="list-row"><span class="chip green">4</span><div class="grow">Backfill check<small>opening ledger entries so today’s balances reconcile to the paisa on day one</small></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const k = [['Foundations', '7', 'small backend pieces'], ['Phases', '5', 'each ships on its own'], ['Pages unlocked', '10', 'of 10 mockup pages'], ['Player-facing change', 'None', 'players notice nothing']];
+  document.getElementById('kpis').innerHTML = k.map(function (x) { return '<div class="am-card kpi"><div class="lbl">' + x[0] + '</div><div class="val">' + x[1] + '</div><div class="meta">' + x[2] + '</div></div>'; }).join('');
+
+  const F = [
+    { id: 1, ic: '📒', n: 'Wallet ledger', size: 'L', phase: 0, why: 'A permanent record of every rupee that moves — the only way to prove the books balance, print a player statement, or investigate a dispute.',
+      how: 'One shared “post to ledger” step inside every money action (deposit, withdrawal, refund, match result, Pro purchase, referral reward, transfer, admin adjustment). Rows can never be edited or deleted. Opening entries are created from today’s balances so history starts clean.',
+      cols: [['kind', 'deposit · withdrawal · match_win · match_loss · pro_purchase · referral · transfer_in/out · admin_adjust'], ['amount', '+ credit / − debit'], ['balance_after', 'running balance'], ['ref_type / ref_id', 'link to the match, tx, transfer…'], ['actor_id', 'who triggered it (player, system or admin)'], ['created_at', 'immutable timestamp']],
+      unlocks: 'User statement · Finance books check · Liabilities · Referral payouts · Reports' },
+    { id: 2, ic: '📜', n: 'Admin audit log', size: 'M', phase: 0, why: 'Every admin action recorded with who, what, before → after, why, and from where. Required once more than one person has admin access.',
+      how: 'Every existing admin function (ban, Pro grant, balance adjust, fee/level/limit changes, withdrawal pay/reject) writes one row. Reasons become mandatory for money actions. Append-only; admins can read but never edit.',
+      cols: [['admin_id', 'who'], ['action', 'balance_adjusted · user_banned · setting_changed …'], ['target_type / target_id', 'player, withdrawal, setting'], ['before / after', 'JSON snapshot of what changed'], ['reason', 'free text, required for money'], ['ip, created_at', 'where and when']],
+      unlocks: 'Audit & Roles page · Notes timeline · Change history · every “reason” field' },
+    { id: 3, ic: '🔐', n: 'Roles & approvals', size: 'M', phase: 0, why: 'Today any admin can do everything, including paying out withdrawals. Separate duties and require a second person for large amounts.',
+      how: 'A role on each admin (super admin, finance, support, analyst). Every admin function checks the role. A small approvals queue holds large withdrawals / adjustments until a different admin approves.',
+      cols: [['profiles.admin_role', 'super · finance · support · analyst'], ['admin_approvals.kind', 'withdrawal · adjustment'], ['payload', 'what is being approved'], ['requested_by / approved_by', 'must be different people'], ['status', 'pending · approved · declined']],
+      unlocks: 'Roles tab · Approvals queue · Finance payout flow · safer Settings' },
+    { id: 4, ic: '🧾', n: 'Match end reason & fee', size: 'S', phase: 2, why: 'Right now a finished match doesn’t say HOW it ended or exactly what fee was taken. Needed for fairness, forfeit stats and exact revenue.',
+      how: 'The game server already knows this at the moment it settles a match; it just writes three more columns. Old matches are labelled “unknown”.',
+      cols: [['end_reason', 'normal · forfeit · timeout · declare · server_restart'], ['fee_amount', 'platform fee actually taken'], ['duration_s', 'seconds from start to finish'], ['player_count', 'seats at the table']],
+      unlocks: 'Games page (how games end, forfeits, durations) · exact revenue on Dashboard' },
+    { id: 5, ic: '🖥', n: 'Login & device events', size: 'M', phase: 3, why: 'To spot one person running many accounts and to count “active players” you need to know when someone signed in and from what device.',
+      how: 'The app creates a random device ID once (stored on the phone) and sends it with sign-in and table joins. Rows are kept for a limited time. Accounts sharing a device or IP block are linked automatically. Needs a line in your privacy policy.',
+      cols: [['user_id', 'who'], ['event', 'login · join_table · withdrawal_request'], ['device_id', 'random ID from the app'], ['ip, user_agent', 'network + browser'], ['created_at', 'when']],
+      unlocks: 'Risk & Fraud (linked accounts, rings) · Active players · Referral abuse signals' },
+    { id: 6, ic: '🗃', n: 'Daily rollups', size: 'M', phase: 2, why: 'Charts over months would otherwise scan every match and transaction each time you open a page. A nightly summary keeps them instant.',
+      how: 'A scheduled job writes one row per day per metric (signups, actives, matches, fees, deposits, withdrawals…). Today’s numbers are computed live and merged in. Can be rebuilt any time from the ledger.',
+      cols: [['day', 'date'], ['metric', 'signups · dau · matches_ludo · fees · deposits …'], ['value', 'number'], ['dimension', 'optional: game, stake, source']],
+      unlocks: 'Dashboard charts · Users cohorts · Reports speed · long date ranges' },
+    { id: 7, ic: '⚙️', n: 'Editable platform fee', size: 'S', phase: 0, why: 'The 10% fee is written into the server code. Changing it needs a code change and a restart that ends live games.',
+      how: 'Move it into settings (with an optional per-game override). The game server reads it when a table starts, so a running match keeps the fee it started with. Every change goes to the audit log.',
+      cols: [['platform_fee_pct', 'default 10'], ['per-game override', 'optional (ludo / rummy)'], ['effective_from', 'applies to new tables only']],
+      unlocks: 'Settings → Game fee · accurate P&L when the fee changes' },
+  ];
+  const sz = { S: 'green', M: 'yellow', L: 'orange' };
+  document.getElementById('found').innerHTML = F.map(function (f) {
+    return '<div class="list-row" style="align-items:flex-start;flex-wrap:wrap;gap:14px"><span style="font-size:30px">' + f.ic + '</span><div class="grow" style="min-width:260px"><b style="font-size:15px">' + f.id + '. ' + f.n + '</b> <span class="chip ' + sz[f.size] + '">size ' + f.size + '</span> <span class="chip blue">phase ' + f.phase + '</span>' +
+      '<div style="font-size:13px;margin:6px 0"><b>Why:</b> ' + f.why + '</div><div style="font-size:13px;margin:6px 0"><b>How:</b> ' + f.how + '</div><div style="font-size:13px"><b>Unlocks:</b> <span class="dim">' + f.unlocks + '</span></div></div>' +
+      '<div style="flex:1;min-width:280px;background:var(--paper-2);border:2px solid var(--border);border-radius:16px;padding:10px 12px"><div class="dim" style="font-size:11px;font-weight:800;margin-bottom:6px">WHAT GETS RECORDED</div>' +
+      f.cols.map(function (c) { return '<div style="display:flex;gap:10px;font-size:12px;font-weight:700;padding:3px 0"><span class="mono" style="min-width:128px">' + c[0] + '</span><span class="dim">' + c[1] + '</span></div>'; }).join('') + '</div></div>';
+  }).join('');
+
+  const pages = ['Dashboard', 'Users', 'User detail', 'Finance', 'Games', 'Referrals', 'Risk & Fraud', 'Reports', 'Audit & Roles', 'Settings'];
+  // 2 = required, 1 = improves it (works without), 0 = not needed.   columns: ledger, audit, roles, end reason, login/device, rollups, fee
+  const M = [[1, 0, 0, 1, 2, 2, 1], [1, 0, 0, 0, 2, 1, 0], [2, 2, 0, 0, 2, 0, 0], [2, 2, 2, 1, 0, 1, 2], [0, 0, 0, 2, 0, 2, 1], [2, 0, 0, 0, 1, 1, 0], [1, 2, 2, 0, 2, 0, 0], [2, 2, 1, 1, 0, 2, 0], [0, 2, 2, 0, 0, 0, 0], [0, 2, 2, 0, 0, 0, 2]];
+  const hdr = ['Wallet ledger', 'Audit log', 'Roles & approvals', 'Match end reason', 'Login & device', 'Daily rollups', 'Editable fee'];
+  const clean = function (v) { return v === 2 ? '<span class="dot"></span>' : v === 1 ? '<span class="dot soft"></span>' : ''; };
+  AM.table(document.getElementById('matrix'), [{ l: 'Page', k: function (r) { return '<b>' + r.p + '</b>'; } }].concat(hdr.map(function (h, i) { return { l: h, a: 'c', k: function (r) { return clean(r.m[i]); } }; })),
+    pages.map(function (p, i) { return { p: p, m: M[i] }; }), { wide: true });
+
+  const P = [
+    { n: 'Phase 0 · Safety net', sz: 'foundations 1, 2, 3, 7', body: 'Ledger (with opening balances), audit log, roles & approvals, editable fee. Existing admin page keeps working but now writes the audit log and respects roles. A first “books balance” check runs.', gets: 'You can see every movement of money, who changed what, and block one person from doing everything alone.', risk: 'Highest care: touches every money function — done with full database tests and a backfill reconciliation.', c: 'red' },
+    { n: 'Phase 1 · Money & people pages', sz: 'real Finance · Users · User detail · basic Reports', body: 'Withdrawal queue with approvals, deposits, transfers, P&L, liabilities, books check. Users list with segments, full user view with ledger and notes. Revenue statement, withdrawal register and user statement exports.', gets: 'Daily finance work happens in one place; accountant-ready exports.', risk: 'Low — read-mostly screens on top of Phase 0.', c: 'orange' },
+    { n: 'Phase 2 · Game insight & speed', sz: 'foundations 4, 6', body: 'Servers start recording how matches end and the exact fee. Nightly rollups. Real Dashboard and Games pages (end reasons, forfeits, durations, peak hours, fairness stats).', gets: 'Trends over any date range, instantly; fairness evidence you can show.', risk: 'Low — small server change, fully backward compatible.', c: 'yellow' },
+    { n: 'Phase 3 · Risk & fraud', sz: 'foundation 5', body: 'Device and login events, linked-account detection, the alert rules and cases board, freeze/ban/hold-commission actions.', gets: 'Rings and loops are flagged for you instead of found by accident.', risk: 'Medium — privacy: needs a policy line and a retention period (your call).', c: 'blue' },
+    { n: 'Phase 4 · Growth, health & automation', sz: 'Referrals · System · scheduled reports · alerts', body: 'Referral analytics and abuse signals, server/watcher health from a status endpoint, email/Telegram alerts, scheduled reports, backup status.', gets: 'The system tells you when something needs you.', risk: 'Low — mostly reads and notifications.', c: 'green' },
+  ];
+  document.getElementById('phases').innerHTML = P.map(function (p, i) {
+    return '<div class="alert-row phase" style="background:var(--paper-2);align-items:center"><div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-weight:800;font-size:20px;display:flex;align-items:center;justify-content:center;flex:none">' + i + '</div><div class="body"><b>' + p.n + ' <span class="chip">' + p.sz + '</span></b>' + p.body + '<div style="margin-top:6px"><span class="chip green">You get</span> ' + p.gets + '</div><div style="margin-top:4px"><span class="chip ' + p.c + '">Risk</span> <span class="dim">' + p.risk + '</span></div></div></div>';
+  }).join('');
+
+  const D = [['Which roles do you want?', '<b>Super admin · Finance · Support · Analyst (read-only)</b>'], ['Second approver needed above', '<b>₹25,000 withdrawals · ₹2,000 manual adjustments</b>'], ['Is a reason mandatory for money actions?', '<b>Yes</b>'], ['Keep device/IP records for', '<b>12 months</b> (and add a privacy-policy line)'], ['Alert channels', '<b>Email</b> now · Telegram later'], ['Report formats', '<b>CSV + PDF</b> first, Excel later'], ['Should the platform fee ever differ per game?', '<b>Same 10% for all, field ready for overrides</b>']];
+  document.getElementById('decisions').innerHTML = D.map(function (d) { return '<div class="list-row"><span class="chip yellow">?</span><div class="grow">' + d[0] + '<small>' + d[1] + '</small></div></div>'; }).join('');
+});
+</script>
+</body>
+</html>

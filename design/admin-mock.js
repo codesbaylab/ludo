@@ -14,6 +14,7 @@
     ['reports', '🧾', 'Reports', 'admin-mock-reports.html'],
     ['audit', '📜', 'Audit & Roles', 'admin-mock-audit.html'],
     ['settings', '⚙️', 'Settings & System', 'admin-mock-settings.html'],
+    ['roadmap', '🧱', 'Foundations & Roadmap', 'admin-mock-roadmap.html'],
   ];
 
   // ---------- deterministic fake data ----------
@@ -172,6 +173,8 @@
     const page = b.dataset.page, title = b.dataset.title || '', sub = b.dataset.sub || '';
     const content = document.getElementById('page'); const tools = document.getElementById('tools');
     const nav = NAV.map((n) => `<a href="${n[3]}" class="${n[0] === page ? 'active' : ''}"><span class="ic">${n[1]}</span>${n[2]}${n[4] ? `<span class="count">${n[4]}</span>` : ''}</a>`).join('');
+    const needs = (b.dataset.needs || '').split('|').filter(Boolean);
+    const needsHtml = needs.length ? `<div class="needs"><span>Needs to be built first:</span>${needs.map((n) => `<a class="chip orange" href="admin-mock-roadmap.html">${n}</a>`).join('')}</div>` : '';
     const showRange = b.dataset.range !== 'off';
     const rangeHtml = showRange ? `<div class="am-pills" data-range><button data-n="7">7D</button><button data-n="30" class="on">30D</button><button data-n="90">90D</button><button data-n="180">6M</button></div>` : '';
     const wrap = document.createElement('div');
@@ -181,7 +184,7 @@
         <nav class="am-nav">${nav}</nav>
         <div class="am-side-foot"><span class="av" style="background:#ff8a3d">A</span><div class="who">aghilraj11<small>Super admin</small></div>
           <a class="icon-btn" href="admin-mock-dashboard.html" title="Log out" aria-label="Log out"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></a></div>
-      </aside><main class="am-main"><div class="am-top"><div><h1>${title}</h1><p>${sub}</p></div><div class="am-tools">${rangeHtml}<span id="tools-slot"></span></div></div><div id="mount"></div></main></div>`;
+      </aside><main class="am-main"><div class="am-top"><div><h1>${title}</h1><p>${sub}</p>${needsHtml}</div><div class="am-tools">${rangeHtml}<span id="tools-slot"></span></div></div><div id="mount"></div></main></div>`;
     document.body.insertBefore(wrap, document.body.firstChild);
     while (wrap.firstChild) document.body.insertBefore(wrap.firstChild, wrap);
     wrap.remove();
