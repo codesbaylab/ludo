@@ -62,7 +62,7 @@
       </div>
       <div style="display:flex; justify-content:space-between; align-items:center;">
         <span style="font-size:14px; font-weight:700;">Room Type</span>
-        <span style="color:var(--text-dim); font-size:14px; font-weight:700;">Private · Cash · Real players only</span>
+        <span id="room-type-text" style="color:var(--text-dim); font-size:14px; font-weight:700;">Cash · Real players only</span>
       </div>
     </div>
 
@@ -78,6 +78,8 @@
   const joinCode = (qp.get('code') || '').trim().toUpperCase();
   const createPrivate = qp.get('room') === 'create';
   const isPrivate = !!joinCode || createPrivate;
+  // Free table (?free=1): real players, play coins, no Pro gate and no money moves.
+  let FREE = qp.get('free') === '1';
   let mode = qp.get('mode') === 'pool' ? 'pool' : 'points';
   const playersParam = Number(qp.get('players'));
   let playerCount = [2, 4].includes(playersParam) ? playersParam : 4;
@@ -88,19 +90,21 @@
   const SERVER_URL = qp.get('server') || 'wss://ludo-x96u.onrender.com';
 
   function renderSettings() {
+  const cur = FREE ? '🪙 ' : '₹'; // free tables use play coins, never rupees
+  document.getElementById('room-type-text').textContent = (isPrivate ? 'Private · ' : '') + (FREE ? 'Free · Real players only' : 'Cash · Real players only');
   document.getElementById('max-players-value').textContent = String(playerCount);
 
   if (mode === 'pool') {
-    document.getElementById('table-badge').textContent = `${poolLimit} Pool · ₹${entryFee}`;
+    document.getElementById('table-badge').textContent = `${poolLimit} Pool · ${cur}${entryFee}`;
     document.getElementById('mode-value').textContent = 'Pool Rummy';
     document.getElementById('stake-left').innerHTML = '<div style="font-size:12px; color:var(--text-dim); font-weight:700;">Pool Size / Entry</div><div id="stake-left-value" style="font-size:19px; font-weight:800;"></div>';
-    document.getElementById('stake-left-value').textContent = `${poolLimit} pool · ₹${entryFee} entry`;
+    document.getElementById('stake-left-value').textContent = `${poolLimit} pool · ${cur}${entryFee} entry`;
     document.getElementById('stake-right').innerHTML = '<div style="font-size:12px; color:var(--text-dim); font-weight:700;">Winner Takes</div><div id="stake-right-value" style="font-size:19px; font-weight:800; color:#178a4c;"></div>';
-    document.getElementById('stake-right-value').textContent = `₹${entryFee * playerCount}`;
+    document.getElementById('stake-right-value').textContent = `${cur}${entryFee * playerCount}`;
   } else {
-    document.getElementById('table-badge').textContent = `₹${pointValue}/pt Table`;
-    document.getElementById('stake-left-value').textContent = `₹${pointValue} / point`;
-    document.getElementById('stake-right-value').textContent = `₹${pointValue * 80}`;
+    document.getElementById('table-badge').textContent = `${cur}${pointValue}/pt Table`;
+    document.getElementById('stake-left-value').textContent = `${cur}${pointValue} / point`;
+    document.getElementById('stake-right-value').textContent = `${cur}${pointValue * 80}`;
   }
   }
   renderSettings();
@@ -152,6 +156,7 @@
           pointValue,
           poolLimit,
           entryFee,
+          free: FREE, // always sent (true/false) so matchmaking never mixes free and cash tables
         };
         room = joinCode ? await client.joinById(joinCode, joinOptions)
           : createPrivate ? await client.create('rummy', { ...joinOptions, private: true })
@@ -207,9 +212,9 @@
     room.onStateChange(state => {
       const snapshot = state.toJSON();
       renderPlayers(snapshot, room.sessionId);
-      if (joinCode && snapshot.mode && (mode !== snapshot.mode || playerCount !== snapshot.playerCount || pointValue !== snapshot.pointValue || poolLimit !== snapshot.poolLimit || entryFee !== snapshot.entryFee)) {
+      if (joinCode && snapshot.mode && (FREE !== !!snapshot.free || mode !== snapshot.mode || playerCount !== snapshot.playerCount || pointValue !== snapshot.pointValue || poolLimit !== snapshot.poolLimit || entryFee !== snapshot.entryFee)) {
         // Guest: adopt the host's table settings and show them.
-        mode = snapshot.mode; playerCount = snapshot.playerCount;
+        FREE = !!snapshot.free; mode = snapshot.mode; playerCount = snapshot.playerCount;
         pointValue = snapshot.pointValue || pointValue; poolLimit = snapshot.poolLimit || poolLimit; entryFee = snapshot.entryFee || entryFee;
         renderSettings();
       }
@@ -224,7 +229,7 @@
         const dest = mode === 'pool'
           ? `rummy-cash-board.html?mode=pool&players=${playerCount}&pool=${poolLimit}&entry=${entryFee}`
           : `rummy-cash-board.html?mode=points&players=${playerCount}&value=${pointValue}`;
-        const destUrl = isPrivate ? dest + '&code=' + room.roomId : dest;
+        const destUrl = dest + (FREE ? '&free=1' : '') + (isPrivate ? '&code=' + room.roomId : '');
         setTimeout(() => {
           room.send('handoff'); // see RummyRoom's 'handoff' handler
           setTimeout(() => { location.href = destUrl; }, 250);

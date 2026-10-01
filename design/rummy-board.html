@@ -560,7 +560,7 @@
     <div class="preview-banner">🎲 Practice mode — real rules enforced, playing against computer opponents. No real money or other players yet.</div>
 
     <div class="rummy-header">
-      <a href="rummy-lobby.html" class="back-link">← Exit</a>
+      <a href="rummy-lobby.html" class="back-link" id="exit-link">← Exit</a>
       <div class="rummy-title">
         <div class="name" id="game-title">Points Rummy</div>
         <div class="sub" id="table-sub">🪙 1 / point · 4 players</div>
@@ -1484,6 +1484,13 @@
     renderAll();
     uiBusy = false;
     runBotTurnsUntilYourTurn();
+  });
+
+  // Leaving mid-game abandons the practice hand — ask first, like the real tables do.
+  document.getElementById('exit-link').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const leave = await ludoConfirm({ tone: 'danger', icon: '🚪', title: 'Leave this game?', message: 'Your current practice game will be abandoned.', confirmText: 'Leave game', cancelText: 'Keep playing' });
+    if (leave) location.href = 'rummy-lobby.html';
   });
 
   document.getElementById('btn-declare').addEventListener('click', async () => {

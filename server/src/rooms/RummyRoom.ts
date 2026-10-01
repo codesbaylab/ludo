@@ -14,6 +14,8 @@ interface JoinOptions {
 interface CreateOptions {
   // true = private table joined by code only (see onCreate).
   private?: boolean;
+  // true = free table: real players but no money (see RummyState.free).
+  free?: boolean;
   mode?: 'points' | 'pool';
   playerCount?: number;
   pointValue?: number;
@@ -62,6 +64,7 @@ export class RummyRoom extends Room<RummyState> {
   // Supabase auth user id per session, only populated for clients that pass
   // one at join time. Not part of the synced schema (opponents don't need it).
   private sessionUserIds: Record<string, string> = {};
+  private isFree = false;
   // Reserved worst-case loss per session (see holdFunds in supabase.ts).
   private holds: Record<string, Hold> = {};
 
@@ -85,6 +88,8 @@ export class RummyRoom extends Room<RummyState> {
     const state = new RummyState();
     state.mode = this.mode;
     state.playerCount = playerCount;
+    this.isFree = !!options.free;
+    state.free = this.isFree;
     // Unused-for-this-mode fields stay at a consistent default (0) so two
     // tables of the same mode+relevant-stake always share metadata shape —
     // filterBy(['mode','playerCount','pointValue','poolLimit','entryFee'])
@@ -105,6 +110,7 @@ export class RummyRoom extends Room<RummyState> {
       pointValue: state.pointValue,
       poolLimit: state.poolLimit,
       entryFee: state.entryFee,
+      free: this.isFree,
     });
 
     // Waiting room -> board handoff: the old page's socket close can take ~10s to
@@ -122,7 +128,7 @@ export class RummyRoom extends Room<RummyState> {
   async onJoin(client: Client, options: JoinOptions = {}) {
     // Same real-money ban check as LudoRoom.onJoin, checked before reserving
     // a slot so a banned user can never occupy a seat even briefly.
-    const check = await authorizeJoin(options, true);
+    const check = await authorizeJoin(options, !this.isFree);
     if (!check.ok) {
       if (check.reason === 'banned') {
         client.leave();
@@ -518,6 +524,7 @@ export class RummyRoom extends Room<RummyState> {
 
   /** Worst-case loss for this table: Pool = entry fee; Points = 80 points x value. */
   private holdAmount(): number {
+    if (this.isFree) return 0; // free tables never reserve or move money
     return this.state.mode === 'pool' ? this.state.entryFee : this.state.pointValue * Engine.MAX_PENALTY;
   }
 
@@ -545,6 +552,7 @@ export class RummyRoom extends Room<RummyState> {
    *  still recorded as a finished match (for history), just with a null
    *  winner and every player's own `payout` at 0. */
   private async persistPointsMatch(points: number[], winnerIdx: number | null) {
+    if (this.isFree) return; // no money, no wallet settlement
     const supabase = getSupabase();
     if (!supabase) return;
 
@@ -601,6 +609,7 @@ export class RummyRoom extends Room<RummyState> {
   }
 
   private async persistPoolMatch(survivorIdx: number) {
+    if (this.isFree) return; // no money, no wallet settlement
     const supabase = getSupabase();
     if (!supabase) return;
 

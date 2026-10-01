@@ -243,11 +243,19 @@
   const MODE = qp.get('mode') === 'pool' ? 'pool' : 'points';
   const PLAYER_COUNT = [2, 4].includes(Number(qp.get('players'))) ? Number(qp.get('players')) : 4;
   const SERVER_URL = qp.get('server') || 'wss://ludo-x96u.onrender.com';
+  // Free table (?free=1): real players, play coins, nothing touches the wallet.
+  const FREE = qp.get('free') === '1';
+  const CUR = FREE ? '🪙 ' : '₹';
 
   document.getElementById('table-sub').textContent = MODE === 'pool'
     ? `Pool Rummy · ${PLAYER_COUNT} players`
     : `Points Rummy · ${PLAYER_COUNT} players`;
   document.getElementById('pool-standings').style.display = MODE === 'pool' ? '' : 'none';
+  if (FREE) {
+    document.getElementById('table-name').textContent = 'Rummy — Free Table';
+    document.getElementById('table-sub').textContent += ' · play coins';
+    document.getElementById('wallet-chip').style.display = 'none';
+  }
 
   let room = null;
   let mySeatIdx = -1;
@@ -470,14 +478,14 @@
         const rows = snapshot.players.map((p, i) => {
           const isWinnerRow = invalidBy === -1 && i === winnerIdx;
           const amount = points[i] * snapshot.pointValue;
-          const amtText = isWinnerRow ? 'won' : amount > 0 ? `-₹${amount}` : '₹0';
+          const amtText = isWinnerRow ? 'won' : amount > 0 ? `-${CUR}${amount}` : `${CUR}0`;
           const amtClass = isWinnerRow || amount === 0 ? 'amt-pos' : 'amt-neg';
           return `<div class="score-row"><span>${i === mySeatIdx ? 'You' : p.name}</span><span class="${amtClass}">${points[i]} pts · ${amtText}</span></div>`;
         }).join('');
         document.getElementById('declare-card-content').innerHTML = `
           <div class="tile-icon trophy-bounce" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">${invalidBy !== -1 ? '❌' : '🏆'}</div>
           <h1 style="font-size:19px; margin:0;">${headline}</h1>
-          <p style="font-size:12px; color:var(--text-dim); font-weight:600; margin:8px 0 4px;">Real wallet updated — this table is now over.</p>
+          <p style="font-size:12px; color:var(--text-dim); font-weight:600; margin:8px 0 4px;">${FREE ? 'Free table — no money was involved.' : 'Real wallet updated — this table is now over.'}</p>
           <div style="margin-top:10px; text-align:left;">${rows}</div>
           <a href="rummy-lobby.html"><button class="btn btn-primary" style="margin-top:16px;">Back to Rummy Lobby</button></a>
         `;
@@ -485,13 +493,13 @@
         const survivorIdx = snapshot.players.findIndex(p => !p.eliminated);
         const rows = snapshot.players.map((p, i) => {
           const isSurvivor = i === survivorIdx;
-          return `<div class="score-row"><span>${i === mySeatIdx ? 'You' : p.name} — ${p.cumulative} pts</span><span class="${isSurvivor ? 'amt-pos' : 'amt-neg'}">${isSurvivor ? 'won the pot' : `-₹${snapshot.entryFee}`}</span></div>`;
+          return `<div class="score-row"><span>${i === mySeatIdx ? 'You' : p.name} — ${p.cumulative} pts</span><span class="${isSurvivor ? 'amt-pos' : 'amt-neg'}">${isSurvivor ? 'won the pot' : `-${CUR}${snapshot.entryFee}`}</span></div>`;
         }).join('');
         const title = survivorIdx === mySeatIdx ? '🏆 You win the pool!' : `🏆 ${snapshot.players[survivorIdx].name} wins the pool!`;
         document.getElementById('declare-card-content').innerHTML = `
           <div class="tile-icon trophy-bounce" style="width:56px; height:56px; font-size:26px; margin:0 auto 12px; background:var(--yellow-soft);">🏆</div>
           <h1 style="font-size:19px; margin:0;">${title}</h1>
-          <p style="font-size:12px; color:var(--text-dim); font-weight:600; margin:8px 0 4px;">Real wallet updated — this pool is now over.</p>
+          <p style="font-size:12px; color:var(--text-dim); font-weight:600; margin:8px 0 4px;">${FREE ? 'Free pool — no money was involved.' : 'Real wallet updated — this pool is now over.'}</p>
           <div style="margin-top:10px; text-align:left;">${rows}</div>
           <a href="rummy-lobby.html"><button class="btn btn-primary" style="margin-top:16px;">Back to Rummy Lobby</button></a>
         `;
@@ -583,6 +591,9 @@
 
     document.getElementById('exit-link').addEventListener('click', async (e) => {
       e.preventDefault();
+      const stakeNote = FREE ? 'The other player will see that you left and may win by forfeit.'
+        : "Leaving forfeits this table — you'll lose your stake and the other player wins.";
+      if (!(await ludoConfirm({ tone: 'danger', icon: '🚪', title: 'Leave this table?', message: stakeNote, confirmText: 'Leave table', cancelText: 'Keep playing' }))) return;
       document.getElementById('connecting-status').textContent = 'Leaving table…';
       document.getElementById('connecting-overlay').classList.add('open');
       // Capped wait: room.leave() resolves only when the server's close frame comes back,
@@ -669,6 +680,7 @@
             pointValue,
             poolLimit,
             entryFee,
+            free: FREE,
           };
           // Private tables (waiting-room passes ?code=) re-join THAT table by code,
           // never joinOrCreate (which would drop the player into a public one).

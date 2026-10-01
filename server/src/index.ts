@@ -68,7 +68,7 @@ gameServer.define('ludo', LudoRoom).filterBy(['playerCount', 'stake']);
 // pointValue/poolLimit/entryFee are 0 (a consistent, mode-irrelevant
 // default — see RummyRoom.onCreate) for whichever mode doesn't use them, so
 // two same-mode tables still match on the fields that actually matter.
-gameServer.define('rummy', RummyRoom).filterBy(['mode', 'playerCount', 'pointValue', 'poolLimit', 'entryFee']);
+gameServer.define('rummy', RummyRoom).filterBy(['mode', 'playerCount', 'pointValue', 'poolLimit', 'entryFee', 'free']);
 
 const port = Number(process.env.PORT) || 2567;
 gameServer.listen(port).then(async () => {

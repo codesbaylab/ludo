@@ -31,6 +31,8 @@ export class RummyState extends Schema {
   // Pool mode only.
   @type('number') poolLimit: number = 101;
   @type('number') entryFee: number = 100;
+  // Free table: real players, play coins only — no Pro gate, no stake hold, no wallet settlement.
+  @type('boolean') free: boolean = false;
 
   @type([RummyPlayerState]) players = new ArraySchema<RummyPlayerState>();
 

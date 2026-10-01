@@ -46,7 +46,8 @@
 
   <div style="padding: 8px 20px;">
     <div class="table-type-picker" id="table-type-picker">
-      <button type="button" class="btn btn-primary btn-sm table-type-btn" data-type="practice">🎲 Practice (free)</button>
+      <button type="button" class="btn btn-primary btn-sm table-type-btn" data-type="practice">🎲 vs Computer (free)</button>
+      <button type="button" class="btn btn-secondary btn-sm table-type-btn" data-type="free">👥 Free · Real players</button>
       <button type="button" class="btn btn-secondary btn-sm table-type-btn" data-type="cash">💵 Cash Table (real money)</button>
     </div>
 
@@ -259,6 +260,8 @@
   function render() {
     const isPool = state.mode === 'pool';
     const isCash = state.tableType === 'cash';
+    const isFree = state.tableType === 'free';
+    const isLive = isCash || isFree; // real players (vs. computer bots otherwise)
 
     document.querySelectorAll('.table-type-btn').forEach((btn) => {
       const selected = btn.dataset.type === state.tableType;
@@ -267,10 +270,12 @@
     });
     document.getElementById('type-banner').innerHTML = isCash
       ? '💵 Cash table — real players, real money. 10% platform fee on winnings, same as Ludo\'s cash tables.'
-      : '🎲 Practice table — real rules, computer opponents, no real money or other players yet';
-    document.getElementById('type-banner').style.background = isCash ? 'var(--green-soft)' : 'var(--yellow-soft)';
-    document.getElementById('type-banner').style.borderColor = isCash ? 'var(--green)' : 'var(--yellow)';
-    document.getElementById('type-banner').style.color = isCash ? '#0f6b47' : '#8a6d00';
+      : isFree
+        ? '👥 Free table — play real people with play coins. No real money, no Pro needed. Create a private room or join one by code.'
+        : '🎲 Practice table — real rules, computer opponents, no real money or other players';
+    document.getElementById('type-banner').style.background = isCash ? 'var(--green-soft)' : isFree ? 'var(--blue-soft)' : 'var(--yellow-soft)';
+    document.getElementById('type-banner').style.borderColor = isCash ? 'var(--green)' : isFree ? 'var(--blue)' : 'var(--yellow)';
+    document.getElementById('type-banner').style.color = isCash ? '#0f6b47' : isFree ? '#1f5fa8' : '#8a6d00';
 
   document.querySelectorAll('.mode-btn').forEach((btn) => {
       const selected = btn.dataset.mode === state.mode;
@@ -294,6 +299,12 @@
       document.getElementById('mode-hint').textContent = isCash
         ? 'You\'ll play one real hand against real opponents with real rules enforced server-side — real money settles the moment the hand ends. No bots fill empty seats.'
         : 'You\'ll play a full round against computer opponents with the real rules enforced — no real money changes hands, and table matchmaking with other people isn\'t wired up yet.';
+    }
+
+    if (isFree) {
+      document.getElementById('mode-hint').textContent = isPool
+        ? 'Hand after hand against real people until one player is left standing — real rules and elimination, play coins only. No bots fill empty seats.'
+        : 'One real hand against real people with the rules enforced server-side — play coins only, nothing touches your wallet. No bots fill empty seats.';
     }
 
     document.querySelectorAll('.points-tile[data-value]').forEach((tile) => {
@@ -326,10 +337,10 @@
     });
     document.querySelectorAll('.entry-btn').forEach((b) => { b.textContent = `${cur}${b.dataset.entry}`; });
     document.getElementById('wallet-chip').style.display = isCash ? '' : 'none';
-    // Codes / private tables only exist for real-player Cash tables (practice is vs. bots).
-    document.getElementById('join-box').style.display = isCash ? '' : 'none';
-    document.querySelectorAll('a[href="#join-box"]').forEach((a) => { a.style.display = isCash ? '' : 'none'; });
-    document.getElementById('create-private-link').style.display = isCash ? '' : 'none';
+    // Codes / private tables only exist for real-player tables (cash or free); practice is vs. bots.
+    document.getElementById('join-box').style.display = isLive ? '' : 'none';
+    document.querySelectorAll('a[href="#join-box"]').forEach((a) => { a.style.display = isLive ? '' : 'none'; });
+    document.getElementById('create-private-link').style.display = isLive ? '' : 'none';
     document.getElementById('sum-value').textContent = `${cur}${state.value} / point`;
     document.getElementById('sum-players').textContent = `${state.players} Players`;
     document.getElementById('sum-maxloss').textContent = `${cur}${state.value * POINTS_CAP}`;
@@ -339,11 +350,11 @@
     document.getElementById('sum-entry').textContent = `${cur}${state.entry}`;
     document.getElementById('sum-pot').textContent = `${cur}${state.entry * state.players}`;
 
-    document.getElementById('start-btn').textContent = isCash ? 'Start Table (real players, real money)' : 'Start Table (vs. computer players)';
-    document.getElementById('start-link').href = isCash
+    document.getElementById('start-btn').textContent = isCash ? 'Start Table (real players, real money)' : isFree ? 'Start Free Table (real players, no money)' : 'Start Table (vs. computer players)';
+    document.getElementById('start-link').href = isLive
       ? (isPool
           ? `rummy-waiting-room.html?mode=pool&players=${state.players}&pool=${state.pool}&entry=${state.entry}`
-          : `rummy-waiting-room.html?mode=points&players=${state.players}&value=${state.value}`)
+          : `rummy-waiting-room.html?mode=points&players=${state.players}&value=${state.value}`) + (isFree ? '&free=1' : '')
       : isPool
         ? `rummy-board.html?mode=pool&players=${state.players}&pool=${state.pool}&entry=${state.entry}`
         : `rummy-board.html?mode=points&players=${state.players}&value=${state.value}`;
@@ -352,12 +363,14 @@
     updateCashGating();
   }
 
-  // Private tables: both buttons need a session + Pro, same gate as Start Table.
+  // Private tables / join-by-code: a session for any real-player table, plus Pro for cash ones.
   async function requireCashAccess() {
     const { data: { session } } = await ludoSupabase.auth.getSession();
     if (!session) { location.href = 'login.html'; return false; }
-    await proReady;
-    if (!isPro) { promptGoPro(); return false; }
+    if (state.tableType === 'cash') {
+      await proReady;
+      if (!isPro) { promptGoPro(); return false; }
+    }
     return true;
   }
   document.getElementById('create-private-link').addEventListener('click', async (e) => {
@@ -391,12 +404,9 @@
   // persist a result), but redirecting to login.html here is a much better
   // experience than silently failing to join a couple of screens later.
   document.getElementById('start-link').addEventListener('click', async (e) => {
-    if (state.tableType !== 'cash') return;
+    if (state.tableType === 'practice') return;
     e.preventDefault();
-    const { data: { session } } = await ludoSupabase.auth.getSession();
-    if (!session) { location.href = 'login.html'; return; }
-    await proReady;
-    if (!isPro) { promptGoPro(); return; }
+    if (!(await requireCashAccess())) return;
     location.href = document.getElementById('start-link').href;
   });
 
@@ -440,7 +450,7 @@
   render();
 
   // Same gating pattern as design/lobby.html's server-gated tiles — only
-  // relevant for Cash Tables (practice needs no server at all). Polls
+  // relevant for real-player tables (practice vs. computer needs no server at all). Polls
   // forever in the background once cash mode is first selected, same
   // reasoning as lobby.html: re-greys the button if the server drops again.
   const SERVER_URL = new URLSearchParams(location.search).get('server') || 'wss://ludo-x96u.onrender.com';
@@ -461,10 +471,10 @@
 
   function updateCashGating() {
     const badge = document.getElementById('cash-server-status');
-    const isCash = state.tableType === 'cash';
-    badge.style.display = isCash ? '' : 'none';
-    document.getElementById('start-link').classList.toggle('disabled', isCash && !serverOnline);
-    if (isCash) {
+    const isLive = state.tableType !== 'practice';
+    badge.style.display = isLive ? '' : 'none';
+    document.getElementById('start-link').classList.toggle('disabled', isLive && !serverOnline);
+    if (isLive) {
       badge.textContent = serverOnline ? '🟢 Game server online' : '⏳ Checking game server…';
       badge.className = 'badge ' + (serverOnline ? 'badge-ready' : 'badge-waiting');
     }
@@ -472,7 +482,7 @@
 
   (async function pollServerStatus() {
     for (;;) {
-      if (state.tableType === 'cash') {
+      if (state.tableType !== 'practice') {
         const ok = await pingServer();
         if (ok !== serverOnline) {
           serverOnline = ok;
