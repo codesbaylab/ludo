@@ -14,6 +14,7 @@
   .tile.locked::after { content:"🔒"; position:absolute; top:10px; right:12px; font-size:18px; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="ui-dialog.js"></script>
 <script src="supabase-client.js"></script>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#ff8a3d">
@@ -261,7 +262,7 @@
   })();
 
   document.getElementById('user-avatar').addEventListener('click', async () => {
-    if (!confirm('Sign out?')) return;
+    if (!(await ludoConfirm({ tone: 'info', icon: '👋', title: 'Sign out?', message: 'You’ll need to log in again to play.', confirmText: 'Sign out', cancelText: 'Stay' }))) return;
     await ludoSupabase.auth.signOut();
     location.href = 'login.html';
   });

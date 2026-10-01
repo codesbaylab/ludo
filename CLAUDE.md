@@ -18,6 +18,11 @@ by a Supabase project for auth/wallet-ledger/match-history.
 - **Always answer short.** Explicit user preference — keep chat replies brief/direct, not long
   explanations, unless the user asks for more detail.
 
+- **No native `confirm()`/`alert()` anywhere** — use `design/ui-dialog.js` (`ludoConfirm`, `ludoAlert`,
+  `ludoError`; styles in `styles.css` `.dlg-*`). Approved design: `design/popup-mockup.html`. Any new
+  page needing a dialog must include `<script src="ui-dialog.js">`; callers `await` the confirm, so
+  the enclosing handler must be `async`.
+
 ## Structure
 
 - `design/styles.css` — shared stylesheet for every page. `html, body` sets

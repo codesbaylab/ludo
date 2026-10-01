@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="ui-dialog.js"></script>
 <script src="supabase-client.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <link rel="manifest" href="manifest.json">
@@ -224,7 +225,7 @@
     `;
     document.getElementById('btn-pro-deposit')?.addEventListener('click', () => depositBtn.click());
     document.getElementById('btn-buy-pro')?.addEventListener('click', async (e) => {
-      if (!confirm(`Buy Pro for ₹${fee.toFixed(0)}? This is a one-time, non-refundable charge.`)) return;
+      if (!(await ludoConfirm({ tone: 'accent', icon: '👑', title: 'Go Pro?', message: 'Unlock cash tables, withdrawals and referrals.', detail: [['Membership fee', `₹${fee.toFixed(0)}`], ['Balance after', `₹${(balance - fee).toFixed(2)}`], ['Type', 'One-time · non-refundable']], confirmText: 'Buy Pro', cancelText: 'Not now' }))) return;
       e.target.disabled = true;
       const { error } = await ludoSupabase.rpc('purchase_pro');
       if (error) {

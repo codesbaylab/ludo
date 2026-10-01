@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="ui-dialog.js"></script>
 <script src="supabase-client.js"></script>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#ff8a3d">
@@ -164,40 +165,40 @@
         btn.disabled = true;
         const { data: newBalance, error } = await ludoSupabase.rpc('admin_adjust_wallet_balance', { p_user_id: p.id, p_delta: delta });
         btn.disabled = false;
-        if (error) { alert('Failed: ' + error.message); return; }
+        if (error) { ludoError(error.message); return; }
         input.value = '';
         row.querySelector('[data-balance]').textContent = `₹${Number(newBalance).toFixed(2)}`;
       });
       row.querySelector('[data-ban-btn]').addEventListener('click', async () => {
         const nextBanned = !p.is_banned;
-        if (!confirm(`${nextBanned ? 'Ban' : 'Unban'} ${p.display_name || 'this player'}?${nextBanned ? ' They will be blocked from joining any game.' : ''}`)) return;
+        if (!(await ludoConfirm({ tone: nextBanned ? 'danger' : 'info', icon: nextBanned ? '🚫' : '✅', title: `${nextBanned ? 'Ban' : 'Unban'} ${p.display_name || 'this player'}?`, message: nextBanned ? 'They will be blocked from joining any game.' : 'They will be able to join games again.', confirmText: nextBanned ? 'Ban user' : 'Unban' }))) return;
         const btn = row.querySelector('[data-ban-btn]');
         btn.disabled = true;
         const { error } = await ludoSupabase.rpc('admin_set_user_banned', { p_user_id: p.id, p_banned: nextBanned });
         btn.disabled = false;
-        if (error) { alert('Failed: ' + error.message); return; }
+        if (error) { ludoError(error.message); return; }
         p.is_banned = nextBanned;
         renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, document.getElementById('user-search').value);
       });
       row.querySelector('[data-pro-btn]').addEventListener('click', async () => {
         const nextPro = !p.is_pro;
-        if (!confirm(`${nextPro ? 'Grant Pro to' : 'Revoke Pro from'} ${p.display_name || 'this player'}?${nextPro ? ' No fee is charged and no referral commission is paid.' : ''}`)) return;
+        if (!(await ludoConfirm({ tone: 'accent', icon: '👑', title: `${nextPro ? 'Grant Pro to' : 'Revoke Pro from'} ${p.display_name || 'this player'}?`, message: nextPro ? 'No fee is charged and no referral commission is paid.' : 'They will lose access to cash tables and referrals.', confirmText: nextPro ? 'Grant Pro' : 'Revoke Pro' }))) return;
         const btn = row.querySelector('[data-pro-btn]');
         btn.disabled = true;
         const { error } = await ludoSupabase.rpc('admin_set_user_pro', { p_user_id: p.id, p_is_pro: nextPro });
         btn.disabled = false;
-        if (error) { alert('Failed: ' + error.message); return; }
+        if (error) { ludoError(error.message); return; }
         p.is_pro = nextPro;
         renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, document.getElementById('user-search').value);
       });
       row.querySelector('[data-admin-btn]').addEventListener('click', async () => {
         const nextAdmin = !p.is_admin;
-        if (!confirm(`${nextAdmin ? 'Grant' : 'Remove'} admin access ${nextAdmin ? 'to' : 'from'} ${p.display_name || 'this player'}?`)) return;
+        if (!(await ludoConfirm({ tone: 'warn', icon: '🛡️', title: `${nextAdmin ? 'Grant' : 'Remove'} admin access?`, message: `${nextAdmin ? 'Give' : 'Take'} admin access ${nextAdmin ? 'to' : 'from'} ${p.display_name || 'this player'}.`, confirmText: nextAdmin ? 'Grant access' : 'Remove access' }))) return;
         const btn = row.querySelector('[data-admin-btn]');
         btn.disabled = true;
         const { error } = await ludoSupabase.rpc('admin_set_is_admin', { p_user_id: p.id, p_is_admin: nextAdmin });
         btn.disabled = false;
-        if (error) { alert('Failed: ' + error.message); return; }
+        if (error) { ludoError(error.message); return; }
         p.is_admin = nextAdmin;
         renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, document.getElementById('user-search').value);
       });
@@ -261,17 +262,17 @@
       if (w.status === 'pending') {
         row.querySelector('[data-paid-btn]').addEventListener('click', async () => {
           const txHash = row.querySelector('[data-txhash-input]').value.trim();
-          if (!txHash) { alert('Enter the on-chain tx hash first.'); return; }
-          if (!confirm(`Confirm you already sent ₹${Number(w.amount_inr).toFixed(2)} worth of USDT to ${w.destination_address}?`)) return;
+          if (!txHash) { ludoAlert({ tone: 'warn', icon: '✏️', title: 'Check your input', message: 'Enter the on-chain tx hash first.' }); return; }
+          if (!(await ludoConfirm({ tone: 'warn', icon: '💸', title: 'Mark as paid?', message: 'Only confirm if you already sent the USDT yourself.', detail: [['Amount', `₹${Number(w.amount_inr).toFixed(2)}`], ['To', w.destination_address]], confirmText: 'Yes, I sent it' }))) return;
           const { error } = await ludoSupabase.rpc('admin_mark_withdrawal_paid', { p_withdrawal_id: w.id, p_tx_hash: txHash });
-          if (error) { alert('Failed: ' + error.message); return; }
+          if (error) { ludoError(error.message); return; }
           w.status = 'paid'; w.tx_hash = txHash;
           renderWithdrawals(cachedWithdrawals);
         });
         row.querySelector('[data-reject-btn]').addEventListener('click', async () => {
           const note = prompt('Reason for rejecting (optional, shown in the audit trail):') || null;
           const { error } = await ludoSupabase.rpc('admin_reject_withdrawal', { p_withdrawal_id: w.id, p_note: note });
-          if (error) { alert('Failed: ' + error.message); return; }
+          if (error) { ludoError(error.message); return; }
           w.status = 'rejected'; w.admin_note = note;
           renderWithdrawals(cachedWithdrawals);
         });
@@ -328,12 +329,12 @@
   document.getElementById('btn-update-rate').addEventListener('click', async () => {
     const input = document.getElementById('crypto-rate-input');
     const rate = Number(input.value);
-    if (!rate || rate <= 0) { alert('Enter a positive rate.'); return; }
+    if (!rate || rate <= 0) { ludoAlert({ tone: 'warn', icon: '✏️', title: 'Check your input', message: 'Enter a positive rate.' }); return; }
     const btn = document.getElementById('btn-update-rate');
     btn.disabled = true;
     const { data: newRate, error } = await ludoSupabase.rpc('admin_set_usdt_rate', { p_rate: rate });
     btn.disabled = false;
-    if (error) { alert('Failed: ' + error.message); return; }
+    if (error) { ludoError(error.message); return; }
     document.getElementById('crypto-rate-display').textContent = `1 USDT ≈ ₹${Number(newRate).toFixed(2)}`;
     input.value = '';
   });
@@ -364,29 +365,29 @@
     el.style.color = total > 100 ? 'var(--red)' : '';
   }
   document.getElementById('btn-add-level').addEventListener('click', () => {
-    if (levelPercents.length >= 10) { alert('At most 10 levels.'); return; }
+    if (levelPercents.length >= 10) { ludoAlert({ tone: 'warn', icon: '✏️', title: 'Limit reached', message: 'At most 10 levels.' }); return; }
     levelPercents.push(1);
     renderLevels();
   });
   document.getElementById('btn-save-levels').addEventListener('click', async () => {
-    if (levelPercents.some(p => !(Number(p) > 0 && Number(p) <= 100))) { alert('Each level needs a percentage above 0 and up to 100.'); return; }
+    if (levelPercents.some(p => !(Number(p) > 0 && Number(p) <= 100))) { ludoAlert({ tone: 'warn', icon: '✏️', title: 'Check your input', message: 'Each level needs a percentage above 0 and up to 100.' }); return; }
     const btn = document.getElementById('btn-save-levels');
     btn.disabled = true;
     const { error } = await ludoSupabase.rpc('admin_set_referral_levels', { p_levels: levelPercents.map(percent => ({ percent: Number(percent) })) });
     btn.disabled = false;
-    if (error) { alert('Failed: ' + error.message); return; }
-    alert('Referral levels saved.');
+    if (error) { ludoError(error.message); return; }
+    ludoAlert({ tone: 'success', title: 'Saved', message: 'Referral levels updated. They apply to future purchases only.', confirmText: 'Done' });
   });
   document.getElementById('btn-save-pro-fee').addEventListener('click', async () => {
     const input = document.getElementById('pro-fee-input');
     const fee = Number(input.value);
-    if (input.value === '' || fee < 0) { alert('Enter a fee of zero or more.'); return; }
+    if (input.value === '' || fee < 0) { ludoAlert({ tone: 'warn', icon: '✏️', title: 'Check your input', message: 'Enter a fee of zero or more.' }); return; }
     const btn = document.getElementById('btn-save-pro-fee');
     btn.disabled = true;
     const { error } = await ludoSupabase.rpc('admin_set_pro_fee', { p_fee: fee });
     btn.disabled = false;
-    if (error) { alert('Failed: ' + error.message); return; }
-    alert('Pro fee saved.');
+    if (error) { ludoError(error.message); return; }
+    ludoAlert({ tone: 'success', title: 'Saved', message: 'Pro fee updated. It applies to new purchases only.', confirmText: 'Done' });
   });
   function renderReferralRewards(rewards) {
     document.getElementById('ref-stat-pro').textContent = cachedProfiles.filter(p => p.is_pro).length;
@@ -466,7 +467,7 @@
   })();
 
   document.getElementById('admin-avatar').addEventListener('click', async () => {
-    if (!confirm('Sign out?')) return;
+    if (!(await ludoConfirm({ tone: 'info', icon: '👋', title: 'Sign out?', message: 'You’ll need to log in again to play.', confirmText: 'Sign out', cancelText: 'Stay' }))) return;
     await ludoSupabase.auth.signOut();
     location.href = 'login.html';
   });

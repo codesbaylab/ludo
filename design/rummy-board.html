@@ -667,6 +667,7 @@
 </div>
 </div>
 
+<script src="ui-dialog.js"></script>
 <script src="rummy-rules.js"></script>
 <script>
   // --- Setup from the lobby's picker --------------------------------------
@@ -1485,7 +1486,7 @@
     runBotTurnsUntilYourTurn();
   });
 
-  document.getElementById('btn-declare').addEventListener('click', () => {
+  document.getElementById('btn-declare').addEventListener('click', async () => {
     if (phase !== 'your-turn-discard' || state.hands[0].length !== 14 || uiBusy) return;
     const preferIdx = selectedCardId ? state.hands[0].findIndex(c => c.id === selectedCardId) : null;
     const option = RummyRules.findDeclareOption(state.hands[0], state.wildRank, preferIdx);
@@ -1494,7 +1495,7 @@
       endHand({ winnerIdx: 0 });
       return;
     }
-    const proceed = confirm(`This isn't a valid Rummy hand yet — no arrangement of these 14 cards forms 2+ sequences with at least one pure. Declaring anyway costs you the ${RummyRules.MAX_PENALTY}-point penalty. Declare anyway?`);
+    const proceed = await ludoConfirm({ tone: 'warn', icon: '⚠️', title: 'Not a valid hand yet', message: `No arrangement of these 14 cards forms 2+ sequences with at least one pure. Declaring anyway costs the ${RummyRules.MAX_PENALTY}-point penalty.`, confirmText: 'Declare anyway', cancelText: 'Keep playing' });
     if (proceed) endHand({ invalidDeclareBy: 0 });
   });
 

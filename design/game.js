@@ -846,7 +846,7 @@
   document.getElementById('exit-link').addEventListener('click', async (e) => {
     if (!room) return; // not connected yet — plain navigation is fine
     e.preventDefault();
-    if (!confirm('Leave this match? The other player will see that you left.')) return;
+    if (!(await ludoConfirm({ tone: 'danger', icon: '🚪', title: 'Leave this match?', message: 'The other player will see that you left and may win by forfeit.', confirmText: 'Leave match', cancelText: 'Keep playing' }))) return;
     // Consented leave (Colyseus close code 4000) — LudoRoom's onLeave shows
     // "<name> left the game." to everyone else instead of holding the seat
     // open for the reconnection grace period like an accidental drop would.

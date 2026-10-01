@@ -434,3 +434,44 @@ a:has(> .btn) { display: block; }
   .log-toggle .chev { display:none; }
   .log-body { max-height:130px !important; overflow-y:auto; padding: 0 16px 14px !important; }
 }
+
+/* ---- Shared popup dialogs (design/ui-dialog.js) ---- */
+.dlg-overlay {
+  position: fixed; inset: 0; z-index: 10000;
+  background: rgba(58, 44, 34, .45);
+  -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+  opacity: 0; transition: opacity .18s ease;
+}
+.dlg-overlay.open { opacity: 1; }
+.dlg {
+  width: 100%; max-width: 360px; background: var(--paper);
+  border-radius: var(--radius-lg); padding: 26px 22px 20px; text-align: center;
+  box-shadow: 0 24px 60px rgba(58, 44, 34, .35);
+  transform: translateY(14px) scale(.94); transition: transform .22s cubic-bezier(.2, .9, .3, 1.2);
+  border: 2px solid var(--border);
+}
+.dlg-overlay.open .dlg { transform: none; }
+.dlg-icon {
+  width: 64px; height: 64px; margin: -52px auto 12px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; font-size: 30px;
+  border: 4px solid var(--paper); box-shadow: 0 8px 18px rgba(58, 44, 34, .18);
+}
+.dlg.tone-accent .dlg-icon { background: linear-gradient(135deg, #ffc93c, #ff8a3d); }
+.dlg.tone-danger .dlg-icon { background: linear-gradient(135deg, #ff8a8a, #ff5c5c); }
+.dlg.tone-warn .dlg-icon { background: linear-gradient(135deg, #ffe08a, #ffc93c); }
+.dlg.tone-success .dlg-icon { background: linear-gradient(135deg, #7fe3a6, #2ecc71); }
+.dlg.tone-info .dlg-icon { background: linear-gradient(135deg, #8ec5ff, #4da3ff); }
+.dlg h3 { margin: 0 0 6px; font-size: 20px; }
+.dlg .dlg-msg { margin: 0; font-size: 14px; color: var(--text-dim); font-weight: 600; line-height: 1.45; }
+.dlg .dlg-detail {
+  margin: 14px 0 0; background: var(--paper-2); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 10px 14px; text-align: left;
+  font-size: 13px; font-weight: 700;
+}
+.dlg .dlg-detail .row { display: flex; justify-content: space-between; gap: 10px; padding: 3px 0; }
+.dlg .dlg-detail .row span:first-child { color: var(--text-dim); font-weight: 600; }
+.dlg-actions { display: flex; gap: 10px; margin-top: 18px; }
+.dlg-actions .btn { flex: 1; }
+.dlg.tone-danger .btn-primary { background: linear-gradient(135deg, #ff7a7a, #ff4d4d); }
+.dlg.tone-success .btn-primary { background: linear-gradient(135deg, #46d98a, #22b866); }

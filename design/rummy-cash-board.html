@@ -236,6 +236,7 @@
   <div class="card declare-card" id="declare-card-content"></div>
 </div>
 
+<script src="ui-dialog.js"></script>
 <script src="rummy-rules.js"></script>
 <script>
   const qp = new URLSearchParams(location.search);
@@ -549,7 +550,7 @@
     room.send('discard', { cardId: selectedCardId });
     selectedCardId = null;
   });
-  document.getElementById('btn-declare').addEventListener('click', () => {
+  document.getElementById('btn-declare').addEventListener('click', async () => {
     if (!lastSnapshot || !interactiveNow(lastSnapshot)) return;
     // Forgiving, same as the practice table: prefer keeping whichever card
     // is selected (if any), otherwise let RummyRules find any valid removal.
@@ -557,7 +558,7 @@
     const option = RummyRules.findDeclareOption(myHand, lastSnapshot.wildRank, selfIndex);
     const cardId = option ? myHand[option.removeIndex].id : (selectedCardId || myHand[myHand.length - 1].id);
     if (!option) {
-      if (!confirm(`This isn't a valid Rummy hand yet — declaring anyway costs the ${RummyRules.MAX_PENALTY}-point penalty. Declare anyway?`)) return;
+      if (!(await ludoConfirm({ tone: 'warn', icon: '⚠️', title: 'Not a valid hand yet', message: `Declaring anyway costs the ${RummyRules.MAX_PENALTY}-point penalty.`, confirmText: 'Declare anyway', cancelText: 'Keep playing' }))) return;
     }
     room.send('declare', { cardId });
     selectedCardId = null;
