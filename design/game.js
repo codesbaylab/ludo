@@ -449,11 +449,14 @@
     if (!winner) return;
     const stake = snapshot.stake || 0;
     const isFree = stake <= 0;
-    const pot = stake * 4;
+    const pot = stake * snapshot.players.length; // table size, not a fixed 4 — same math as LudoRoom.persistResult
     const fee = Math.round(pot * 0.1);
     const payout = pot - fee;
     document.getElementById('winner-icon').style.background = `var(--${winner.color}-soft)`;
     document.getElementById('winner-title').textContent = `${colorDot(winner.color)} ${winner.name} Wins!`;
+    // A forfeit win (opponents left) carries the reason in the final status message ("<name> wins — <reason>").
+    const forfeitReason = (snapshot.statusMessage || '').split(' wins — ')[1];
+    document.getElementById('winner-sub').textContent = forfeitReason || 'All 4 tokens home';
     document.getElementById('payout-block').style.display = isFree ? 'none' : '';
     document.getElementById('free-note').style.display = isFree ? '' : 'none';
     if (!isFree) {
@@ -863,7 +866,11 @@
     connectingOverlay.classList.add('open');
     connectingStatus.textContent = 'Leaving match…';
     reconnecting = true; // suppress attachRoomHandlers' onLeave auto-reconnect for this deliberate close
-    await room.leave(true);
+    // room.leave() resolves only once the server's close frame comes back, and
+    // through Render's proxy that echo can lag ~20s (same proxy delay that
+    // slows close detection on the handoff). The LEAVE_ROOM message itself has
+    // long since been sent, so cap the wait instead of sitting on "Leaving…".
+    await Promise.race([room.leave(true), new Promise(resolve => setTimeout(resolve, 1500))]);
     location.href = 'lobby.html';
   });
 
