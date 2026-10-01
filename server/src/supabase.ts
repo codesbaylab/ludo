@@ -64,3 +64,50 @@ export async function authorizeJoin(
   }
   return { ok: true, userId };
 }
+
+// ---- Stake holds ---------------------------------------------------------
+// A real-money seat RESERVES its worst-case loss when the player joins
+// (wallets.held), instead of being debited only at the very end. Available
+// funds (balance - held) are all a player can transfer / withdraw / spend on Pro
+// meanwhile, so nobody can walk away from a stake they're sitting on. The hold
+// is released at settlement (settle_wallet applies the result and releases it
+// in one statement), when a seat empties before the game starts, or when the
+// room is disposed without settling (anything left over is refunded by simply
+// releasing it — balance was never touched).
+
+export interface Hold { userId: string; amount: number }
+
+/** Reserve `amount`; false if the player doesn't have it available. */
+export async function holdFunds(userId: string, amount: number): Promise<boolean> {
+  const supabase = getSupabase();
+  if (!supabase) return true; // nothing can be checked without a service key (local dev/tests)
+  const { error } = await supabase.rpc('hold_funds', { p_user_id: userId, p_amount: amount });
+  if (error) {
+    if (/insufficient available balance/i.test(error.message)) return false;
+    throw new Error(`hold_funds failed: ${error.message}`);
+  }
+  return true;
+}
+
+export async function releaseFunds(userId: string, amount: number): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  const { error } = await supabase.rpc('release_funds', { p_user_id: userId, p_amount: amount });
+  if (error) console.error(`[holds] failed to release ${amount} for ${userId}:`, error);
+}
+
+/** Apply a match result (`delta`) and release this match's hold atomically. */
+export async function settleWallet(userId: string, delta: number, release: number): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  const { error } = await supabase.rpc('settle_wallet', { p_user_id: userId, p_delta: delta, p_release: release });
+  if (error) console.error(`[holds] failed to settle wallet for ${userId}:`, error);
+}
+
+/** Rooms only live in this process's memory, so after a restart every hold is stale. */
+export async function releaseAllHolds(): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  const { error } = await supabase.rpc('release_all_holds');
+  if (error) console.error('[holds] failed to release stale holds at boot:', error);
+}

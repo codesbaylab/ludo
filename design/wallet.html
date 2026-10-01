@@ -32,7 +32,7 @@
     <div class="card" style="background:linear-gradient(150deg, #2ecc71, #178a4c); color:#fff; text-align:center; padding:28px 20px;">
       <div style="font-size:12px; font-weight:700; opacity:.85; text-transform:uppercase; letter-spacing:.5px;">Available Balance</div>
       <div style="font-size:38px; font-weight:800; margin:8px 0 4px;" id="wallet-balance">…</div>
-      <div style="font-size:12px; opacity:.85; font-weight:600;">🔒 ₹0 locked in active games</div>
+      <div style="font-size:12px; opacity:.85; font-weight:600;" id="wallet-locked">🔒 ₹0 locked in active games</div>
     </div>
 
     <!-- Your Player ID: what others use to send you money -->
@@ -351,15 +351,18 @@
 
   async function loadWalletAndTransactions() {
     const [{ data: wallet }, matches, cryptoDeposits, { data: withdrawals }, { data: transfers }] = await Promise.all([
-      ludoSupabase.from('wallets').select('balance').eq('user_id', currentUserId).single(),
+      ludoSupabase.from('wallets').select('balance, held').eq('user_id', currentUserId).single(),
       ludoFetchMatches(currentUserId, 20),
       ludoFetchCryptoDeposits(currentUserId, 20),
       ludoSupabase.from('crypto_withdrawals').select('amount_inr, destination_address, status, tx_hash, requested_at').eq('user_id', currentUserId).order('requested_at', { ascending: false }).limit(20),
       ludoSupabase.rpc('my_transfers', { p_limit: 20 }),
     ]);
-    walletBalance = Number(wallet?.balance ?? 0);
+    // Only unreserved funds can be sent / withdrawn / spent on Pro (stakes in active games are held).
+    const heldAmount = Number(wallet?.held ?? 0);
+    walletBalance = Number(wallet?.balance ?? 0) - heldAmount;
+    document.getElementById('wallet-locked').textContent = `🔒 ₹${heldAmount.toFixed(2)} locked in active games`;
     document.getElementById('wallet-balance').textContent = `₹${Number(wallet?.balance ?? 0).toFixed(2)}`;
-    loadProCard(Number(wallet?.balance ?? 0)).catch(err => console.error('[ludo] pro card failed:', err));
+    loadProCard(walletBalance).catch(err => console.error('[ludo] pro card failed:', err));
 
     const stakedMatches = matches.filter(m => m.matches.stake > 0);
     const counts = await ludoFetchPlayerCounts(stakedMatches.map(m => m.matches.id));

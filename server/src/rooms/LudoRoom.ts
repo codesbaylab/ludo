@@ -8,7 +8,7 @@ import {
   isSafeAbsoluteIndex,
   movableTokenIndices,
 } from '../rules';
-import { getSupabase, authorizeJoin } from '../supabase';
+import { getSupabase, authorizeJoin, holdFunds, releaseFunds, settleWallet, Hold } from '../supabase';
 import { newRoomCode } from '../roomCode';
 
 interface JoinOptions {
@@ -65,6 +65,8 @@ export class LudoRoom extends Room<LudoState> {
   // Supabase auth user id per session, only populated for clients that pass
   // one at join time. Not part of the synced schema (opponents don't need it).
   private sessionUserIds: Record<string, string> = {};
+  // Reserved stake per session (see holdFunds). Entries are removed as they're released/settled.
+  private holds: Record<string, Hold> = {};
 
   onCreate(options: CreateOptions) {
     this.rollTimeoutMs = options.rollTimeoutMs ?? 15000;
@@ -124,8 +126,20 @@ export class LudoRoom extends Room<LudoState> {
     }
     const verifiedUserId = check.userId;
 
+    // Reserve the stake BEFORE touching any seat state (the await below would
+    // otherwise let two joins pick the same free slot).
+    let reservedHere = false;
+    if (this.state.stake > 0 && verifiedUserId) {
+      if (!(await holdFunds(verifiedUserId, this.state.stake))) {
+        throw new ServerError(4402, 'insufficient_funds');
+      }
+      this.holds[client.sessionId] = { userId: verifiedUserId, amount: this.state.stake };
+      reservedHere = true;
+    }
+
     const slot = this.state.players.find((p) => !p.connected);
     if (!slot) {
+      if (reservedHere) await this.releaseHold(client.sessionId);
       client.leave();
       return;
     }
@@ -156,6 +170,8 @@ export class LudoRoom extends Room<LudoState> {
       // yet, so there's nothing to skip and no forfeit-win to apply.
       const connected = this.state.players.filter((p) => p.connected).length;
       this.state.statusMessage = `Waiting for players… (${connected}/${this.state.players.length})`;
+      // Seat is empty again, so its reserved stake goes back to the player.
+      await this.releaseHold(client.sessionId);
       return;
     }
 
@@ -471,6 +487,18 @@ export class LudoRoom extends Room<LudoState> {
 
   // --- Persistence ------------------------------------------------------
 
+  private async releaseHold(sessionId: string) {
+    const hold = this.holds[sessionId];
+    if (!hold) return;
+    delete this.holds[sessionId];
+    await releaseFunds(hold.userId, hold.amount);
+  }
+
+  /** Anything still reserved when the room goes away (match never settled) is refunded. */
+  async onDispose() {
+    await Promise.all(Object.keys(this.holds).map((sid) => this.releaseHold(sid)));
+  }
+
   private async persistResult(winnerIdx: number) {
     const supabase = getSupabase();
     if (!supabase) return;
@@ -515,10 +543,13 @@ export class LudoRoom extends Room<LudoState> {
       // so concurrent matches finishing for the same user can no longer race
       // like a plain read-then-write would.
       for (let i = 0; i < players.length; i++) {
-        const uid = userIds[i];
+        const uid = userIds[i]!;
         const delta = i === winnerIdx ? payout - this.state.stake : -this.state.stake;
-        const { error } = await supabase.rpc('increment_wallet_balance', { p_user_id: uid, p_delta: delta });
-        if (error) console.error(`[ludo] failed to update wallet balance for ${uid}:`, error);
+        // Applies the result and releases this seat's hold in one statement.
+        const sid = players[i]!.sessionId;
+        const reserved = this.holds[sid]?.amount ?? 0;
+        delete this.holds[sid];
+        await settleWallet(uid, delta, reserved);
       }
     }
   }

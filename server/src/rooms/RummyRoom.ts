@@ -2,7 +2,7 @@ import { Room, Client, ServerError } from 'colyseus';
 import { ArraySchema } from '@colyseus/schema';
 import { RummyState, RummyPlayerState, CardState } from './schema/RummyState';
 import * as Engine from '../rummy/engine';
-import { getSupabase, authorizeJoin } from '../supabase';
+import { getSupabase, authorizeJoin, holdFunds, releaseFunds, settleWallet, Hold } from '../supabase';
 import { newRoomCode } from '../roomCode';
 
 interface JoinOptions {
@@ -62,6 +62,8 @@ export class RummyRoom extends Room<RummyState> {
   // Supabase auth user id per session, only populated for clients that pass
   // one at join time. Not part of the synced schema (opponents don't need it).
   private sessionUserIds: Record<string, string> = {};
+  // Reserved worst-case loss per session (see holdFunds in supabase.ts).
+  private holds: Record<string, Hold> = {};
 
   onCreate(options: CreateOptions) {
     this.mode = options.mode === 'pool' ? 'pool' : 'points';
@@ -132,8 +134,24 @@ export class RummyRoom extends Room<RummyState> {
     }
     const verifiedUserId = check.userId;
 
+    // Reserve the worst-case loss BEFORE touching any seat state (the await
+    // would otherwise let two joins pick the same free slot): the entry fee for
+    // Pool, 80 points x the point value for Points.
+    let reservedHere = false;
+    if (verifiedUserId) {
+      const amount = this.holdAmount();
+      if (amount > 0) {
+        if (!(await holdFunds(verifiedUserId, amount))) {
+          throw new ServerError(4402, 'insufficient_funds');
+        }
+        this.holds[client.sessionId] = { userId: verifiedUserId, amount };
+        reservedHere = true;
+      }
+    }
+
     const slot = this.state.players.find((p) => !p.connected);
     if (!slot) {
+      if (reservedHere) await this.releaseHold(client.sessionId);
       client.leave();
       return;
     }
@@ -163,6 +181,8 @@ export class RummyRoom extends Room<RummyState> {
     if (!this.state.started) {
       const connected = this.state.players.filter((p) => p.connected).length;
       this.state.statusMessage = `Waiting for players… (${connected}/${this.state.players.length})`;
+      // Seat is empty again, so its reserved stake goes back to the player.
+      await this.releaseHold(client.sessionId);
       return;
     }
 
@@ -490,6 +510,31 @@ export class RummyRoom extends Room<RummyState> {
 
   // --- Persistence ------------------------------------------------------
 
+  /** Worst-case loss for this table: Pool = entry fee; Points = 80 points x value. */
+  private holdAmount(): number {
+    return this.state.mode === 'pool' ? this.state.entryFee : this.state.pointValue * Engine.MAX_PENALTY;
+  }
+
+  private async releaseHold(sessionId: string) {
+    const hold = this.holds[sessionId];
+    if (!hold) return;
+    delete this.holds[sessionId];
+    await releaseFunds(hold.userId, hold.amount);
+  }
+
+  /** Anything still reserved when the room goes away (match never settled) is refunded. */
+  async onDispose() {
+    await Promise.all(Object.keys(this.holds).map((sid) => this.releaseHold(sid)));
+  }
+
+  /** Apply one seat's result and release its reservation in a single statement. */
+  private async settleSeat(i: number, userId: string, delta: number) {
+    const sid = this.state.players[i]!.sessionId;
+    const reserved = this.holds[sid]?.amount ?? 0;
+    delete this.holds[sid];
+    await settleWallet(userId, delta, reserved);
+  }
+
   /** winnerIdx === null means an invalid declare with no money to move —
    *  still recorded as a finished match (for history), just with a null
    *  winner and every player's own `payout` at 0. */
@@ -544,9 +589,8 @@ export class RummyRoom extends Room<RummyState> {
     if (playersErr) console.error('[rummy] failed to insert rummy_match_players rows:', playersErr);
 
     for (let i = 0; i < players.length; i++) {
-      if (payouts[i] === 0) continue;
-      const { error } = await supabase.rpc('increment_wallet_balance', { p_user_id: userIds[i], p_delta: payouts[i] });
-      if (error) console.error(`[rummy] failed to update wallet balance for ${userIds[i]}:`, error);
+      // Even a 0 payout still has to release the seat's reservation.
+      await this.settleSeat(i, userIds[i]!, payouts[i]!);
     }
   }
 
@@ -601,8 +645,7 @@ export class RummyRoom extends Room<RummyState> {
     if (playersErr) console.error('[rummy] failed to insert rummy_match_players rows:', playersErr);
 
     for (let i = 0; i < players.length; i++) {
-      const { error } = await supabase.rpc('increment_wallet_balance', { p_user_id: userIds[i], p_delta: payouts[i] });
-      if (error) console.error(`[rummy] failed to update wallet balance for ${userIds[i]}:`, error);
+      await this.settleSeat(i, userIds[i]!, payouts[i]!);
     }
   }
 }

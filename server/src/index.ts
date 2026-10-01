@@ -5,7 +5,7 @@ import { Server } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { LudoRoom } from './rooms/LudoRoom';
 import { RummyRoom } from './rooms/RummyRoom';
-import { getSupabase } from './supabase';
+import { getSupabase, releaseAllHolds } from './supabase';
 import { getOrCreateDepositAddress } from './crypto/depositAddress';
 import { cryptoDepositsEnabled } from './crypto/tron';
 import { startDepositWatcher } from './crypto/depositWatcher';
@@ -71,7 +71,9 @@ gameServer.define('ludo', LudoRoom).filterBy(['playerCount', 'stake']);
 gameServer.define('rummy', RummyRoom).filterBy(['mode', 'playerCount', 'pointValue', 'poolLimit', 'entryFee']);
 
 const port = Number(process.env.PORT) || 2567;
-gameServer.listen(port).then(() => {
+gameServer.listen(port).then(async () => {
+  // No room survives a restart, so every reserved stake is stale (see supabase.ts).
+  await releaseAllHolds();
   console.log(`Ludo server listening on ws://localhost:${port}`);
 });
 

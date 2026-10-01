@@ -698,6 +698,10 @@
             connectingStatus.innerHTML = 'This private room is no longer available. <a href="lobby.html">Back to lobby</a>';
             return;
           }
+          if (err && err.code === 4402) {
+            connectingStatus.innerHTML = 'Not enough available balance for this table (funds locked in other games don\'t count). <a href="wallet.html">Open wallet</a>';
+            return;
+          }
           if (err && err.code === 4403) {
             connectingStatus.innerHTML = 'Cash tables are for Pro members. <a href="wallet.html#pro">Go Pro</a>';
             return;

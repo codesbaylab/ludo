@@ -671,6 +671,10 @@
             document.getElementById('connecting-status').innerHTML = 'This private table is no longer available. <a href="rummy-lobby.html">Back to Rummy lobby</a>';
             return;
           }
+          if (err && err.code === 4402) {
+            document.getElementById('connecting-status').innerHTML = 'Not enough available balance for this table (funds locked in other games don\'t count). <a href="wallet.html">Open wallet</a>';
+            return;
+          }
           if (err && err.code === 4403) {
             document.getElementById('connecting-status').innerHTML = 'Cash tables are for Pro members. <a href="wallet.html#pro">Go Pro</a>';
             return;

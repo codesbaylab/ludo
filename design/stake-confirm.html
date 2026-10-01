@@ -134,10 +134,10 @@
     if (isFree) return;
     const [{ data: profile }, { data: wallet }] = await Promise.all([
       ludoSupabase.from('profiles').select('is_pro').eq('id', session.user.id).single(),
-      ludoSupabase.from('wallets').select('balance').eq('user_id', session.user.id).single(),
+      ludoSupabase.from('wallets').select('balance, held').eq('user_id', session.user.id).single(),
     ]);
     if (!profile?.is_pro) { location.href = 'wallet.html#pro'; return; }
-    WALLET_BALANCE = Number(wallet?.balance ?? 0);
+    WALLET_BALANCE = Number(wallet?.balance ?? 0) - Number(wallet?.held ?? 0); // available (unreserved) funds
     render();
   })();
 </script>
