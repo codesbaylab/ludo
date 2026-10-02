@@ -996,9 +996,10 @@ deliberately trimmed).
   fee — a deliberate consistency choice, not something the user specified a number for). **Points
   mode is always a single-hand match**: whoever isn't the winner pays `their points × the table's
   point value` toward the winner's payout (fee taken off the winner's side, same shape as Ludo's
-  `payout - stake`); an invalid declare moves no money at all (the declarer's penalty is a scoring
-  concept only, relevant if this table's players start another Points hand from the lobby — nobody
-  "wins" a penalty). **Pool mode settles once, when the match ends** (one survivor): pot =
+  `payout - stake`); an invalid declare makes the declarer pay 80 pts x point value, split equally
+  among the other players after the 10% fee (it used to move no money, which a live test showed let a
+  losing player end the hand for free and contradicted the popup's "-₹80"; 2p at ₹1: declarer -80,
+  opponent +72, fee 8). **Pool mode settles once, when the match ends** (one survivor): pot =
   `entryFee × playerCount`, survivor nets `pot - fee - entryFee`, everyone else nets `-entryFee` —
   balances to `-fee` overall, unlike the practice table's own display math (`+pot` for the survivor,
   `-entryFee` for everyone else, which doesn't net to anything sensible — harmless there since no
