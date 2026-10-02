@@ -1,4 +1,5 @@
 import { Room, Client, ServerError } from 'colyseus';
+import { randomInt } from 'crypto';
 import { LudoState, PlayerState, TokenState } from './schema/LudoState';
 import {
   Color,
@@ -8,7 +9,7 @@ import {
   isSafeAbsoluteIndex,
   movableTokenIndices,
 } from '../rules';
-import { getSupabase, authorizeJoin, holdFunds, releaseFunds, settleWallet, getPlatformSettings, recordDiceCounts, Hold } from '../supabase';
+import { getSupabase, authorizeJoin, holdFunds, releaseFunds, settleWallet, getPlatformSettings, recordDiceCounts, recordMatchRolls, Hold } from '../supabase';
 import { newRoomCode } from '../roomCode';
 
 interface JoinOptions {
@@ -71,6 +72,8 @@ export class LudoRoom extends Room<LudoState> {
   private feeRate: number | null = null;
   private startedAt = 0;
   private diceCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+  // Every roll in order, per seat, so a dispute ("I never got a 6") can be settled from stored data.
+  private rollLog: number[][] = [];
   private diceFlushed = false;
 
   onCreate(options: CreateOptions) {
@@ -266,8 +269,10 @@ export class LudoRoom extends Room<LudoState> {
 
   private resolveRoll(playerIdx: number) {
     const player = this.state.players[playerIdx]!;
-    const result = 1 + Math.floor(Math.random() * 6);
+    // Cryptographically secure and uniform (no modulo bias) — real money rides on this.
+    const result = randomInt(1, 7);
     this.diceCounts[result] = (this.diceCounts[result] ?? 0) + 1;
+    (this.rollLog[playerIdx] ??= []).push(result);
     this.state.diceValue = result;
     this.state.rollSeq++;
     this.state.consecutiveSixes = result === 6 ? this.state.consecutiveSixes + 1 : 0;
@@ -517,6 +522,10 @@ export class LudoRoom extends Room<LudoState> {
     if (this.diceFlushed) return;
     this.diceFlushed = true;
     recordDiceCounts(this.diceCounts).catch(() => {});
+    const rows = this.state.players
+      .map((pl, seat) => ({ user_id: this.sessionUserIds[pl.sessionId], seat, rolls: this.rollLog[seat] ?? [] }))
+      .filter((r) => r.user_id && r.rolls.length > 0);
+    recordMatchRolls(this.roomId, rows).catch(() => {});
   }
 
   private async persistResult(winnerIdx: number, endReason: string) {

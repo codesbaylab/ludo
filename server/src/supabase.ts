@@ -144,3 +144,11 @@ export async function recordDiceCounts(counts: Record<number, number>): Promise<
   const { error } = await supabase.rpc('record_dice_counts', { p_counts: counts });
   if (error) console.error('[dice] failed to record roll counts:', error);
 }
+
+/** Ordered rolls per player for one match (admin audit + the dice 6-rate risk rule). */
+export async function recordMatchRolls(roomId: string, rows: { user_id: string; seat: number; rolls: number[] }[]): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase || rows.length === 0) return;
+  const { error } = await supabase.rpc('record_match_rolls', { p_room: roomId, p_rows: rows });
+  if (error) console.error('[dice] failed to record match rolls:', error);
+}

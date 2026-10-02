@@ -15,6 +15,8 @@
 // players only (no bots), and the server only ever needs to validate a
 // declare attempt the client already committed to, not suggest one.
 
+import { randomInt } from 'crypto';
+
 export interface Card {
   id: string;
   rank: string;
@@ -85,7 +87,7 @@ export function buildDoubleDeck(): Card[] {
 export function shuffle<T>(arr: T[]): T[] {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
+    const j = randomInt(0, i + 1); // secure shuffle: real money rides on the deal
     const tmp = a[i]!;
     a[i] = a[j]!;
     a[j] = tmp;

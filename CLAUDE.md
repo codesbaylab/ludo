@@ -1099,6 +1099,13 @@ deliberately trimmed).
   open alerts. Admins work alerts (investigate/dismiss/resolve, freeze withdrawals) on `admin-risk.html`.
 - **System health**: `GET /api/admin/status` on the game server (admin-verified; uptime, version,
   players, tables, ₹ in play, deposit watcher) plus `admin_system()`/`admin_books_check()`.
+- **Dice integrity**: rolls use `crypto.randomInt(1, 7)` (and the Rummy shuffle `randomInt` too), never
+  `Math.random`. Every Ludo match stores each player's ordered rolls in `match_rolls` (one row per player
+  per match, `smallint[]`, flushed with the dice counts at match end / room dispose; admin-readable only,
+  writes via the service-role `record_match_rolls`). Risk rule `dice_outlier` (`_risk_scan_dice`, called
+  from the new `_risk_scan` wrapper around `_risk_scan_core`) flags a player whose 6-rate has |z| >= 3.5
+  over >= 200 rolls (editable params). No "pity"/luck balancing — that would be rigging real-money play.
+  Verified: honest spread = no alert, skewed = alert (rolled-back DB test); both sims pass.
 - **Deploy**: the Pages workflow's `sed` stamps `?v=<sha>` on a fixed asset list — `admin.css` and
   `admin-core.js` are in it; any new shared asset must be added there.
 - **Verified** with Playwright (real Chrome, seeded QA accounts, since removed of admin rights): all 10

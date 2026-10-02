@@ -51,7 +51,7 @@ AD.boot({
   range: false,
   init: async function () {
     const C = AD.COLORS; let page = null; const canAct = AD.can(['support', 'finance']), isSuper = AD.can([]);
-    const RULE_ICON = { multi_account: '🚨', shared_ip: '🌐', transfer_loop: '🔁', fast_withdrawal: '💸', big_new_transfer: '⚡', win_outlier: '🎯', pro_never_played: '👤', rapid_in_out: '↔️' };
+    const RULE_ICON = { multi_account: '🚨', shared_ip: '🌐', transfer_loop: '🔁', fast_withdrawal: '💸', big_new_transfer: '⚡', win_outlier: '🎯', pro_never_played: '👤', rapid_in_out: '↔️', dice_outlier: '🎲' };
     async function load() { page = await AD.rpc('admin_risk_page'); render(); }
     function render() {
       const c = page.counts;
