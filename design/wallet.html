@@ -394,6 +394,7 @@
       });
     });
     cryptoDeposits.forEach(d => {
+      if (!(Number(d.inr_credited) > 0)) return; // dust transfers that credited nothing
       entries.push({
         time: d.detected_at,
         icon: '💵',

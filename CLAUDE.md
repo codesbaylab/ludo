@@ -1188,6 +1188,12 @@ compromised server means a compromised hot wallet) accepted for v1, with mitigat
   "Transaction History" now merges two real sources — match results and `crypto_deposits` (via the
   new `ludoFetchCryptoDeposits` helper in `supabase-client.js`) — sorted together by time; no more
   mock/fabricated entries anywhere in that list.
+- **Dust filter + Nile rehearsal (verified)**: a live Nile-testnet run credited a 1000 test-USDT faucet
+  transfer exactly once (₹100,000 at the ₹100 rate, one ledger row) and also recorded a 0.000001 USDT
+  dust transfer as a ₹0.00 deposit. The watcher now ignores transfers under `MIN_DEPOSIT_USDT` (default
+  1; env override) and `wallet.html` hides ₹0 deposit rows. **While `TRONGRID_API_BASE` /
+  `USDT_CONTRACT_ADDRESS_OVERRIDE` point at Nile, credited money is fake — remove both variables
+  before real users deposit, and reverse any testnet credit with an admin adjustment.**
 - **Not built yet, on purpose**: automated sweeping of collected USDT out of per-user hot addresses
   into cold storage (do this as a manual/periodic admin action for now, keeping v1 simpler and the
   blast radius of a server compromise limited to whatever hasn't been swept out yet); live USD/INR

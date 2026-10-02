@@ -18,6 +18,10 @@ const TRONGRID_API_BASE = process.env.TRONGRID_API_BASE?.trim() || 'https://api.
 // is only used as the recorded confirmations value for the audit trail.
 const ASSUMED_CONFIRMATIONS = 19;
 
+// Transfers smaller than this are ignored entirely (no deposit row, no credit). Faucets and spammers
+// send "dust" (e.g. 0.000001 USDT) that would otherwise show up as empty "₹0 deposits" in every history.
+const MIN_DEPOSIT_USDT = Number(process.env.MIN_DEPOSIT_USDT) > 0 ? Number(process.env.MIN_DEPOSIT_USDT) : 1;
+
 const POLL_INTERVAL_MS = 30_000;
 // Caps how many deposit addresses are polled concurrently per tick, so this
 // doesn't blow through TronGrid's free-tier rate limit as the user base
@@ -91,7 +95,7 @@ export async function processAddress(supabase: SupabaseClient, known: KnownAddre
 
     const decimals = transfer.token_info?.decimals ?? 6; // USDT on Tron uses 6 decimals
     const amountUsdt = Number(transfer.value) / 10 ** decimals;
-    if (!(amountUsdt > 0)) continue;
+    if (!(amountUsdt >= MIN_DEPOSIT_USDT)) continue;
 
     const { data, error } = await supabase.rpc('credit_crypto_deposit', {
       p_user_id: known.userId,
