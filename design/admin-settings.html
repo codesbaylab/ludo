@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Ludo Admin — Settings &amp; System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="ui-dialog.js"></script>
+<script src="supabase-client.js"></script>
+<script src="app-update.js"></script>
+<script src="admin-core.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff8a3d">
+<link rel="icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+</head>
+<body data-page="settings" data-title="Settings &amp; System" data-sub="Money rules, switches and how healthy the platform is" data-range="off">
+
+<div id="tools" style="display:contents"><span id="role-note" class="chip"></span></div>
+
+<div id="page" style="display:none">
+  <div class="am-tabs" data-tabs="s"><button class="on" data-t="money">💰 Money rules</button><button data-t="switch">🎚️ Switches &amp; notice</button><button data-t="sys">🩺 System health</button></div>
+
+  <div data-tab-group="s" data-tab="money">
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>Platform fee</h3><div class="sub">Taken from every cash pot before the winner is paid</div></div></div>
+        <div id="fee-rows"></div></div>
+      <div class="am-card"><div class="head"><div><h3>Two-person approval</h3><div class="sub">Above this amount a second admin must approve. 0 = off.</div></div></div>
+        <div id="appr-rows"></div></div>
+    </div>
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>Pro membership &amp; transfers</h3><div class="sub">One-time Pro fee and player-to-player limits</div></div></div><div id="pro-rows"></div></div>
+      <div class="am-card"><div class="head"><div><h3>USDT → ₹ rate</h3><div class="sub">Used to credit every new deposit</div></div></div><div id="rate-rows"></div></div>
+    </div>
+    <div class="am-card"><div class="head"><div><h3>🎁 Referral levels</h3><div class="sub">Each level is paid as a share of the Pro fee when someone in your network goes Pro</div></div><button class="am-btn sm primary" id="lvl-edit">Edit levels</button></div><div id="lvls"></div></div>
+  </div>
+
+  <div data-tab-group="s" data-tab="switch" style="display:none">
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>Feature switches</h3><div class="sub">Take effect within ~15 seconds on the game server</div></div></div><div id="flags"></div></div>
+      <div class="am-card"><div class="head"><div><h3>📣 Announcement banner</h3><div class="sub">Shown at the top of the player lobby</div></div></div><div id="ann"></div></div>
+    </div>
+  </div>
+
+  <div data-tab-group="s" data-tab="sys" style="display:none">
+    <div class="am-grid g4" id="sys-k"></div>
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>🧾 Books check</h3><div class="sub">Do the numbers add up?</div></div><span id="books-chip"></span></div><div id="books"></div></div>
+      <div class="am-card"><div class="head"><div><h3>🔌 Services</h3><div class="sub">Game server, database and deposit watcher</div></div><button class="am-btn sm" id="sys-reload">⟳ Refresh</button></div><div id="services"></div></div>
+    </div>
+    <div class="am-grid g2">
+      <div class="am-card"><div class="head"><div><h3>🎮 Live tables</h3><div class="sub">Right now, from the game server</div></div></div><div id="rooms"></div></div>
+      <div class="am-card"><div class="head"><div><h3>🗄️ Database</h3><div class="sub">Rows and reporting freshness</div></div><button class="am-btn sm" id="stats-rebuild">Rebuild stats</button></div><div id="db"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+AD.boot({
+  range: false,
+  init: async function () {
+    const isSuper = AD.role === 'super'; const canRate = AD.can(['finance']); let S = null, rate = null, levels = [];
+    document.getElementById('role-note').textContent = isSuper ? 'You can edit everything' : 'View only — super admin edits money rules';
+    const row = function (label, small, right) { return '<div class="field-row"><span>' + label + (small ? '<small>' + small + '</small>' : '') + '</span>' + right + '</div>'; };
+    const btn = function (id, t, ok) { return ok ? '<button class="am-btn sm" id="' + id + '">' + t + '</button>' : '<span class="dim" style="font-size:12px">locked</span>'; };
+    async function loadSettings() {
+      const [{ data: s }, { data: r }, { data: l }] = await Promise.all([AD.sb.from('app_settings').select('*').eq('id', true).single(), AD.sb.from('crypto_settings').select('*').eq('id', true).single(), AD.sb.from('referral_levels').select('*').eq('active', true).order('level')]);
+      S = s; rate = r; levels = l || []; renderMoney(); renderSwitches();
+    }
+    async function patch(p) { await AD.rpc('admin_set_settings', { p_patch: p }); await loadSettings(); }
+    function renderMoney() {
+      document.getElementById('fee-rows').innerHTML = row('Platform fee', 'Applies to Ludo and Rummy cash tables', '<b>' + Number(S.platform_fee_pct) + '%</b>' + btn('b-fee', 'Change', isSuper));
+      document.getElementById('appr-rows').innerHTML = row('Withdrawal payouts', 'Second admin required at or above', '<b>' + (Number(S.withdrawal_approval_min) ? AD.inr(S.withdrawal_approval_min) : 'Off') + '</b>' + btn('b-wa', 'Change', isSuper)) + row('Balance adjustments', 'Second admin required at or above', '<b>' + (Number(S.adjustment_approval_min) ? AD.inr(S.adjustment_approval_min) : 'Off') + '</b>' + btn('b-aa', 'Change', isSuper));
+      document.getElementById('pro-rows').innerHTML = row('Pro membership fee', 'One-time, non-refundable', '<b>' + AD.inr(S.pro_fee) + '</b>' + btn('b-pro', 'Change', isSuper)) + row('Transfer limits', 'Per transfer: ' + AD.inr(S.transfer_min) + ' – ' + AD.inr(S.transfer_max) + ' · per day: ' + AD.inr(S.transfer_daily_max), btn('b-tl', 'Change', isSuper));
+      document.getElementById('rate-rows').innerHTML = row('1 USDT =', 'Updated ' + AD.ago(rate.updated_at), '<b>' + AD.inr(rate.usdt_inr_rate) + '</b>' + btn('b-rate', 'Change', canRate));
+      const tot = levels.reduce(function (a, x) { return a + Number(x.percent); }, 0);
+      document.getElementById('lvls').innerHTML = levels.length ? '<div class="am-grid g4" style="margin:0">' + levels.map(function (x) { return '<div class="am-card kpi" style="box-shadow:none"><div class="lbl">Level ' + x.level + '</div><div class="val">' + Number(x.percent) + '%</div><div class="meta">≈ ' + AD.inr(Number(S.pro_fee) * Number(x.percent) / 100) + ' per Pro</div></div>'; }).join('') + '</div><p class="hint" style="margin-top:8px">Total paid out per Pro purchase: ' + tot + '% (' + AD.inr(Number(S.pro_fee) * tot / 100) + '). The rest is platform revenue.</p>' : '<div class="empty-note">No referral levels — referrals pay nothing.</div>';
+      const on = function (id, fn) { const e = document.getElementById(id); if (e) e.addEventListener('click', function () { AD.run(fn); }); };
+      const ask = async function (title, label, value, step, msg) { const f = await ludoForm({ tone: 'accent', icon: '⚙️', title: title, message: msg || 'Recorded in the audit log.', fields: [{ name: 'v', label: label, type: 'number', step: step || 'any', value: value, required: true }], confirmText: 'Save' }); return f ? Number(f.v) : null; };
+      on('b-fee', async function () { const v = await ask('Platform fee (%)', 'Percent of each cash pot (0–50)', S.platform_fee_pct, '0.5', 'Applies to matches that START after the game server refreshes its settings (~15 s). Matches already in play keep their rate.'); if (v !== null) await patch({ platform_fee_pct: v }); });
+      on('b-wa', async function () { const v = await ask('Withdrawal approval threshold', '₹ amount (0 = off)', S.withdrawal_approval_min, '1'); if (v !== null) await patch({ withdrawal_approval_min: v }); });
+      on('b-aa', async function () { const v = await ask('Adjustment approval threshold', '₹ amount (0 = off)', S.adjustment_approval_min, '1'); if (v !== null) await patch({ adjustment_approval_min: v }); });
+      on('b-pro', async function () { const v = await ask('Pro membership fee', '₹ one-time fee', S.pro_fee, '1', 'Only affects future purchases.'); if (v !== null) { await AD.rpc('admin_set_pro_fee', { p_fee: v }); await loadSettings(); } });
+      on('b-rate', async function () { const v = await ask('USDT → ₹ rate', '₹ per 1 USDT', rate.usdt_inr_rate, '0.01', 'Only affects deposits detected from now on.'); if (v !== null) { await AD.rpc('admin_set_usdt_rate', { p_rate: v }); await loadSettings(); } });
+      on('b-tl', async function () {
+        const f = await ludoForm({ tone: 'accent', icon: '🔁', title: 'Transfer limits', message: 'Applies to player-to-player transfers.', fields: [{ name: 'mn', label: 'Minimum per transfer (₹)', type: 'number', step: '1', value: S.transfer_min, required: true }, { name: 'mx', label: 'Maximum per transfer (₹)', type: 'number', step: '1', value: S.transfer_max, required: true }, { name: 'dy', label: 'Maximum per day, per player (₹)', type: 'number', step: '1', value: S.transfer_daily_max, required: true }], confirmText: 'Save' });
+        if (f) { await AD.rpc('admin_set_transfer_limits', { p_min: Number(f.mn), p_max: Number(f.mx), p_daily: Number(f.dy) }); await loadSettings(); }
+      });
+      const le = document.getElementById('lvl-edit'); le.style.display = isSuper ? '' : 'none';
+    }
+    document.getElementById('lvl-edit').addEventListener('click', function () { AD.run(async function () {
+      const f = await ludoForm({ tone: 'accent', icon: '🎁', title: 'Referral levels', message: 'One percent per line, level 1 first (max 10 lines, total ≤ 100%). Levels you remove stop paying but past payouts stay in history.', fields: [{ name: 'p', label: 'Percent per level', type: 'textarea', rows: 5, value: levels.map(function (l) { return Number(l.percent); }).join('\n'), required: false, hint: 'Example: 10, 5, 2 on three lines' }], confirmText: 'Save' });
+      if (!f) return; const arr = String(f.p || '').split(/[\s,]+/).filter(Boolean).map(Number);
+      if (arr.some(function (x) { return !isFinite(x) || x < 0; })) throw new Error('Each level must be a number of 0 or more.');
+      await AD.rpc('admin_set_referral_levels', { p_levels: arr.map(function (x) { return { percent: x }; }) }); await loadSettings();
+    }); });
+
+    // ----- switches -----
+    const FLAGS = [['maintenance', '🛠️', 'Maintenance mode', 'Blocks everyone from joining any table. Players already in a game finish it.', true], ['cash_tables', '💵', 'Cash tables', 'Turn off to allow only free tables.', false], ['transfers', '🔁', 'Player transfers', 'Send-to-player in the wallet.', false], ['withdrawals', '⬆️', 'Withdrawals', 'Players can request payouts.', false], ['deposits', '⬇️', 'Deposits', 'Players can fetch a deposit address.', false], ['referrals', '🎁', 'Referral commissions', 'Pay level commissions on Pro purchases.', false]];
+    function renderSwitches() {
+      const f = S.flags || {};
+      document.getElementById('flags').innerHTML = FLAGS.map(function (x) { const on = x[0] === 'maintenance' ? f.maintenance === true : f[x[0]] !== false; return '<div class="field-row"><span>' + x[1] + ' ' + x[2] + '<small>' + x[3] + '</small></span><div class="switch ' + (on ? 'on' : '') + '" data-flag="' + x[0] + '"' + (isSuper ? '' : ' style="opacity:.5;pointer-events:none"') + '></div></div>'; }).join('');
+      document.querySelectorAll('[data-flag]').forEach(function (sw) { sw.addEventListener('click', function () { AD.run(async function () {
+        const k = sw.dataset.flag; const wasOn = k === 'maintenance' ? f.maintenance === true : f[k] !== false; const meta = FLAGS.find(function (x) { return x[0] === k; });
+        const turningBad = k === 'maintenance' ? !wasOn : wasOn;
+        if (turningBad && !(await ludoConfirm({ tone: 'warn', icon: meta[1], title: (k === 'maintenance' ? 'Turn on ' : 'Turn off ') + meta[2].toLowerCase() + '?', message: meta[3], confirmText: 'Yes, do it', cancelText: 'Cancel' }))) return;
+        const o = {}; o[k] = !wasOn; await patch({ flags: o });
+      }); }); });
+      const tones = [['info', 'ℹ️ Info (blue)'], ['warn', '⚠️ Warning (yellow)'], ['ok', '✅ Good news (green)']];
+      document.getElementById('ann').innerHTML = row('Show banner', 'Visible to every signed-in player', '<div class="switch ' + (S.announcement_on ? 'on' : '') + '" id="ann-sw"' + (isSuper ? '' : ' style="opacity:.5;pointer-events:none"') + '></div>') +
+        '<div style="margin:10px 0"><div class="dim" style="font-size:11px;font-weight:800;margin-bottom:4px">MESSAGE (max 400 characters)</div><textarea class="input" id="ann-text" rows="3" maxlength="400"' + (isSuper ? '' : ' disabled') + '>' + AD.esc(S.announcement || '') + '</textarea></div>' +
+        '<div style="display:flex;gap:10px;flex-wrap:wrap"><select class="input" id="ann-tone" style="max-width:220px"' + (isSuper ? '' : ' disabled') + '>' + tones.map(function (t) { return '<option value="' + t[0] + '"' + (S.announcement_tone === t[0] ? ' selected' : '') + '>' + t[1] + '</option>'; }).join('') + '</select>' + (isSuper ? '<button class="am-btn primary" id="ann-save">Save message</button>' : '') + '</div>';
+      const sw = document.getElementById('ann-sw'); if (sw) sw.addEventListener('click', function () { AD.run(function () { return patch({ announcement_on: !S.announcement_on }); }); });
+      const sv = document.getElementById('ann-save'); if (sv) sv.addEventListener('click', function () { AD.run(function () { return patch({ announcement: document.getElementById('ann-text').value, announcement_tone: document.getElementById('ann-tone').value }); }); });
+    }
+
+    // ----- system -----
+    const upt = function (s) { s = Number(s); return s < 3600 ? Math.floor(s / 60) + ' min' : s < 86400 ? (s / 3600).toFixed(1) + ' h' : (s / 86400).toFixed(1) + ' d'; };
+    async function loadSystem() {
+      document.getElementById('sys-k').innerHTML = '<div class="am-card kpi"><div class="lbl">Game server</div><div class="val">checking…</div></div>';
+      const [sys, books] = await Promise.all([AD.rpc('admin_system'), AD.rpc('admin_books_check')]);
+      let srv = null, srvErr = null; try { srv = await AD.serverStatus(); } catch (e) { srvErr = e.message; }
+      document.getElementById('sys-k').innerHTML = [
+        AD.kpiCard('Game server', srv ? '<span class="pos">Online</span>' : '<span class="neg">Unreachable</span>', null, srv ? 'up ' + upt(srv.uptime_s) + ' · ' + srv.version : 'free tier may be asleep — ' + (srvErr || '')),
+        AD.kpiCard('Players connected', srv ? AD.num(srv.players) : '—', null, srv ? AD.num(srv.tables) + ' tables' : ''),
+        AD.kpiCard('₹ in play now', srv ? AD.inr(srv.in_play_inr) : '—', null, 'stakes on live tables'),
+        AD.kpiCard('Server memory', srv ? srv.memory_mb + ' MB' : '—', null, srv ? srv.node : '')].join('');
+      document.getElementById('books-chip').innerHTML = AD.chip(books.ok ? 'ALL CHECKS PASS' : 'MISMATCH — INVESTIGATE', books.ok ? 'green' : 'red');
+      document.getElementById('books').innerHTML = books.checks.map(function (c) { return row((c.ok ? '✅ ' : '❌ ') + AD.esc(c.name), AD.esc(c.detail), ''); }).join('') + '<p class="hint" style="margin:8px 0 0">Wallet total ' + AD.inr(books.wallet_total) + ' · held ' + AD.inr(books.held_total) + ' · pending withdrawals ' + AD.inr(books.pending_withdrawals) + '</p>';
+      const w = srv && srv.watcher;
+      document.getElementById('services').innerHTML =
+        row('🎮 Game server (Render)', srv ? 'Node ' + AD.esc(srv.node) + ' · started ' + AD.ago(srv.started_at) : AD.esc(srvErr || ''), AD.chip(srv ? 'Online' : 'Down', srv ? 'green' : 'red')) +
+        row('🗄️ Database (Supabase)', 'Size ' + sys.db_size_mb + ' MB', AD.chip('Online', 'green')) +
+        row('⛓️ Deposit watcher (Tron)', !srv ? 'unknown' : !w.configured ? 'TRON_MASTER_SEED is not set on the server' : AD.num(w.addresses) + ' addresses · last poll ' + (w.lastTickAt ? AD.ago(w.lastTickAt) : 'not yet') + (w.lastError ? ' · ' + AD.esc(w.lastError) : ''), AD.chip(!srv ? '—' : !w.configured ? 'Not configured' : (w.lastError ? 'Error' : 'Running'), !srv ? '' : !w.configured ? 'yellow' : (w.lastError ? 'red' : 'green'))) +
+        row('📈 Reporting rollups', 'Latest day built: ' + AD.esc(sys.stats_last_day || 'never'), AD.chip(sys.stats_last_day ? 'Fresh' : 'Empty', sys.stats_last_day ? 'green' : 'yellow'));
+      const rooms = (srv && srv.rooms) || [];
+      AD.table(document.getElementById('rooms'), [{ l: 'Game', k: function (r) { return r.game === 'ludo' ? '🎲 Ludo' : '🃏 Rummy'; } }, { l: 'Table', k: function (r) { return r.private ? 'Private' : r.free ? 'Free' : r.stake ? '₹' + r.stake : (r.mode || 'Cash'); } }, { l: 'Seats', a: 'r', k: function (r) { return r.clients + '/' + r.maxClients; } }, { l: 'State', k: function (r) { return r.locked ? AD.chip('Playing', 'green') : AD.chip('Waiting', 'yellow'); } }], rooms, { empty: srv ? 'No live tables right now.' : 'Game server unreachable.' });
+      const rw = sys.rows; document.getElementById('db').innerHTML = Object.keys(rw).map(function (k) { return row(k.replace(/_/g, ' '), '', '<b>' + AD.num(rw[k]) + '</b>'); }).join('') + row('Player events last', '', '<span class="dim">' + AD.ago(sys.events_last) + '</span>') + row('Last ledger entry', '', '<span class="dim">' + AD.ago(sys.last_ledger) + '</span>');
+    }
+    document.getElementById('sys-reload').addEventListener('click', function () { AD.run(loadSystem); });
+    document.getElementById('stats-rebuild').addEventListener('click', function () { AD.run(async function () {
+      await AD.rpc('admin_refresh_stats', { p_full: true }); await ludoAlert({ tone: 'success', icon: '✅', title: 'Stats rebuilt', message: 'Every reporting rollup was recomputed from the raw match and wallet records.' }); await loadSystem();
+    }); });
+    let sysLoaded = false; AD.onTab = function (g, t) { if (t === 'sys' && !sysLoaded) { sysLoaded = true; AD.run(loadSystem); } };
+    await loadSettings();
+  }
+});
+</script>
+</body>
+</html>

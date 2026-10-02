@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Ludo Admin — Users</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="ui-dialog.js"></script>
+<script src="supabase-client.js"></script>
+<script src="app-update.js"></script>
+<script src="admin-core.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff8a3d">
+<link rel="icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+</head>
+<body data-page="users" data-title="Users" data-sub="Search, segment and act on any account">
+
+<div id="tools" style="display:contents"><button class="am-btn" id="btn-export-all">⬇ Export CSV</button></div>
+
+<div id="page" style="display:none">
+  <div class="am-card">
+    <div class="seg-chips" id="segs"></div>
+    <div class="filters">
+      <div class="am-search" style="min-width:280px"><span>🔍</span><input id="q" placeholder="Search name, email, Player ID…" /></div>
+      <select id="f-plan"><option value="any">Plan: any</option><option value="pro">Pro</option><option value="free">Free</option></select>
+      <select id="f-status"><option value="any">Status: any</option><option value="active">Active</option><option value="banned">Banned</option><option value="flagged">Flagged</option><option value="frozen">Withdrawals frozen</option></select>
+      <select id="f-sort"><option value="last_active">Sort: last active</option><option value="balance">Balance ↓</option><option value="net">Net P&amp;L ↓</option><option value="risk">Risk ↓</option><option value="joined">Newest</option><option value="name">Name A–Z</option></select>
+    </div>
+    <div id="bulk" class="alert-row" style="display:none; background:var(--blue-soft); border-color:var(--blue); align-items:center">
+      <div class="body"><b style="display:inline" id="bulk-n">0 selected</b> &nbsp; <button class="am-btn sm" id="bulk-export">Export</button> <button class="am-btn sm" id="bulk-pro">Grant Pro</button> <button class="am-btn sm danger" id="bulk-ban">Ban</button></div>
+    </div>
+    <div id="t-users"></div>
+    <div id="pager"></div>
+  </div>
+</div>
+
+<script>
+AD.boot({
+  range: false,
+  init: async function () {
+    const st = { q: '', plan: 'any', status: 'any', segment: 'all', sort: 'last_active', offset: 0, limit: 25, rows: [], total: 0, counts: {}, sel: {} };
+    const SEGS = [['all', 'All'], ['new7', 'New (7d)'], ['pro', 'Pro'], ['free', 'Free'], ['whales', 'Whales ≥ ₹50k'], ['depositors', 'Depositors'], ['dormant', 'Dormant 30d+'], ['at_risk', 'At risk'], ['flagged', 'Flagged'], ['banned', 'Banned'], ['referred', 'Referred'], ['staff', 'Staff']];
+    const canSupport = AD.can(['support']);
+
+    async function fetchPage(offset, limit) {
+      return AD.rpc('admin_users_page', { p_search: st.q || null, p_plan: st.plan, p_status: st.status, p_segment: st.segment, p_sort: st.sort, p_limit: limit, p_offset: offset });
+    }
+    async function load() {
+      const d = await fetchPage(st.offset, st.limit);
+      st.rows = d.rows; st.total = d.total; st.counts = d.counts;
+      render();
+    }
+    function render() {
+      document.getElementById('segs').innerHTML = SEGS.map(function (s) {
+        return '<button data-seg="' + s[0] + '" class="' + (st.segment === s[0] ? 'on' : '') + '">' + s[1] + ' <b>' + AD.num(st.counts[s[0] === 'all' ? 'all' : s[0] === 'at_risk' ? 'at_risk' : s[0]] || 0) + '</b></button>';
+      }).join('');
+      document.querySelectorAll('#segs button').forEach(function (b) { b.addEventListener('click', function () { st.segment = b.dataset.seg; st.offset = 0; st.sel = {}; AD.run(load); }); });
+      AD.table(document.getElementById('t-users'), [
+        { l: '<input type="checkbox" id="chk-all">', k: function (r) { return '<input type="checkbox" class="row-chk" data-id="' + r.id + '" ' + (st.sel[r.id] ? 'checked' : '') + '>'; } },
+        { l: 'Player', k: function (r, i) { return '<a href="admin-user.html?id=' + r.id + '" style="text-decoration:none;color:inherit">' + AD.who(r.name, i, '<span class="mono">' + AD.esc(r.player_id) + '</span>') + '</a>'; } },
+        { l: 'Plan', k: function (r) { return (r.admin_role ? AD.chip(r.admin_role, 'blue') + ' ' : '') + (r.is_pro ? AD.chip('PRO', 'purple') : AD.chip('Free')); } },
+        { l: 'Status', k: function (r) { return r.is_banned ? AD.chip('Banned', 'red') : r.frozen ? AD.chip('Withdrawals frozen', 'yellow') : r.risk >= 60 ? AD.chip('Flagged', 'yellow') : AD.chip('Active', 'green'); } },
+        { l: 'Wallet', a: 'r', k: function (r) { return AD.inr(r.balance) + (r.held > 0 ? '<small class="dim" style="display:block">🔒 ' + AD.inr(r.held) + ' held</small>' : ''); } },
+        { l: 'Games', a: 'r', k: 'games' }, { l: 'Win %', a: 'r', k: function (r) { return r.games ? Math.round(r.wins / r.games * 100) + '%' : '—'; } },
+        { l: 'Net P&L', a: 'r', k: function (r) { return '<span class="' + (r.net >= 0 ? 'pos' : 'neg') + '">' + (r.net >= 0 ? '+' : '') + AD.inr(r.net) + '</span>'; } },
+        { l: 'Deposited', a: 'r', k: function (r) { return AD.inr(r.deposited); } }, { l: 'Withdrawn', a: 'r', k: function (r) { return AD.inr(r.withdrawn); } },
+        { l: 'Invites', a: 'r', k: 'invites' }, { l: 'Last active', k: function (r) { return '<span class="dim">' + (r.last_active ? AD.ago(r.last_active + 'T12:00:00+05:30') : 'never') + '</span>'; } },
+        { l: 'Risk', a: 'c', k: function (r) { return AD.chip(r.risk, r.risk > 60 ? 'red' : r.risk > 30 ? 'yellow' : 'green'); } }
+      ], st.rows, { wide: true, empty: 'No players match these filters.' });
+      AD.pager(document.getElementById('pager'), { total: st.total, offset: st.offset, limit: st.limit, onPage: function (o) { st.offset = o; AD.run(load); } });
+      document.querySelectorAll('.row-chk').forEach(function (c) { c.addEventListener('change', function () { if (c.checked) st.sel[c.dataset.id] = true; else delete st.sel[c.dataset.id]; bulkUi(); }); });
+      const all = document.getElementById('chk-all'); if (all) all.addEventListener('change', function () { document.querySelectorAll('.row-chk').forEach(function (c) { c.checked = all.checked; if (all.checked) st.sel[c.dataset.id] = true; else delete st.sel[c.dataset.id]; }); bulkUi(); });
+      bulkUi();
+    }
+    function bulkUi() {
+      const n = Object.keys(st.sel).length; document.getElementById('bulk').style.display = n ? '' : 'none'; document.getElementById('bulk-n').textContent = n + ' selected';
+      document.getElementById('bulk-pro').style.display = document.getElementById('bulk-ban').style.display = canSupport ? '' : 'none';
+    }
+    const COLS = [{ key: 'name', label: 'Name' }, { key: 'player_id', label: 'Player ID' }, { key: 'email', label: 'Email' }, { key: 'plan', label: 'Plan' }, { key: 'status', label: 'Status' }, { key: 'balance', label: 'Balance' }, { key: 'held', label: 'Held' },
+      { key: 'games', label: 'Games' }, { key: 'wins', label: 'Wins' }, { key: 'net', label: 'Net P&L' }, { key: 'deposited', label: 'Deposited' }, { key: 'withdrawn', label: 'Withdrawn' }, { key: 'invites', label: 'Invites' }, { key: 'last_active', label: 'Last active' }, { key: 'risk', label: 'Risk' }, { key: 'created_at', label: 'Joined' }];
+    const flat = function (r) { return { name: r.name, player_id: r.player_id, email: r.email, plan: r.is_pro ? 'Pro' : 'Free', status: r.is_banned ? 'Banned' : r.frozen ? 'Frozen' : 'Active', balance: r.balance, held: r.held, games: r.games, wins: r.wins, net: r.net, deposited: r.deposited, withdrawn: r.withdrawn, invites: r.invites, last_active: r.last_active || '', risk: r.risk, created_at: r.created_at }; };
+    async function exportAll() {
+      let rows = [], off = 0; for (;;) { const d = await fetchPage(off, 100); rows = rows.concat(d.rows); off += 100; if (off >= d.total || off >= 5000) break; }
+      AD.csv('players.csv', COLS, rows.map(flat));
+    }
+    document.getElementById('btn-export-all').addEventListener('click', function () { AD.run(exportAll); });
+    document.getElementById('bulk-export').addEventListener('click', function () { AD.csv('players-selected.csv', COLS, st.rows.filter(function (r) { return st.sel[r.id]; }).map(flat)); });
+    async function bulk(kind) {
+      const ids = Object.keys(st.sel); if (!ids.length) return;
+      const f = await ludoForm({ tone: kind === 'ban' ? 'danger' : 'accent', icon: kind === 'ban' ? '🚫' : '👑', title: (kind === 'ban' ? 'Ban ' : 'Grant Pro to ') + ids.length + ' player(s)?', message: kind === 'ban' ? 'They will be blocked from joining any game.' : 'No fee is charged and no referral commission is paid.', fields: [{ name: 'reason', label: 'Reason (kept in the audit log)', required: true, type: 'textarea', rows: 2 }], confirmText: kind === 'ban' ? 'Ban' : 'Grant Pro' });
+      if (!f) return;
+      let ok = 0, failed = [];
+      for (const id of ids) {
+        try { if (kind === 'ban') await AD.rpc('admin_set_user_banned', { p_user_id: id, p_banned: true, p_reason: f.reason }); else await AD.rpc('admin_set_user_pro', { p_user_id: id, p_is_pro: true, p_reason: f.reason }); ok++; }
+        catch (e) { failed.push(e.message); }
+      }
+      st.sel = {}; await load();
+      await ludoAlert({ tone: failed.length ? 'warn' : 'success', title: failed.length ? 'Partly done' : 'Done', message: ok + ' updated' + (failed.length ? ', ' + failed.length + ' failed: ' + failed[0] : '.'), confirmText: 'OK' });
+    }
+    document.getElementById('bulk-pro').addEventListener('click', function () { AD.run(function () { return bulk('pro'); }); });
+    document.getElementById('bulk-ban').addEventListener('click', function () { AD.run(function () { return bulk('ban'); }); });
+    let t; document.getElementById('q').addEventListener('input', function (e) { clearTimeout(t); t = setTimeout(function () { st.q = e.target.value.trim(); st.offset = 0; AD.run(load); }, 300); });
+    ['plan', 'status', 'sort'].forEach(function (k) { document.getElementById('f-' + k).addEventListener('change', function (e) { st[k] = e.target.value; st.offset = 0; AD.run(load); }); });
+    await load();
+  }
+});
+</script>
+</body>
+</html>

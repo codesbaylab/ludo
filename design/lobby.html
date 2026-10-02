@@ -201,6 +201,8 @@
   (async () => {
     const { data: { session } } = await ludoSupabase.auth.getSession();
     if (!session) { location.href = 'login.html'; return; }
+    ludoLogEvent('app_open');
+    ludoShowAnnouncement();
 
     const { data: profile } = await ludoSupabase
       .from('profiles')

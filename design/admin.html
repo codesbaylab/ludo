@@ -3,14 +3,16 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
-<title>Ludo Online — Admin</title>
+<title>Ludo Admin — Dashboard</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="ui-dialog.js"></script>
 <script src="supabase-client.js"></script>
 <script src="app-update.js"></script>
+<script src="admin-core.js"></script>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#ff8a3d">
 <link rel="icon" href="icons/icon-192.png">
@@ -20,503 +22,101 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Ludo">
 </head>
-<body>
-<div class="app">
-  <div class="topbar">
-    <div class="brand">
-      <a href="lobby.html" class="icon-btn" aria-label="Back" title="Back" style="text-decoration:none; font-size:20px; font-weight:800;">←</a>
-      <div class="dice">🛠️</div>
-      <h1 style="font-size:20px;">Admin</h1>
-    </div>
-    <div style="display:flex; align-items:center; gap:10px;">
-      <a href="lobby.html" class="nav-item" style="flex-direction:row; gap:6px; color:var(--text-dim); font-size:13px;">Player view</a>
-      <button type="button" class="icon-btn" id="admin-avatar" aria-label="Log out" title="Log out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
+<body data-page="dashboard" data-title="Dashboard" data-sub="Platform health at a glance">
+
+<div id="tools" style="display:contents"><button class="am-btn" id="btn-refresh">⟳ Refresh</button><a class="am-btn primary" href="admin-reports.html">⬇ Reports</a></div>
+
+<div id="page" style="display:none">
+  <div class="am-grid g4" id="kpis"></div>
+
+  <div class="am-grid g21">
+    <div class="am-card"><div class="head"><div><h3>💰 Platform revenue</h3><div class="sub">Match fees + Pro memberships, per day</div></div><span class="chip green" id="rev-total"></span></div><div id="c-revenue"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🧑‍🤝‍🧑 Active players</h3><div class="sub">Daily vs weekly actives</div></div></div><div id="c-active"></div></div>
+  </div>
+
+  <div class="am-grid g3">
+    <div class="am-card"><div class="head"><div><h3>🔁 Cash flow</h3><div class="sub">USDT deposits vs withdrawals paid</div></div></div><div id="c-cash"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🎮 Game mix</h3><div class="sub">Matches played in the period</div></div></div><div id="c-mix"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🚀 Conversion funnel</h3><div class="sub">Signup → paying player (all time)</div></div></div><div id="c-funnel"></div></div>
+  </div>
+
+  <div class="am-grid g21">
+    <div class="am-card"><div class="head"><div><h3>🔔 Needs your attention</h3><div class="sub">Items waiting on an admin</div></div></div><div id="attention"></div></div>
+    <div class="am-card">
+      <div class="head"><div><h3>🟢 Live right now</h3><div class="sub">From the game server</div></div><span class="chip" id="live-chip">checking…</span></div>
+      <div class="am-grid g3" style="margin-bottom:10px;gap:10px">
+        <div><div class="dim" style="font-size:11px;font-weight:800">PLAYERS</div><div style="font-size:24px;font-weight:800" id="live-players">–</div></div>
+        <div><div class="dim" style="font-size:11px;font-weight:800">TABLES</div><div style="font-size:24px;font-weight:800" id="live-tables">–</div></div>
+        <div><div class="dim" style="font-size:11px;font-weight:800">IN PLAY</div><div style="font-size:24px;font-weight:800" id="live-inplay">–</div></div>
+      </div>
+      <div id="live"></div>
     </div>
   </div>
 
-  <div style="padding: 8px 20px;">
-    <p id="denied-message" class="hint" style="display:none; color:var(--red);">Not authorized — redirecting…</p>
-
-    <div class="section-title" style="margin-top:8px;">Platform</div>
-    <div class="stat-row">
-      <div class="stat"><div class="num" id="stat-users">…</div><div class="lbl">Total Users</div></div>
-      <div class="stat"><div class="num" id="stat-matches">…</div><div class="lbl">Total Matches</div></div>
-      <div class="stat"><div class="num" id="stat-revenue">…</div><div class="lbl">Fee Revenue</div></div>
-    </div>
-
-    <div class="section-title">Pro &amp; Referrals</div>
-    <div class="card" style="margin-bottom:10px;">
-      <div style="font-weight:800; margin-bottom:8px;">Pro membership fee</div>
-      <div style="display:flex; gap:10px; align-items:center;">
-        <input class="input" type="number" min="0" step="1" id="pro-fee-input" style="flex:1;" />
-        <button class="btn btn-secondary btn-sm" id="btn-save-pro-fee">Save</button>
-      </div>
-      <p class="hint" style="margin:6px 0 0;">Applies to new purchases only.</p>
-    </div>
-    <div class="card" style="margin-bottom:10px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-        <div style="font-weight:800;">Referral levels</div>
-        <button class="btn btn-secondary btn-sm" id="btn-add-level">+ Add level</button>
-      </div>
-      <p class="hint" style="margin:0 0 8px;">Commission is a % of the Pro fee, paid to each upline level when someone buys Pro. Levels are 1, 2, 3… in order; total can't exceed 100%.</p>
-      <div id="levels-list"></div>
-      <div class="hint" id="levels-total" style="margin:8px 0;"></div>
-      <button class="btn btn-primary" id="btn-save-levels" style="width:100%;">Save levels</button>
-      <p class="hint" style="margin:8px 0 0;">Changes apply to future purchases only; past payouts are never altered.</p>
-    </div>
-    <div class="card" style="margin-bottom:10px;">
-      <div style="font-weight:800; margin-bottom:8px;">Referral payouts</div>
-      <div class="stat-row">
-        <div class="stat"><div class="num" id="ref-stat-pro">…</div><div class="lbl">Pro users</div></div>
-        <div class="stat"><div class="num" id="ref-stat-paid">…</div><div class="lbl">Paid out</div></div>
-      </div>
-      <div style="display:flex; flex-direction:column; gap:8px; margin-top:10px;" id="referral-rewards-list"></div>
-    </div>
-
-    <div class="section-title">Balance Transfers</div>
-    <div class="card" style="margin-bottom:10px;">
-      <p class="hint" style="margin:0 0 10px;">Players send balance to each other by Player ID. No fee. Limits apply to the sender.</p>
-      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
-        <div class="field" style="margin:0;"><label>Min (₹)</label><input class="input" type="number" min="1" step="1" id="tf-min" /></div>
-        <div class="field" style="margin:0;"><label>Max / transfer</label><input class="input" type="number" min="1" step="1" id="tf-max" /></div>
-        <div class="field" style="margin:0;"><label>Max / 24h</label><input class="input" type="number" min="1" step="1" id="tf-daily" /></div>
-      </div>
-      <button class="btn btn-secondary btn-sm" id="btn-save-transfer-limits" style="margin-top:10px;">Save limits</button>
-      <div style="font-weight:800; margin:14px 0 8px;">Recent transfers</div>
-      <div style="display:flex; flex-direction:column; gap:8px;" id="transfers-list"></div>
-    </div>
-
-    <div class="section-title">Crypto Deposits (USDT / TRC-20)</div>
-    <div class="card" style="margin-bottom:10px;">
-      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-        <div style="flex:1; min-width:160px;">
-          <div class="hint" style="margin:0;">Current rate</div>
-          <div style="font-size:18px; font-weight:800;" id="crypto-rate-display">…</div>
-        </div>
-        <input class="input" type="number" step="0.01" id="crypto-rate-input" placeholder="New rate (₹ per USDT)" style="width:180px;" />
-        <button class="btn btn-secondary btn-sm" id="btn-update-rate">Update Rate</button>
-      </div>
-    </div>
-    <div style="display:flex; flex-direction:column; gap:10px;" id="crypto-deposits-list">
-      <p class="hint" style="margin:0;">Loading…</p>
-    </div>
-
-    <div class="section-title">Withdrawal Requests</div>
-    <p class="hint" style="margin-top:0;">Payout is manual: send the USDT yourself from your own wallet, then mark it paid with the tx hash. Rejecting refunds the user automatically.</p>
-    <div style="display:flex; flex-direction:column; gap:10px;" id="withdrawals-list">
-      <p class="hint" style="margin:0;">Loading…</p>
-    </div>
-
-    <div class="section-title">Users &amp; Wallets</div>
-    <input class="input" id="user-search" placeholder="Search by name…" style="margin-bottom:10px;" />
-    <div style="display:flex; flex-direction:column; gap:10px;" id="users-list">
-      <p class="hint" style="margin:0;">Loading…</p>
-    </div>
-
-    <div class="section-title">All Matches</div>
-    <p class="hint" style="margin-top:0;">Tap a match to see its players.</p>
-    <div style="display:flex; flex-direction:column; gap:10px;" id="matches-list">
-      <p class="hint" style="margin:0;">Loading…</p>
-    </div>
+  <div class="am-grid g2">
+    <div class="am-card"><div class="head"><div><h3>🏆 Top players</h3><div class="sub">By net winnings this period</div></div></div><div id="t-top"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🧾 Recent activity</h3><div class="sub">Money moves and admin actions</div></div></div><div id="feed" class="timeline"></div></div>
   </div>
 </div>
 
 <script>
-  const usersById = {};
-  let currentAdminId = null;
-
-  // Cached raw data so the search box can re-render instantly without
-  // refetching — this list won't realistically be large enough to need
-  // server-side search for a long while.
-  let cachedProfiles = [];
-  let cachedWallets = [];
-  let cachedStatsByUser = {};
-  let cachedWithdrawals = [];
-
-  function renderUsers(profiles, wallets, statsByUser, filterText) {
-    const walletByUser = {};
-    wallets.forEach(w => { walletByUser[w.user_id] = w.balance; });
-
-    const needle = (filterText || '').trim().toLowerCase();
-    const filtered = needle
-      ? profiles.filter(p => (p.display_name || '').toLowerCase().includes(needle))
-      : profiles;
-
-    const list = document.getElementById('users-list');
-    list.innerHTML = '';
-    if (filtered.length === 0) {
-      list.innerHTML = '<p class="hint" style="margin:0;">No users match that search.</p>';
-      return;
+AD.boot({
+  init: async function () {
+    const C = AD.COLORS; let days = 30;
+    async function load() {
+      const d = await AD.rpc('admin_dashboard', { p_days: days });
+      render(d);
     }
-    filtered.forEach(p => {
-      usersById[p.id] = p;
-      const stats = statsByUser[p.id] || { games: 0, wins: 0 };
-      const isSelf = p.id === currentAdminId;
-      const row = document.createElement('div');
-      row.className = 'player-chip';
-      row.style.flexWrap = 'wrap';
-      row.innerHTML = `
-        <div class="avatar" style="width:34px; height:34px; font-size:13px;">${(p.display_name || '?')[0].toUpperCase()}</div>
-        <div style="flex:1; min-width:120px;">
-          <div class="name">
-            ${p.display_name || 'Player'}
-            ${p.is_admin ? ' <span class="badge badge-host">Admin</span>' : ''}
-            ${p.is_pro ? ' <span class="badge badge-ready">PRO</span>' : ''}
-            ${p.is_banned ? ' <span class="badge" style="background:var(--red-soft); color:var(--red);">Banned</span>' : ''}
-          </div>
-          <div class="status"><span data-balance>₹${Number(walletByUser[p.id] ?? 0).toFixed(2)}</span> · ${stats.games} games · ${stats.wins} wins</div>
-        </div>
-        <input type="number" class="input" placeholder="±₹" style="width:70px; padding:8px;" data-adjust-input />
-        <button class="btn btn-secondary btn-sm" data-adjust-btn>Apply</button>
-        <button class="btn btn-secondary btn-sm" data-ban-btn>${p.is_banned ? 'Unban' : 'Ban'}</button>
-        <button class="btn btn-secondary btn-sm" data-pro-btn>${p.is_pro ? 'Revoke Pro' : 'Grant Pro'}</button>
-        <button class="btn btn-secondary btn-sm" data-admin-btn ${isSelf ? 'disabled title="Cannot change your own admin access"' : ''}>${p.is_admin ? 'Demote' : 'Promote'}</button>
-      `;
-      row.querySelector('[data-adjust-btn]').addEventListener('click', async () => {
-        const btn = row.querySelector('[data-adjust-btn]');
-        const input = row.querySelector('[data-adjust-input]');
-        const delta = Number(input.value);
-        if (!delta) return;
-        btn.disabled = true;
-        const { data: newBalance, error } = await ludoSupabase.rpc('admin_adjust_wallet_balance', { p_user_id: p.id, p_delta: delta });
-        btn.disabled = false;
-        if (error) { ludoError(error.message); return; }
-        input.value = '';
-        row.querySelector('[data-balance]').textContent = `₹${Number(newBalance).toFixed(2)}`;
-      });
-      row.querySelector('[data-ban-btn]').addEventListener('click', async () => {
-        const nextBanned = !p.is_banned;
-        if (!(await ludoConfirm({ tone: nextBanned ? 'danger' : 'info', icon: nextBanned ? '🚫' : '✅', title: `${nextBanned ? 'Ban' : 'Unban'} ${p.display_name || 'this player'}?`, message: nextBanned ? 'They will be blocked from joining any game.' : 'They will be able to join games again.', confirmText: nextBanned ? 'Ban user' : 'Unban' }))) return;
-        const btn = row.querySelector('[data-ban-btn]');
-        btn.disabled = true;
-        const { error } = await ludoSupabase.rpc('admin_set_user_banned', { p_user_id: p.id, p_banned: nextBanned });
-        btn.disabled = false;
-        if (error) { ludoError(error.message); return; }
-        p.is_banned = nextBanned;
-        renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, document.getElementById('user-search').value);
-      });
-      row.querySelector('[data-pro-btn]').addEventListener('click', async () => {
-        const nextPro = !p.is_pro;
-        if (!(await ludoConfirm({ tone: 'accent', icon: '👑', title: `${nextPro ? 'Grant Pro to' : 'Revoke Pro from'} ${p.display_name || 'this player'}?`, message: nextPro ? 'No fee is charged and no referral commission is paid.' : 'They will lose access to cash tables and referrals.', confirmText: nextPro ? 'Grant Pro' : 'Revoke Pro' }))) return;
-        const btn = row.querySelector('[data-pro-btn]');
-        btn.disabled = true;
-        const { error } = await ludoSupabase.rpc('admin_set_user_pro', { p_user_id: p.id, p_is_pro: nextPro });
-        btn.disabled = false;
-        if (error) { ludoError(error.message); return; }
-        p.is_pro = nextPro;
-        renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, document.getElementById('user-search').value);
-      });
-      row.querySelector('[data-admin-btn]').addEventListener('click', async () => {
-        const nextAdmin = !p.is_admin;
-        if (!(await ludoConfirm({ tone: 'warn', icon: '🛡️', title: `${nextAdmin ? 'Grant' : 'Remove'} admin access?`, message: `${nextAdmin ? 'Give' : 'Take'} admin access ${nextAdmin ? 'to' : 'from'} ${p.display_name || 'this player'}.`, confirmText: nextAdmin ? 'Grant access' : 'Remove access' }))) return;
-        const btn = row.querySelector('[data-admin-btn]');
-        btn.disabled = true;
-        const { error } = await ludoSupabase.rpc('admin_set_is_admin', { p_user_id: p.id, p_is_admin: nextAdmin });
-        btn.disabled = false;
-        if (error) { ludoError(error.message); return; }
-        p.is_admin = nextAdmin;
-        renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, document.getElementById('user-search').value);
-      });
-      list.appendChild(row);
-    });
-  }
-
-  function renderCryptoDeposits(deposits) {
-    const list = document.getElementById('crypto-deposits-list');
-    list.innerHTML = '';
-    if (deposits.length === 0) {
-      list.innerHTML = '<p class="hint" style="margin:0;">No USDT deposits yet.</p>';
-      return;
+    function render(d) {
+      const k = d.kpis, s = d.series, last = function (a) { return (a || []).slice(-14); };
+      const revSeries = (s.ludo_fee || []).map(function (v, i) { return Number(v) + Number(s.rummy_fee[i]) + Number(s.pro_fee[i]); });
+      const proPct = k.pro.users ? (k.pro.total / k.pro.users * 100).toFixed(1) : '0';
+      const cards = [
+        AD.kpiCard('Revenue', AD.inr(k.revenue.cur), AD.delta(k.revenue.cur, k.revenue.prev), 'vs previous ' + d.days + ' days', AD.spark(last(revSeries), C.orange)),
+        AD.kpiCard('Active players today', AD.num(k.dau.cur), AD.delta(k.dau.cur, k.dau.prev), 'weekly ' + AD.num(k.dau.wau), AD.spark(last(s.dau), C.blue)),
+        AD.kpiCard('New signups', AD.num(k.signups.cur), AD.delta(k.signups.cur, k.signups.prev), AD.num(k.signups.ref_cur) + ' via referral', AD.spark(last(s.signups), C.green)),
+        AD.kpiCard('Pro members', AD.num(k.pro.total), AD.delta(k.pro.cur, k.pro.prev), proPct + '% of ' + AD.num(k.pro.users) + ' users · ' + AD.num(k.pro.cur) + ' new', ''),
+        AD.kpiCard('USDT deposits', AD.inr(k.deposits.cur), AD.delta(k.deposits.cur, k.deposits.prev), AD.num(k.deposits.count) + ' deposits', AD.spark(last(s.deposits), C.green)),
+        AD.kpiCard('Withdrawals paid', AD.inr(k.withdrawals.cur), AD.delta(k.withdrawals.cur, k.withdrawals.prev), k.withdrawals.pending_count + ' pending · ' + AD.inr(k.withdrawals.pending_amount), AD.spark(last(s.withdrawals), C.red)),
+        AD.kpiCard('Net cash flow', AD.inr(k.deposits.cur - k.withdrawals.cur), AD.delta(k.deposits.cur - k.withdrawals.cur, k.deposits.prev - k.withdrawals.prev), 'deposits − withdrawals', ''),
+        AD.kpiCard('Wallet liabilities', AD.inr(k.liabilities.total), null, AD.inr(k.liabilities.held) + ' locked in live games', '')];
+      document.getElementById('kpis').innerHTML = cards.join('');
+      document.getElementById('rev-total').textContent = AD.inr(k.revenue.cur) + ' total';
+      AD.bars(document.getElementById('c-revenue'), { labels: d.labels, stacked: true, fmt: AD.inr, yfmt: function (v) { return '₹' + AD.short(v); }, series: [
+        { name: 'Ludo fees', color: C.orange, values: s.ludo_fee }, { name: 'Rummy fees', color: C.pink, values: s.rummy_fee }, { name: 'Pro memberships', color: C.purple, values: s.pro_fee }] });
+      AD.line(document.getElementById('c-active'), { w: 400, h: 245, labels: d.labels, series: [{ name: 'Daily', color: C.blue, values: s.dau }, { name: 'Weekly', color: C.teal, values: s.wau, area: false, dash: true }] });
+      AD.bars(document.getElementById('c-cash'), { w: 420, h: 230, labels: d.labels.slice(-14), fmt: AD.inr, yfmt: function (v) { return '₹' + AD.short(v); }, series: [{ name: 'Deposits', color: C.green, values: last(s.deposits) }, { name: 'Withdrawals', color: C.red, values: last(s.withdrawals) }] });
+      const m = d.mix; const tot = m.ludo_cash + m.ludo_free + m.rummy_points + m.rummy_pool;
+      AD.donut(document.getElementById('c-mix'), [{ label: 'Ludo · cash', value: m.ludo_cash, color: C.orange }, { label: 'Ludo · free', value: m.ludo_free, color: '#ffc58f' }, { label: 'Rummy · points', value: m.rummy_points, color: C.pink }, { label: 'Rummy · pool', value: m.rummy_pool, color: C.purple }], AD.short(tot), 'matches');
+      const f = d.funnel;
+      AD.funnel(document.getElementById('c-funnel'), [{ label: 'Signed up', value: f.signed_up, color: C.blue }, { label: 'Played a game', value: f.played, color: C.teal }, { label: 'Deposited', value: f.deposited, color: C.green }, { label: 'Became Pro', value: f.pro, color: C.purple }, { label: 'Played cash', value: f.cash_players, color: C.orange }]);
+      document.getElementById('attention').innerHTML = d.attention.length ? d.attention.map(function (a) {
+        return '<div class="alert-row ' + (a.severity === 'high' ? 'high' : a.severity === 'med' ? 'med' : '') + '"><span style="font-size:22px">' + a.icon + '</span><div class="body"><b>' + AD.esc(a.title) + '</b>' + AD.esc(a.detail) + '</div><a class="am-btn sm" href="' + AD.esc(a.link) + '">Open</a></div>';
+      }).join('') : '<div class="empty-note">✅ Nothing needs attention right now.</div>';
+      AD.table(document.getElementById('t-top'), [{ l: '#', k: function (r, i) { return i + 1; } }, { l: 'Player', k: function (r, i) { return AD.who(r.name, i, '<span class="mono">' + AD.esc(r.player_id) + '</span>'); } }, { l: 'Results', a: 'r', k: 'events' },
+        { l: 'Net', a: 'r', k: function (r) { return '<b class="' + (r.net >= 0 ? 'pos' : 'neg') + '">' + AD.inr(r.net) + '</b>'; } }], d.top_players, { empty: 'No cash matches settled in this period yet.' });
+      document.getElementById('feed').innerHTML = d.feed.length ? d.feed.map(function (e) { return '<div class="ev">' + AD.esc(e.text) + '<small>' + AD.ago(e.at) + '</small></div>'; }).join('') : '<div class="empty-note">No activity yet.</div>';
     }
-    deposits.forEach(d => {
-      const user = usersById[d.user_id];
-      const row = document.createElement('div');
-      row.className = 'player-chip';
-      const shortHash = d.tx_hash.length > 14 ? `${d.tx_hash.slice(0, 8)}…${d.tx_hash.slice(-6)}` : d.tx_hash;
-      row.innerHTML = `
-        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:linear-gradient(135deg, #26a17b, #178a4c);">${(user?.display_name || '?')[0].toUpperCase()}</div>
-        <div style="flex:1; min-width:0;">
-          <div class="name">${user?.display_name || 'Unknown user'} · ${Number(d.amount_usdt).toFixed(2)} USDT</div>
-          <div class="status" title="${d.tx_hash}">${shortHash} · ${ludoTimeAgo(d.detected_at)}</div>
-        </div>
-        <span class="badge badge-ready">+₹${Number(d.inr_credited).toFixed(2)}</span>
-      `;
-      list.appendChild(row);
-    });
-  }
-
-  function renderWithdrawals(withdrawals) {
-    const list = document.getElementById('withdrawals-list');
-    list.innerHTML = '';
-    if (withdrawals.length === 0) {
-      list.innerHTML = '<p class="hint" style="margin:0;">No withdrawal requests.</p>';
-      return;
-    }
-    withdrawals.forEach(w => {
-      const user = usersById[w.user_id];
-      const row = document.createElement('div');
-      row.className = 'player-chip';
-      row.style.flexWrap = 'wrap';
-      const statusBadge = w.status === 'pending'
-        ? '<span class="badge badge-waiting">Pending</span>'
-        : w.status === 'paid'
-          ? '<span class="badge badge-ready">Paid</span>'
-          : '<span class="badge" style="background:var(--red-soft); color:var(--red);">Rejected</span>';
-      row.innerHTML = `
-        <div class="avatar" style="width:34px; height:34px; font-size:13px; background:linear-gradient(135deg, #ff8a3d, #ff5c8a);">${(user?.display_name || '?')[0].toUpperCase()}</div>
-        <div style="flex:1; min-width:160px;">
-          <div class="name">${user?.display_name || 'Unknown user'} · ₹${Number(w.amount_inr).toFixed(2)} ${statusBadge}</div>
-          <div class="status" title="${w.destination_address}">${w.destination_address} · ${ludoTimeAgo(w.requested_at)}${w.tx_hash ? ` · tx: ${w.tx_hash}` : ''}${w.admin_note ? ` · note: ${w.admin_note}` : ''}</div>
-        </div>
-        ${w.status === 'pending' ? `
-          <input type="text" class="input" placeholder="tx hash" style="width:140px;" data-txhash-input />
-          <button class="btn btn-secondary btn-sm" data-paid-btn>Mark Paid</button>
-          <button class="btn btn-secondary btn-sm" data-reject-btn>Reject</button>
-        ` : ''}
-      `;
-      if (w.status === 'pending') {
-        row.querySelector('[data-paid-btn]').addEventListener('click', async () => {
-          const txHash = row.querySelector('[data-txhash-input]').value.trim();
-          if (!txHash) { ludoAlert({ tone: 'warn', icon: '✏️', title: 'Check your input', message: 'Enter the on-chain tx hash first.' }); return; }
-          if (!(await ludoConfirm({ tone: 'warn', icon: '💸', title: 'Mark as paid?', message: 'Only confirm if you already sent the USDT yourself.', detail: [['Amount', `₹${Number(w.amount_inr).toFixed(2)}`], ['To', w.destination_address]], confirmText: 'Yes, I sent it' }))) return;
-          const { error } = await ludoSupabase.rpc('admin_mark_withdrawal_paid', { p_withdrawal_id: w.id, p_tx_hash: txHash });
-          if (error) { ludoError(error.message); return; }
-          w.status = 'paid'; w.tx_hash = txHash;
-          renderWithdrawals(cachedWithdrawals);
-        });
-        row.querySelector('[data-reject-btn]').addEventListener('click', async () => {
-          const note = prompt('Reason for rejecting (optional, shown in the audit trail):') || null;
-          const { error } = await ludoSupabase.rpc('admin_reject_withdrawal', { p_withdrawal_id: w.id, p_note: note });
-          if (error) { ludoError(error.message); return; }
-          w.status = 'rejected'; w.admin_note = note;
-          renderWithdrawals(cachedWithdrawals);
-        });
+    async function loadLive() {
+      const chip = document.getElementById('live-chip');
+      try {
+        const st = await AD.serverStatus();
+        chip.textContent = 'server online'; chip.className = 'chip green';
+        document.getElementById('live-players').textContent = AD.num(st.players); document.getElementById('live-tables').textContent = AD.num(st.tables); document.getElementById('live-inplay').textContent = AD.inr(st.in_play_inr);
+        document.getElementById('live').innerHTML = st.rooms.length ? st.rooms.slice(0, 6).map(function (r) {
+          const label = r.game === 'ludo' ? ('Ludo ' + (r.stake > 0 ? '₹' + r.stake : 'free')) : ('Rummy ' + (r.mode || '') + (r.free ? ' free' : ''));
+          return '<div class="list-row"><span class="chip ' + (r.game === 'ludo' ? 'green' : 'orange') + '">●</span><div class="grow">' + AD.esc(label) + ' · ' + r.clients + '/' + r.maxClients + 'p<small>' + (r.private ? 'private ' : '') + 'room ' + AD.esc(r.id) + '</small></div></div>';
+        }).join('') : '<div class="empty-note">No tables open right now.</div>';
+      } catch (e) {
+        chip.textContent = 'unreachable'; chip.className = 'chip red';
+        document.getElementById('live').innerHTML = '<div class="empty-note">Could not reach the game server (it may be waking up). ' + AD.esc(e.message) + '</div>';
       }
-      list.appendChild(row);
-    });
-  }
-
-  function renderMatches(matches, matchPlayersByMatch) {
-    const list = document.getElementById('matches-list');
-    list.innerHTML = '';
-    if (matches.length === 0) {
-      list.innerHTML = '<p class="hint" style="margin:0;">No matches played yet.</p>';
-      return;
     }
-    matches.forEach(m => {
-      const winner = m.winner_id ? usersById[m.winner_id] : null;
-      const wrap = document.createElement('div');
-      const row = document.createElement('div');
-      row.className = 'player-chip';
-      row.style.cursor = 'pointer';
-      const tableLabel = m.stake > 0 ? `₹${m.stake} table` : 'Free table';
-      const winnerLabel = winner ? `Winner: ${winner.display_name || 'Player'}` : (m.status === 'finished' ? 'Winner: —' : m.status);
-      row.innerHTML = `
-        <div class="tile-icon" style="width:34px; height:34px; font-size:15px; background:var(--paper-2);">🎲</div>
-        <div>
-          <div class="name">${tableLabel}</div>
-          <div class="status">${winnerLabel} · ${m.finished_at ? ludoTimeAgo(m.finished_at) : 'in progress'}</div>
-        </div>
-        <span class="badge ${m.status === 'finished' ? 'badge-ready' : 'badge-waiting'}">${m.status}</span>
-      `;
-      const detail = document.createElement('div');
-      detail.style.cssText = 'display:none; padding:10px 14px 4px; margin-top:-6px;';
-      const players = matchPlayersByMatch[m.id] || [];
-      detail.innerHTML = players.length === 0
-        ? '<p class="hint" style="margin:0;">No player records for this match.</p>'
-        : players.map(mp => {
-            const u = usersById[mp.user_id];
-            return `<div class="status" style="padding:4px 0; display:flex; align-items:center; gap:6px;"><span style="width:10px; height:10px; border-radius:50%; flex-shrink:0; background:var(--${mp.color});"></span> ${u?.display_name || 'Unknown'} — ${mp.result === 'win' ? '🏆 won' : mp.result === 'lose' ? 'lost' : 'in progress'}</div>`;
-          }).join('');
-      row.addEventListener('click', () => {
-        detail.style.display = detail.style.display === 'none' ? 'block' : 'none';
-      });
-      wrap.appendChild(row);
-      wrap.appendChild(detail);
-      list.appendChild(wrap);
-    });
+    AD.range(function (n) { days = n; AD.run(load); });
+    document.getElementById('btn-refresh').addEventListener('click', function () { AD.run(load); loadLive(); });
+    await load(); loadLive();
   }
-
-  document.getElementById('user-search').addEventListener('input', (e) => {
-    renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, e.target.value);
-  });
-
-  document.getElementById('btn-update-rate').addEventListener('click', async () => {
-    const input = document.getElementById('crypto-rate-input');
-    const rate = Number(input.value);
-    if (!rate || rate <= 0) { ludoAlert({ tone: 'warn', icon: '✏️', title: 'Check your input', message: 'Enter a positive rate.' }); return; }
-    const btn = document.getElementById('btn-update-rate');
-    btn.disabled = true;
-    const { data: newRate, error } = await ludoSupabase.rpc('admin_set_usdt_rate', { p_rate: rate });
-    btn.disabled = false;
-    if (error) { ludoError(error.message); return; }
-    document.getElementById('crypto-rate-display').textContent = `1 USDT ≈ ₹${Number(newRate).toFixed(2)}`;
-    input.value = '';
-  });
-
-
-  // ---- Pro fee + referral levels ----
-  let levelPercents = [];
-  function renderLevels() {
-    const list = document.getElementById('levels-list');
-    list.innerHTML = '';
-    levelPercents.forEach((pct, i) => {
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex; gap:10px; align-items:center; margin-bottom:6px;';
-      row.innerHTML = `<div style="width:64px; font-weight:800;">Level ${i + 1}</div>
-        <input class="input" type="number" min="0.01" max="100" step="0.01" value="${pct}" style="flex:1;" />
-        <span style="font-weight:700;">%</span>
-        <button class="btn btn-ghost btn-sm" style="color:var(--red);">✕</button>`;
-      row.querySelector('input').addEventListener('input', (e) => { levelPercents[i] = Number(e.target.value); updateLevelsTotal(); });
-      row.querySelector('button').addEventListener('click', () => { levelPercents.splice(i, 1); renderLevels(); });
-      list.appendChild(row);
-    });
-    updateLevelsTotal();
-  }
-  function updateLevelsTotal() {
-    const total = levelPercents.reduce((a, b) => a + (Number(b) || 0), 0);
-    const el = document.getElementById('levels-total');
-    el.textContent = levelPercents.length ? `Total paid out per Pro purchase: ${total}%` : 'No levels — referrals pay nothing.';
-    el.style.color = total > 100 ? 'var(--red)' : '';
-  }
-  document.getElementById('btn-add-level').addEventListener('click', () => {
-    if (levelPercents.length >= 10) { ludoAlert({ tone: 'warn', icon: '✏️', title: 'Limit reached', message: 'At most 10 levels.' }); return; }
-    levelPercents.push(1);
-    renderLevels();
-  });
-  document.getElementById('btn-save-levels').addEventListener('click', async () => {
-    if (levelPercents.some(p => !(Number(p) > 0 && Number(p) <= 100))) { ludoAlert({ tone: 'warn', icon: '✏️', title: 'Check your input', message: 'Each level needs a percentage above 0 and up to 100.' }); return; }
-    const btn = document.getElementById('btn-save-levels');
-    btn.disabled = true;
-    const { error } = await ludoSupabase.rpc('admin_set_referral_levels', { p_levels: levelPercents.map(percent => ({ percent: Number(percent) })) });
-    btn.disabled = false;
-    if (error) { ludoError(error.message); return; }
-    ludoAlert({ tone: 'success', title: 'Saved', message: 'Referral levels updated. They apply to future purchases only.', confirmText: 'Done' });
-  });
-  document.getElementById('btn-save-pro-fee').addEventListener('click', async () => {
-    const input = document.getElementById('pro-fee-input');
-    const fee = Number(input.value);
-    if (input.value === '' || fee < 0) { ludoAlert({ tone: 'warn', icon: '✏️', title: 'Check your input', message: 'Enter a fee of zero or more.' }); return; }
-    const btn = document.getElementById('btn-save-pro-fee');
-    btn.disabled = true;
-    const { error } = await ludoSupabase.rpc('admin_set_pro_fee', { p_fee: fee });
-    btn.disabled = false;
-    if (error) { ludoError(error.message); return; }
-    ludoAlert({ tone: 'success', title: 'Saved', message: 'Pro fee updated. It applies to new purchases only.', confirmText: 'Done' });
-  });
-  function renderTransfers(transfers) {
-    const list = document.getElementById('transfers-list');
-    list.innerHTML = transfers.length ? '' : '<p class="hint" style="margin:0;">No transfers yet.</p>';
-    transfers.forEach(t => {
-      const nameOf = (id) => (usersById[id] && usersById[id].display_name) || 'Player';
-      const row = document.createElement('div');
-      row.className = 'player-chip';
-      row.innerHTML = '<div class="name"></div><span style="font-weight:800;">₹' + Number(t.amount).toFixed(2) + '</span>';
-      row.querySelector('.name').textContent = `${nameOf(t.sender_id)} → ${nameOf(t.recipient_id)} · ${ludoTimeAgo(t.created_at)}`;
-      list.appendChild(row);
-    });
-  }
-  document.getElementById('btn-save-transfer-limits').addEventListener('click', async () => {
-    const min = Number(document.getElementById('tf-min').value);
-    const max = Number(document.getElementById('tf-max').value);
-    const daily = Number(document.getElementById('tf-daily').value);
-    if (!(min > 0 && max >= min && daily >= max)) {
-      ludoAlert({ tone: 'warn', icon: '✏️', title: 'Check your input', message: 'Limits must satisfy: minimum > 0, minimum ≤ max per transfer ≤ max per 24 hours.' });
-      return;
-    }
-    const btn = document.getElementById('btn-save-transfer-limits');
-    btn.disabled = true;
-    const { error } = await ludoSupabase.rpc('admin_set_transfer_limits', { p_min: min, p_max: max, p_daily: daily });
-    btn.disabled = false;
-    if (error) { ludoError(error.message); return; }
-    ludoAlert({ tone: 'success', title: 'Saved', message: 'Transfer limits updated.', confirmText: 'Done' });
-  });
-  function renderReferralRewards(rewards) {
-    document.getElementById('ref-stat-pro').textContent = cachedProfiles.filter(p => p.is_pro).length;
-    document.getElementById('ref-stat-paid').textContent = '₹' + rewards.reduce((a, r) => a + Number(r.amount), 0).toFixed(0);
-    const list = document.getElementById('referral-rewards-list');
-    list.innerHTML = rewards.length ? '' : '<p class="hint" style="margin:0;">No referral payouts yet.</p>';
-    rewards.slice(0, 50).forEach(r => {
-      const nameOf = (id) => (usersById[id] && usersById[id].display_name) || 'Player';
-      const row = document.createElement('div');
-      row.className = 'player-chip';
-      row.innerHTML = '<div class="name"></div><span style="color:var(--green); font-weight:800;">+₹' + Number(r.amount).toFixed(2) + '</span>';
-      row.querySelector('.name').textContent = `${nameOf(r.referrer_id)} ← ${nameOf(r.invitee_id)} · L${r.level} · ${ludoTimeAgo(r.created_at)}`;
-      list.appendChild(row);
-    });
-  }
-
-  (async () => {
-    const { data: { session } } = await ludoSupabase.auth.getSession();
-    if (!session) { location.href = 'login.html'; return; }
-
-    if (!(await ludoIsAdmin(session.user.id))) {
-      document.getElementById('denied-message').style.display = 'block';
-      setTimeout(() => { location.href = 'lobby.html'; }, 1200);
-      return;
-    }
-    currentAdminId = session.user.id;
-
-
-    const [stats, { data: profiles }, { data: wallets }, { data: allMatchPlayers }, { data: matches }, { data: cryptoSettings }, { data: cryptoDeposits }, { data: withdrawals }, { data: appSettings }, { data: levelRows }, { data: rewards }, { data: transfers }] = await Promise.all([
-      ludoSupabase.rpc('get_platform_stats').then(r => r.data?.[0] || { total_users: 0, total_matches: 0, total_revenue: 0 }),
-      ludoSupabase.from('profiles').select('id, display_name, is_admin, is_banned, is_pro'),
-      ludoSupabase.from('wallets').select('user_id, balance'),
-      ludoSupabase.from('match_players').select('match_id, user_id, color, result'),
-      ludoSupabase.from('matches').select('id, stake, status, winner_id, finished_at').order('created_at', { ascending: false }),
-      ludoSupabase.from('crypto_settings').select('usdt_inr_rate').eq('id', true).single(),
-      ludoSupabase.from('crypto_deposits').select('user_id, tx_hash, amount_usdt, inr_credited, detected_at').order('detected_at', { ascending: false }),
-      ludoSupabase.from('crypto_withdrawals').select('id, user_id, amount_inr, destination_address, status, tx_hash, admin_note, requested_at').order('requested_at', { ascending: false }),
-      ludoSupabase.from('app_settings').select('pro_fee, transfer_min, transfer_max, transfer_daily_max').eq('id', true).single(),
-      ludoSupabase.from('referral_levels').select('level, percent').order('level'),
-      ludoSupabase.from('referral_rewards').select('referrer_id, invitee_id, level, amount, created_at').order('created_at', { ascending: false }),
-      ludoSupabase.from('transfers').select('sender_id, recipient_id, amount, created_at').order('created_at', { ascending: false }).limit(50),
-    ]);
-
-    document.getElementById('stat-users').textContent = stats.total_users;
-    document.getElementById('stat-matches').textContent = stats.total_matches;
-    document.getElementById('stat-revenue').textContent = `₹${Number(stats.total_revenue).toFixed(0)}`;
-    document.getElementById('crypto-rate-display').textContent = `1 USDT ≈ ₹${Number(cryptoSettings?.usdt_inr_rate ?? 90).toFixed(2)}`;
-
-    const statsByUser = {};
-    const matchPlayersByMatch = {};
-    (allMatchPlayers || []).forEach(row => {
-      const s = statsByUser[row.user_id] || (statsByUser[row.user_id] = { games: 0, wins: 0 });
-      s.games++;
-      if (row.result === 'win') s.wins++;
-      (matchPlayersByMatch[row.match_id] = matchPlayersByMatch[row.match_id] || []).push(row);
-    });
-
-    cachedProfiles = profiles || [];
-    cachedWallets = wallets || [];
-    cachedStatsByUser = statsByUser;
-
-    // usersById needs to be populated before renderCryptoDeposits/renderMatches
-    // look user names up in it.
-    cachedProfiles.forEach(p => { usersById[p.id] = p; });
-
-    cachedWithdrawals = withdrawals || [];
-
-    document.getElementById('pro-fee-input').value = appSettings?.pro_fee ?? 0;
-    levelPercents = (levelRows || []).map(l => Number(l.percent));
-    renderLevels();
-    renderReferralRewards(rewards || []);
-    document.getElementById('tf-min').value = appSettings?.transfer_min ?? 10;
-    document.getElementById('tf-max').value = appSettings?.transfer_max ?? 5000;
-    document.getElementById('tf-daily').value = appSettings?.transfer_daily_max ?? 20000;
-    renderTransfers(transfers || []);
-
-    renderUsers(cachedProfiles, cachedWallets, cachedStatsByUser, '');
-    renderCryptoDeposits(cryptoDeposits || []);
-    renderWithdrawals(cachedWithdrawals);
-    renderMatches(matches || [], matchPlayersByMatch);
-  })();
-
-  document.getElementById('admin-avatar').addEventListener('click', async () => {
-    if (!(await ludoConfirm({ tone: 'info', icon: '👋', title: 'Log out?', message: 'You’ll need to log in again to play.', confirmText: 'Log out', cancelText: 'Stay' }))) return;
-    await ludoSupabase.auth.signOut();
-    location.href = 'login.html';
-  });
+});
 </script>
 </body>
 </html>

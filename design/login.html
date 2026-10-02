@@ -103,6 +103,7 @@
   }
 
   async function redirectAfterLogin(userId) {
+    await ludoLogEvent('login');
     location.href = (await ludoIsAdmin(userId)) ? 'admin.html' : 'lobby.html';
   }
 

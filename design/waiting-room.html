@@ -169,6 +169,11 @@
           document.getElementById('start-hint').innerHTML = 'Not enough available balance for this table (funds locked in other games don\'t count). <a href="wallet.html">Open wallet</a>';
           return;
         }
+        if (err && (err.code === 4503 || err.code === 4504)) {
+          document.getElementById('players-title').textContent = err.code === 4503 ? 'Down for maintenance' : 'Cash tables are paused';
+          document.getElementById('start-hint').innerHTML = (err.code === 4503 ? 'The game is briefly down for maintenance. Please try again soon.' : 'Cash tables are paused right now. Free tables are still open.') + ' <a href="lobby.html">Back to lobby</a>';
+          return;
+        }
         if (err && err.code === 4403) {
           document.getElementById('players-title').textContent = 'Pro membership required';
           document.getElementById('start-hint').innerHTML = 'Cash tables are for Pro members. <a href="wallet.html#pro">Go Pro</a>';

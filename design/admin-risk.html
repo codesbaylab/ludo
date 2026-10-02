@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Ludo Admin — Risk &amp; Fraud</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="ui-dialog.js"></script>
+<script src="supabase-client.js"></script>
+<script src="app-update.js"></script>
+<script src="admin-core.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff8a3d">
+<link rel="icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+</head>
+<body data-page="risk" data-title="Risk &amp; Fraud" data-sub="Automatic detection, case handling and the rules behind it">
+
+<div id="tools" style="display:contents"><button class="am-btn" id="btn-rescan">⟳ Scan now</button><a class="am-btn" href="admin-reports.html">⬇ Case register</a></div>
+
+<div id="page" style="display:none">
+  <div class="am-grid g4" id="kpis"></div>
+
+  <div class="am-card">
+    <div class="am-tabs" data-tabs="r">
+      <button class="on" data-t="alerts">Alerts <span class="chip red" id="open-badge" style="display:none"></span></button><button data-t="cases">Cases board</button><button data-t="links">Linked accounts</button><button data-t="rules">Rules &amp; thresholds</button>
+    </div>
+    <div data-tab-group="r" data-tab="alerts">
+      <div class="filters"><select id="f-sev"><option value="any">Severity: all</option><option value="high">High</option><option value="med">Medium</option><option value="low">Low</option></select>
+        <select id="f-stat"><option value="active">Status: open &amp; investigating</option><option value="any">All</option><option value="dismissed">Dismissed</option><option value="resolved">Resolved</option></select></div>
+      <div id="alerts"></div>
+    </div>
+    <div data-tab-group="r" data-tab="cases" style="display:none"><div class="am-grid g4" style="margin:0" id="kanban"></div></div>
+    <div data-tab-group="r" data-tab="links" style="display:none"><div class="head"><div><h3>Account network</h3><div class="sub">Accounts in open alerts, joined by shared device, transfers or referral</div></div></div><div id="c-net"></div></div>
+    <div data-tab-group="r" data-tab="rules" style="display:none"><div id="rules"></div></div>
+  </div>
+
+  <div class="am-grid g2">
+    <div class="am-card"><div class="head"><div><h3>📊 Risk score distribution</h3><div class="sub">All accounts</div></div></div><div id="c-dist"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🚦 New alerts, last 14 days</h3><div class="sub">By severity</div></div></div><div id="c-over"></div></div>
+  </div>
+</div>
+
+<script>
+AD.boot({
+  range: false,
+  init: async function () {
+    const C = AD.COLORS; let page = null; const canAct = AD.can(['support', 'finance']), isSuper = AD.can([]);
+    const RULE_ICON = { multi_account: '🚨', shared_ip: '🌐', transfer_loop: '🔁', fast_withdrawal: '💸', big_new_transfer: '⚡', win_outlier: '🎯', pro_never_played: '👤', rapid_in_out: '↔️' };
+    async function load() { page = await AD.rpc('admin_risk_page'); render(); }
+    function render() {
+      const c = page.counts;
+      document.getElementById('kpis').innerHTML = [AD.kpiCard('Open alerts', c.open, null, c.high + ' high severity'), AD.kpiCard('Under investigation', c.investigating, null, 'assigned to an admin'), AD.kpiCard('Withdrawals frozen', c.frozen, null, 'accounts on hold'), AD.kpiCard('Closed', c.resolved + c.dismissed, null, c.resolved + ' resolved · ' + c.dismissed + ' dismissed')].join('');
+      const ob = document.getElementById('open-badge'); ob.style.display = c.open ? '' : 'none'; ob.textContent = c.open;
+      renderAlerts(); renderKanban(); renderNet(); renderRules();
+      const dist = page.distribution; AD.bars(document.getElementById('c-dist'), { w: 460, h: 215, legend: false, labels: ['No alerts', 'Low (<40)', 'Medium (40–69)', 'High (70+)'], series: [{ name: 'Accounts', color: C.blue, values: [dist.none, dist.low, dist.mid, dist.high] }] });
+      AD.bars(document.getElementById('c-over'), { w: 460, h: 215, stacked: true, labels: page.over_time.map(function (o) { return o.day; }), series: [{ name: 'High', color: C.red, values: page.over_time.map(function (o) { return o.high; }) }, { name: 'Medium', color: C.yellow, values: page.over_time.map(function (o) { return o.med; }) }, { name: 'Low', color: C.blue, values: page.over_time.map(function (o) { return o.low; }) }] });
+    }
+    function filtered() {
+      const sev = document.getElementById('f-sev').value, stat = document.getElementById('f-stat').value;
+      return page.alerts.filter(function (a) { return (sev === 'any' || a.severity === sev) && (stat === 'any' || (stat === 'active' ? (a.status === 'open' || a.status === 'investigating') : a.status === stat)); });
+    }
+    function alertRow(a) {
+      const users = a.users.map(function (u) { return '<a class="chip" href="admin-user.html?id=' + u.id + '" style="text-decoration:none">' + AD.esc(u.name) + (u.frozen ? ' 🧊' : '') + (u.banned ? ' 🚫' : '') + '</a>'; }).join(' ');
+      const open = a.status === 'open' || a.status === 'investigating';
+      return '<div class="alert-row ' + (open ? (a.severity === 'high' ? 'high' : 'med') : '') + '"><span style="font-size:24px">' + (RULE_ICON[a.rule] || '⚠️') + '</span><div class="body"><b>' + AD.esc(a.title) + '</b>' + AD.esc(a.detail) +
+        '<div style="margin-top:6px">' + users + ' <span class="dim" style="font-size:12px">· ' + AD.chip(a.status, a.status === 'open' ? 'red' : a.status === 'investigating' ? 'yellow' : 'green') + ' ' + AD.ago(a.first_seen) + (a.assignee ? ' · ' + AD.esc(a.assignee) : '') + '</span></div>' + (a.note ? '<div class="dim" style="font-size:12px;margin-top:4px">📝 ' + AD.esc(a.note) + '</div>' : '') + '</div>' +
+        (canAct ? '<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">' + (open ? '<button class="am-btn sm" data-st="dismissed" data-k="' + AD.esc(a.key) + '">Dismiss</button>' + (a.status === 'open' ? '<button class="am-btn sm" data-st="investigating" data-k="' + AD.esc(a.key) + '">Investigate</button>' : '<button class="am-btn sm green" data-st="resolved" data-k="' + AD.esc(a.key) + '">Resolve</button>') + '<button class="am-btn sm danger" data-freeze="' + AD.esc(a.key) + '">Freeze</button>' : '<button class="am-btn sm" data-st="open" data-k="' + AD.esc(a.key) + '">Reopen</button>') + '</div>' : '') + '</div>';
+    }
+    function renderAlerts() {
+      const rows = filtered(); document.getElementById('alerts').innerHTML = rows.length ? rows.map(alertRow).join('') : '<div class="empty-note">✅ No alerts match. The scan checks eight rules every time this page opens.</div>';
+      document.querySelectorAll('[data-st]').forEach(function (b) { b.addEventListener('click', function () { AD.run(function () { return setStatus(b.dataset.k, b.dataset.st); }); }); });
+      document.querySelectorAll('[data-freeze]').forEach(function (b) { b.addEventListener('click', function () { AD.run(function () { return freeze(b.dataset.freeze); }); }); });
+    }
+    async function setStatus(key, st) {
+      const f = await ludoForm({ tone: st === 'dismissed' ? 'info' : 'accent', icon: '📝', title: st.charAt(0).toUpperCase() + st.slice(1) + ' this alert?', message: 'Your note is kept with the alert and in the audit log.', fields: [{ name: 'note', label: 'Note', type: 'textarea', rows: 2, required: st === 'dismissed' || st === 'resolved' }], confirmText: 'Save' });
+      if (!f) return; await AD.rpc('admin_risk_set_status', { p_key: key, p_status: st, p_note: f.note || null }); await load();
+    }
+    async function freeze(key) {
+      const a = page.alerts.find(function (x) { return x.key === key; }); const targets = a.users.filter(function (u) { return !u.frozen; });
+      if (!targets.length) { await ludoAlert({ tone: 'info', title: 'Already frozen', message: 'Every account in this alert already has withdrawals on hold.' }); return; }
+      const f = await ludoForm({ tone: 'warn', icon: '🧊', title: 'Freeze withdrawals for ' + targets.length + ' account(s)?', message: targets.map(function (u) { return u.name; }).join(', ') + ' can keep playing but cannot request withdrawals until you unfreeze.', fields: [{ name: 'reason', label: 'Reason', type: 'textarea', rows: 2, required: true, value: a.title }], confirmText: 'Freeze' });
+      if (!f) return;
+      for (const u of targets) await AD.rpc('admin_set_withdrawal_freeze', { p_user_id: u.id, p_frozen: true, p_reason: f.reason });
+      if (a.status === 'open') await AD.rpc('admin_risk_set_status', { p_key: key, p_status: 'investigating', p_note: 'Withdrawals frozen' });
+      await load();
+    }
+    function renderKanban() {
+      const cols = [['Open', 'open', C.red], ['Investigating', 'investigating', C.yellow], ['Resolved', 'resolved', C.green], ['Dismissed', 'dismissed', C.gray]];
+      document.getElementById('kanban').innerHTML = cols.map(function (c) {
+        const items = page.alerts.filter(function (a) { return a.status === c[1]; });
+        return '<div style="background:var(--paper-2);border:2px solid var(--border);border-radius:16px;padding:12px"><div style="font-weight:800;margin-bottom:10px"><i style="display:inline-block;width:10px;height:10px;border-radius:3px;background:' + c[2] + ';margin-right:6px"></i>' + c[0] + ' <span class="dim">' + items.length + '</span></div>' +
+          (items.length ? items.map(function (a) { return '<div style="background:var(--paper);border:2px solid var(--border);border-radius:12px;padding:10px;margin-bottom:8px;font-size:13px;font-weight:800">' + AD.esc(a.title) + '<div class="dim" style="font-size:11px;margin-top:4px">' + (a.assignee ? AD.esc(a.assignee) : 'unassigned') + ' · ' + AD.ago(a.updated_at) + '</div></div>'; }).join('') : '<div class="empty-note">—</div>') + '</div>';
+      }).join('');
+    }
+    function renderNet() {
+      const g = page.graph, el = document.getElementById('c-net');
+      if (!g.nodes.length) { el.innerHTML = '<div class="empty-note">No linked accounts in open alerts.</div>'; return; }
+      const W = 660, H = 300, cx = W / 2, cy = H / 2, R = Math.min(cx, cy) - 40; const pos = {};
+      g.nodes.forEach(function (n, i) { const ang = i / g.nodes.length * Math.PI * 2 - Math.PI / 2; pos[n.id] = [cx + (g.nodes.length === 1 ? 0 : R * 1.5 * Math.cos(ang)), cy + (g.nodes.length === 1 ? 0 : R * Math.sin(ang))]; });
+      const col = { device: C.red, transfer: C.orange, referral: C.gray };
+      let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto">';
+      g.edges.forEach(function (e) { const a = pos[e.a], b = pos[e.b]; if (!a || !b) return; svg += '<line x1="' + a[0] + '" y1="' + a[1] + '" x2="' + b[0] + '" y2="' + b[1] + '" stroke="' + col[e.kind] + '" stroke-width="' + (e.kind === 'device' ? 3 : 2) + '" ' + (e.kind === 'referral' ? 'stroke-dasharray="5 5"' : '') + '/>'; });
+      g.nodes.forEach(function (n, i) { const p = pos[n.id]; svg += '<a href="admin-user.html?id=' + n.id + '"><circle cx="' + p[0] + '" cy="' + p[1] + '" r="22" fill="' + AD.AVC[i % 6] + '"/><text x="' + p[0] + '" y="' + (p[1] + 5) + '" text-anchor="middle" style="fill:#fff;font-size:14px;font-weight:800">' + AD.esc((n.name || '?')[0].toUpperCase()) + '</text><text x="' + p[0] + '" y="' + (p[1] + 40) + '" text-anchor="middle" style="font-size:11px">' + AD.esc(n.name) + '</text></a>'; });
+      el.innerHTML = svg + '</svg><div class="legend"><span><i style="background:' + C.red + '"></i>Shared device</span><span><i style="background:' + C.orange + '"></i>Transfers</span><span><i style="background:' + C.gray + '"></i>Referral link</span></div>';
+    }
+    function renderRules() {
+      document.getElementById('rules').innerHTML = page.rules.map(function (r) {
+        return '<div class="field-row"><span>' + (RULE_ICON[r.rule] || '') + ' ' + AD.esc(r.title) + '<small>' + AD.esc(r.description) + ' · ' + AD.esc(Object.keys(r.params).map(function (k) { return k + ' = ' + r.params[k]; }).join(', ')) + '</small></span><span class="chip">score +' + r.score + '</span>' +
+          (isSuper ? '<button class="am-btn sm" data-edit="' + r.rule + '">Edit</button>' : '') + '<div class="switch ' + (r.enabled ? 'on' : '') + '" data-sw="' + r.rule + '"' + (isSuper ? '' : ' style="opacity:.5;pointer-events:none"') + '></div></div>';
+      }).join('') + (isSuper ? '' : '<div class="empty-note">Only a super admin can change detection rules.</div>');
+      document.querySelectorAll('[data-sw]').forEach(function (s) { s.addEventListener('click', function () { AD.run(async function () { const r = page.rules.find(function (x) { return x.rule === s.dataset.sw; }); await AD.rpc('admin_risk_rule_update', { p_rule: r.rule, p_enabled: !r.enabled, p_score: null, p_params: null }); await load(); }); }); });
+      document.querySelectorAll('[data-edit]').forEach(function (b) { b.addEventListener('click', function () { AD.run(async function () {
+        const r = page.rules.find(function (x) { return x.rule === b.dataset.edit; });
+        const fields = [{ name: '__score', label: 'Risk score added', type: 'number', value: r.score, required: true }].concat(Object.keys(r.params).map(function (k) { return { name: k, label: k.replace(/_/g, ' '), type: 'number', step: 'any', value: r.params[k], required: true }; }));
+        const f = await ludoForm({ tone: 'accent', icon: '⚙️', title: r.title, message: r.description, fields: fields, confirmText: 'Save' }); if (!f) return;
+        const params = {}; Object.keys(r.params).forEach(function (k) { params[k] = Number(f[k]); });
+        await AD.rpc('admin_risk_rule_update', { p_rule: r.rule, p_enabled: null, p_score: Number(f.__score), p_params: params }); await load();
+      }); }); });
+    }
+    document.getElementById('btn-rescan').addEventListener('click', function () { AD.run(load); });
+    document.getElementById('f-sev').addEventListener('change', renderAlerts); document.getElementById('f-stat').addEventListener('change', renderAlerts);
+    await load();
+  }
+});
+</script>
+</body>
+</html>

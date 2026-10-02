@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Ludo Admin — Finance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="ui-dialog.js"></script>
+<script src="supabase-client.js"></script>
+<script src="app-update.js"></script>
+<script src="admin-core.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff8a3d">
+<link rel="icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+</head>
+<body data-page="finance" data-title="Finance" data-sub="Money in, money out, and whether the books balance">
+
+<div id="tools" style="display:contents"><a class="am-btn" href="admin-reports.html">⬇ Registers &amp; exports</a></div>
+
+<div id="page" style="display:none">
+  <div class="am-grid g4" id="kpis"></div>
+
+  <div class="am-grid g21">
+    <div class="am-card"><div class="head"><div><h3>🔁 Money in vs out</h3><div class="sub">USDT deposits and paid withdrawals per day</div></div></div><div id="c-flow"></div></div>
+    <div class="am-card">
+      <div class="head"><div><h3>⚖️ Books check</h3><div class="sub" id="books-sub">Automated reconciliation</div></div><button class="am-btn sm" id="books-run">Run now</button></div>
+      <div id="books"></div>
+    </div>
+  </div>
+
+  <div class="am-card">
+    <div class="am-tabs" data-tabs="f">
+      <button class="on" data-t="wd">Withdrawals <span class="chip red" id="wd-badge" style="display:none"></span></button><button data-t="appr">Approvals <span class="chip red" id="ap-badge" style="display:none"></span></button><button data-t="dep">Deposits</button><button data-t="xf">Player transfers</button><button data-t="pl">Revenue &amp; P&amp;L</button><button data-t="rate">USDT rate</button>
+    </div>
+
+    <div data-tab-group="f" data-tab="wd">
+      <div class="filters"><select id="wd-status"><option value="pending">Status: pending</option><option value="all">All</option><option value="paid">Paid</option><option value="rejected">Rejected</option></select>
+        <span class="dim" style="font-size:12px;font-weight:700">Payout is manual: send the USDT from your own wallet, paste the tx hash, then mark it paid. Rejecting refunds the player automatically.</span></div>
+      <div id="t-wd"></div>
+    </div>
+    <div data-tab-group="f" data-tab="appr" style="display:none"><div id="t-appr"></div></div>
+    <div data-tab-group="f" data-tab="dep" style="display:none"><div id="t-dep"></div></div>
+    <div data-tab-group="f" data-tab="xf" style="display:none"><div class="am-grid g21" style="margin-bottom:0"><div id="c-xf"></div><div id="t-xf"></div></div></div>
+    <div data-tab-group="f" data-tab="pl" style="display:none"><div class="am-grid g2" style="margin-bottom:0"><div id="c-pl"></div><dl class="kv" id="pl-kv"></dl></div></div>
+    <div data-tab-group="f" data-tab="rate" style="display:none">
+      <div class="am-grid g21" style="margin-bottom:0"><div id="c-rate"></div>
+        <div><div class="field-row"><span>Current rate<small>₹ per 1 USDT, applied to new deposits only</small></span><input id="rate-input" type="number" step="0.01" /></div><button class="am-btn primary" id="rate-save" style="margin-top:10px">Update rate</button></div></div>
+    </div>
+  </div>
+
+  <div class="am-grid g2">
+    <div class="am-card"><div class="head"><div><h3>🧮 Liabilities by player tier</h3><div class="sub">Who the money in wallets belongs to</div></div></div><div id="c-liab"></div></div>
+    <div class="am-card"><div class="head"><div><h3>⏱ Withdrawal speed</h3><div class="sub">Request → paid, period</div></div></div><div id="c-sla"></div></div>
+  </div>
+</div>
+
+<script>
+AD.boot({
+  init: async function () {
+    const C = AD.COLORS; let days = 30, fin = null, rate = 90; const canPay = AD.can(['finance']);
+    const sb = AD.sb;
+    async function names(ids) {
+      ids = Array.from(new Set(ids.filter(Boolean))); if (!ids.length) return {};
+      const { data } = await sb.from('profiles').select('id, display_name, player_id, withdrawals_frozen, created_at').in('id', ids); const m = {}; (data || []).forEach(function (p) { m[p.id] = p; }); return m;
+    }
+    async function load() {
+      fin = await AD.rpc('admin_finance', { p_days: days });
+      const { data: cs } = await sb.from('crypto_settings').select('usdt_inr_rate').eq('id', true).single(); rate = Number(cs ? cs.usdt_inr_rate : 90);
+      renderTop(); await Promise.all([loadWithdrawals(), loadApprovals(), loadDeposits(), loadTransfers()]);
+    }
+    function renderTop() {
+      const k = fin.kpis, s = fin.series;
+      document.getElementById('kpis').innerHTML = [
+        AD.kpiCard('USDT deposits', AD.inr(k.deposits), null, AD.num(k.deposit_count) + ' deposits'), AD.kpiCard('Withdrawals paid', AD.inr(k.withdrawals_paid), null, 'period total'),
+        AD.kpiCard('Pending withdrawals', AD.inr(k.pending_amount), null, k.pending_count + ' request(s)' + (k.pending_count ? ' · oldest ' + k.pending_oldest_h.toFixed(1) + ' h' : '')),
+        AD.kpiCard('Wallet liabilities', AD.inr(k.liabilities), null, AD.num(k.wallets) + ' wallets'),
+        AD.kpiCard('Held in live games', AD.inr(k.held), null, 'reserved stakes'), AD.kpiCard('Platform revenue', AD.inr(k.revenue), null, 'fees + Pro'),
+        AD.kpiCard('Referral commission', AD.inr(k.commission), null, 'cost of growth'), AD.kpiCard('Net margin', k.margin + '%', null, 'revenue ÷ deposits')].join('');
+      AD.bars(document.getElementById('c-flow'), { labels: s.labels, h: 240, fmt: AD.inr, yfmt: function (v) { return '₹' + AD.short(v); }, series: [{ name: 'Deposits', color: C.green, values: s.deposits }, { name: 'Withdrawals', color: C.red, values: s.withdrawals }] });
+      renderBooks(fin.books);
+      document.getElementById('wd-badge').style.display = k.pending_count ? '' : 'none'; document.getElementById('wd-badge').textContent = k.pending_count;
+      const colors = [C.purple, C.orange, C.blue];
+      AD.donut(document.getElementById('c-liab'), fin.liabilities.map(function (l, i) { return { label: l.label, value: Number(l.value), color: colors[i], fmt: AD.inr(l.value) }; }), AD.short(k.liabilities), 'owed to players');
+      const sl = fin.sla; AD.bars(document.getElementById('c-sla'), { w: 460, h: 215, legend: false, labels: ['< 1h', '1–6h', '6–12h', '12–24h', '> 24h'], series: [{ name: 'Withdrawals', color: C.green, values: [sl.lt1h, sl.h1_6, sl.h6_12, sl.h12_24, sl.gt24h] }] });
+      AD.bars(document.getElementById('c-xf'), { w: 460, h: 230, labels: s.labels, fmt: AD.inr, yfmt: function (v) { return '₹' + AD.short(v); }, series: [{ name: 'Transfer volume', color: C.blue, values: s.transfers }] });
+      AD.bars(document.getElementById('c-pl'), { w: 460, h: 240, labels: ['Ludo fees', 'Rummy fees', 'Pro fees', 'Referral commission'], legend: false, fmt: AD.inr, yfmt: function (v) { return '₹' + AD.short(v); }, series: [{ name: 'Amount', color: C.orange, values: [k.ludo_fees, k.rummy_fees, k.pro_fees, k.commission] }] });
+      document.getElementById('pl-kv').innerHTML = [['Ludo match fees', AD.inr(k.ludo_fees)], ['Rummy match fees', AD.inr(k.rummy_fees)], ['Pro memberships', AD.inr(k.pro_fees)], ['<b>Gross revenue</b>', '<b>' + AD.inr(k.revenue) + '</b>'], ['− Referral commission', '−' + AD.inr(k.commission)], ['<b>Net revenue</b>', '<b class="pos">' + AD.inr(k.revenue - k.commission) + '</b>'], ['Player-to-player transfers (volume)', AD.inr(k.transfer_volume)]].map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('');
+      const hist = fin.rate_history; document.getElementById('rate-input').value = rate;
+      AD.line(document.getElementById('c-rate'), { h: 230, labels: hist.length ? hist.map(function (h) { return AD.dt(h.at); }) : [], legend: false, yfmt: function (v) { return '₹' + v.toFixed(0); }, fmt: function (v) { return '₹' + v; }, series: [{ name: 'Rate set', color: C.teal, values: hist.map(function (h) { return h.rate; }) }] });
+      if (!hist.length) document.getElementById('c-rate').innerHTML = '<div class="empty-note">Current rate ₹' + rate + ' · no changes recorded yet.</div>';
+    }
+    function renderBooks(b) {
+      document.getElementById('books-sub').textContent = 'Checked ' + AD.ago(b.checked_at);
+      document.getElementById('books').innerHTML = b.checks.map(function (c) { return '<div class="list-row"><span class="chip ' + (c.ok ? 'green' : 'red') + '">' + (c.ok ? '✓' : '✗') + '</span><div class="grow">' + AD.esc(c.name) + '<small>' + AD.esc(c.detail) + '</small></div></div>'; }).join('') + '<div class="progress" style="margin-top:10px"><i style="width:' + (b.ok ? 100 : 40) + '%"></i></div>';
+    }
+    async function loadWithdrawals() {
+      const status = document.getElementById('wd-status').value;
+      let q = sb.from('crypto_withdrawals').select('*').order('requested_at', { ascending: status === 'pending' }).limit(100); if (status !== 'all') q = q.eq('status', status);
+      const { data } = await q; const rows = data || []; const nm = await names(rows.map(function (r) { return r.user_id; }));
+      const { data: al } = await sb.from('risk_alerts').select('alert_key').like('alert_key', 'fast_withdrawal:%').in('status', ['open', 'investigating']); const flagged = {}; (al || []).forEach(function (a) { flagged[a.alert_key.split(':')[1]] = true; });
+      AD.table(document.getElementById('t-wd'), [
+        { l: 'Player', k: function (r, i) { const p = nm[r.user_id] || {}; return '<a href="admin-user.html?id=' + r.user_id + '" style="text-decoration:none;color:inherit">' + AD.who(p.display_name || 'Player', i, '<span class="mono">' + AD.esc(p.player_id || '') + '</span>') + '</a>'; } },
+        { l: 'Amount', a: 'r', k: function (r) { return '<b>' + AD.inr(r.amount_inr) + '</b><small class="dim" style="display:block">≈ ' + (r.amount_inr / rate).toFixed(1) + ' USDT</small>'; } },
+        { l: 'Destination', k: function (r) { return '<span class="mono">' + AD.esc(r.destination_address.slice(0, 6) + '…' + r.destination_address.slice(-4)) + '</span> <button class="am-btn sm" data-copy="' + AD.esc(r.destination_address) + '">copy</button>'; } },
+        { l: 'Requested', k: function (r) { return r.status === 'pending' ? '<b>' + AD.ago(r.requested_at) + '</b>' : '<span class="dim">' + AD.dt(r.requested_at) + '</span>'; } },
+        { l: 'Checks', k: function (r) { const p = nm[r.user_id] || {}; const f = []; if (flagged[r.id]) f.push(AD.chip('⚠ fast withdrawal', 'yellow')); if (p.withdrawals_frozen) f.push(AD.chip('🧊 frozen', 'red')); if (p.created_at && Date.now() - new Date(p.created_at) < 7 * 864e5) f.push(AD.chip('new account', 'yellow')); return f.length ? f.join(' ') : AD.chip('✓ clean', 'green'); } },
+        { l: 'Payout', k: function (r) { return r.status === 'pending' ? (canPay ? '<input placeholder="paste tx hash" data-tx="' + r.id + '" style="border:2px solid var(--border);border-radius:10px;padding:5px 8px;font:inherit;font-weight:700;width:150px;background:var(--paper-2)">' : '<span class="dim">awaiting finance</span>') : (r.status === 'paid' ? AD.chip('Paid', 'green') + ' <span class="mono dim">' + AD.esc((r.tx_hash || '').slice(0, 10)) + '…</span>' : AD.chip('Rejected', 'red') + ' <span class="dim">' + AD.esc(r.admin_note || '') + '</span>'); } },
+        { l: '', a: 'r', k: function (r) { return r.status === 'pending' && canPay ? '<button class="am-btn sm green" data-pay="' + r.id + '">Mark paid</button> <button class="am-btn sm danger" data-rej="' + r.id + '">Reject</button>' : ''; } }
+      ], rows, { wide: true, empty: status === 'pending' ? '✅ No withdrawals waiting.' : 'No withdrawals.' });
+      document.querySelectorAll('[data-copy]').forEach(function (b) { b.addEventListener('click', function () { navigator.clipboard.writeText(b.dataset.copy).then(function () { b.textContent = 'copied'; setTimeout(function () { b.textContent = 'copy'; }, 1200); }); }); });
+      document.querySelectorAll('[data-pay]').forEach(function (b) { b.addEventListener('click', function () { AD.run(function () { return pay(b.dataset.pay, rows, nm); }); }); });
+      document.querySelectorAll('[data-rej]').forEach(function (b) { b.addEventListener('click', function () { AD.run(function () { return reject(b.dataset.rej, rows, nm); }); }); });
+    }
+    async function pay(id, rows, nm) {
+      const r = rows.find(function (x) { return x.id === id; }); const tx = (document.querySelector('[data-tx="' + id + '"]') || {}).value || '';
+      if (!tx.trim()) { await ludoAlert({ tone: 'warn', icon: '✏️', title: 'Paste the tx hash first', message: 'Send the USDT from your wallet, then paste the transaction hash here.' }); return; }
+      const p = nm[r.user_id] || {};
+      const ok = await ludoConfirm({ tone: 'warn', icon: '💸', title: 'Mark as paid?', message: 'Only confirm if you already sent the USDT yourself.', detail: [['Player', p.display_name || ''], ['Amount', AD.inr(r.amount_inr) + ' (≈ ' + (r.amount_inr / rate).toFixed(1) + ' USDT)'], ['To', r.destination_address], ['Tx', tx.trim().slice(0, 14) + '…']], confirmText: 'Yes, I sent it' });
+      if (!ok) return;
+      const res = await AD.rpc('admin_pay_withdrawal', { p_withdrawal_id: id, p_tx_hash: tx });
+      if (res.status === 'pending_approval') await ludoAlert({ tone: 'info', title: 'Needs a second approver', message: 'This amount is above the two-person limit. Another finance admin must approve it under Approvals.', confirmText: 'OK' });
+      await load();
+    }
+    async function reject(id, rows, nm) {
+      const r = rows.find(function (x) { return x.id === id; });
+      const f = await ludoForm({ tone: 'danger', icon: '↩️', title: 'Reject this withdrawal?', message: AD.inr(r.amount_inr) + ' will be refunded to ' + ((nm[r.user_id] || {}).display_name || 'the player') + ' immediately.', fields: [{ name: 'note', label: 'Reason (shown in the audit log)', type: 'textarea', rows: 2, required: true }], confirmText: 'Reject & refund' });
+      if (!f) return; await AD.rpc('admin_decline_withdrawal', { p_withdrawal_id: id, p_note: f.note }); await load();
+    }
+    async function loadApprovals() {
+      const { data } = await sb.from('admin_approvals').select('*').order('created_at', { ascending: false }).limit(50); const rows = data || [];
+      const pend = rows.filter(function (r) { return r.status === 'pending'; }); const bd = document.getElementById('ap-badge'); bd.style.display = pend.length ? '' : 'none'; bd.textContent = pend.length;
+      const nm = await names(rows.map(function (r) { return r.requested_by; }).concat(rows.filter(function (r) { return r.kind === 'adjustment'; }).map(function (r) { return r.payload.user_id; })));
+      AD.table(document.getElementById('t-appr'), [
+        { l: 'Request', k: function (r) { return r.kind === 'adjustment' ? '± Balance adjustment ' + AD.inr(r.payload.delta) + ' · ' + AD.esc((nm[r.payload.user_id] || {}).display_name || '') : '💸 Withdrawal payout ' + AD.inr(r.payload.amount); } },
+        { l: 'Reason', k: function (r) { return '<span class="dim">' + AD.esc(r.reason || '') + '</span>'; } }, { l: 'Requested by', k: function (r) { return AD.esc((nm[r.requested_by] || {}).display_name || '—'); } },
+        { l: 'When', k: function (r) { return '<span class="dim">' + AD.ago(r.created_at) + '</span>'; } },
+        { l: 'Status', k: function (r) { return r.status === 'pending' ? AD.chip('pending', 'yellow') : r.status === 'approved' ? AD.chip('approved', 'green') : AD.chip('declined', 'red'); } },
+        { l: '', a: 'r', k: function (r) { return r.status === 'pending' && canPay && r.requested_by === AD.me.id ? '<span class="dim" style="font-size:12px">waiting for another admin</span>' : r.status === 'pending' && canPay ? '<button class="am-btn sm green" data-ap="' + r.id + '">Approve</button> <button class="am-btn sm danger" data-dn="' + r.id + '">Decline</button>' : ''; } }], rows, { wide: true, empty: 'No approval requests. (Turn on the two-person rule under Settings → Platform.)' });
+      document.querySelectorAll('[data-ap]').forEach(function (b) { b.addEventListener('click', function () { AD.run(async function () { if (!(await ludoConfirm({ tone: 'warn', icon: '🤝', title: 'Approve this request?', message: 'It will be applied immediately and recorded in the audit log.', confirmText: 'Approve' }))) return; await AD.rpc('admin_decide_approval', { p_id: b.dataset.ap, p_approve: true, p_note: null }); await load(); }); }); });
+      document.querySelectorAll('[data-dn]').forEach(function (b) { b.addEventListener('click', function () { AD.run(async function () { await AD.rpc('admin_decide_approval', { p_id: b.dataset.dn, p_approve: false, p_note: null }); await load(); }); }); });
+    }
+    async function loadDeposits() {
+      const { data } = await sb.from('crypto_deposits').select('*').order('detected_at', { ascending: false }).limit(100); const rows = data || []; const nm = await names(rows.map(function (r) { return r.user_id; }));
+      AD.table(document.getElementById('t-dep'), [{ l: 'Detected', k: function (r) { return '<span class="dim">' + AD.dt(r.detected_at) + '</span>'; } }, { l: 'Player', k: function (r, i) { const p = nm[r.user_id] || {}; return AD.who(p.display_name || 'Player', i, '<span class="mono">' + AD.esc(p.player_id || '') + '</span>'); } },
+        { l: 'USDT', a: 'r', k: function (r) { return Number(r.amount_usdt).toFixed(2); } }, { l: 'Rate', a: 'r', k: function (r) { return '₹' + r.rate_used; } }, { l: 'Credited', a: 'r', k: function (r) { return '<b>' + AD.inr(r.inr_credited) + '</b>'; } },
+        { l: 'Confirmations', a: 'r', k: 'confirmations' }, { l: 'Tx', k: function (r) { return '<span class="mono">' + AD.esc(r.tx_hash.slice(0, 10)) + '…</span>'; } }], rows, { wide: true, empty: 'No USDT deposits yet.' });
+    }
+    async function loadTransfers() {
+      const { data } = await sb.from('transfers').select('*').order('created_at', { ascending: false }).limit(60); const rows = data || []; const nm = await names(rows.map(function (r) { return r.sender_id; }).concat(rows.map(function (r) { return r.recipient_id; })));
+      AD.table(document.getElementById('t-xf'), [{ l: 'From → To', k: function (r) { return '<a href="admin-user.html?id=' + r.sender_id + '">' + AD.esc((nm[r.sender_id] || {}).display_name || '') + '</a> → <a href="admin-user.html?id=' + r.recipient_id + '">' + AD.esc((nm[r.recipient_id] || {}).display_name || '') + '</a>'; } },
+        { l: '₹', a: 'r', k: function (r) { return AD.inr(r.amount); } }, { l: 'When', k: function (r) { return '<span class="dim">' + AD.ago(r.created_at) + '</span>'; } }], rows, { empty: 'No transfers yet.' });
+    }
+    document.getElementById('wd-status').addEventListener('change', function () { AD.run(loadWithdrawals); });
+    document.getElementById('books-run').addEventListener('click', function () { AD.run(async function () { renderBooks(await AD.rpc('admin_books_check')); }); });
+    document.getElementById('rate-save').addEventListener('click', function () { AD.run(async function () {
+      if (!canPay) { await ludoAlert({ tone: 'warn', title: 'Not allowed', message: 'Only finance or super admins can change the rate.' }); return; }
+      const v = Number(document.getElementById('rate-input').value); if (!(v > 0)) { await ludoAlert({ tone: 'warn', title: 'Enter a rate', message: 'The rate must be above zero.' }); return; }
+      await AD.rpc('admin_set_usdt_rate', { p_rate: v }); await ludoAlert({ tone: 'success', title: 'Saved', message: 'New deposits will use ₹' + v + ' per USDT.', confirmText: 'Done' }); await load();
+    }); });
+    AD.range(function (n) { days = n; AD.run(load); });
+    await load();
+  }
+});
+</script>
+</body>
+</html>

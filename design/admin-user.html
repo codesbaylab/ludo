@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Ludo Admin — Player</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="ui-dialog.js"></script>
+<script src="supabase-client.js"></script>
+<script src="app-update.js"></script>
+<script src="admin-core.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff8a3d">
+<link rel="icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+</head>
+<body data-page="users" data-title="Player" data-sub="Everything about one account in one place">
+
+<div id="tools" style="display:contents"><a class="am-btn" href="admin-users.html">← All users</a></div>
+
+<div id="page" style="display:none">
+  <div class="am-card" style="margin-bottom:16px">
+    <div style="display:flex; gap:18px; align-items:center; flex-wrap:wrap">
+      <span id="u-av"></span>
+      <div style="flex:1; min-width:240px"><div style="font-size:22px;font-weight:800" id="u-name"></div><div class="dim" style="font-size:13px;font-weight:700;margin-top:4px" id="u-meta"></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap" id="u-actions"></div>
+    </div>
+  </div>
+  <div class="am-grid g5" id="kpis"></div>
+  <div class="am-grid g21">
+    <div>
+      <div class="am-card">
+        <div class="am-tabs" data-tabs="u">
+          <button class="on" data-t="over">Overview</button><button data-t="ledger">Wallet ledger</button><button data-t="games">Games</button><button data-t="xfer">Transfers</button><button data-t="refs">Referrals</button><button data-t="notes">Notes &amp; history</button>
+        </div>
+        <div data-tab-group="u" data-tab="over"><div class="head"><div><h3>Cash results over time</h3><div class="sub">Cumulative net result from settled cash matches</div></div></div><div id="c-act"></div><div id="over-extra" class="am-grid g3" style="margin:14px 0 0"></div></div>
+        <div data-tab-group="u" data-tab="ledger" style="display:none"><div class="head"><div><h3>Wallet ledger</h3><div class="sub">Every balance change, newest first</div></div><button class="am-btn sm" id="ledger-csv">⬇ CSV</button></div><div id="t-ledger"></div><div style="text-align:center;margin-top:10px"><button class="am-btn sm" id="ledger-more">Load older</button></div></div>
+        <div data-tab-group="u" data-tab="games" style="display:none"><div class="head"><div><h3>Match history</h3><div class="sub">Latest 40 across Ludo and Rummy</div></div></div><div id="t-games"></div></div>
+        <div data-tab-group="u" data-tab="xfer" style="display:none"><div id="t-xfer"></div></div>
+        <div data-tab-group="u" data-tab="refs" style="display:none"><div class="head"><div><h3>Referral network</h3><div class="sub" id="refs-sub"></div></div></div><ul class="tree" id="tree"></ul></div>
+        <div data-tab-group="u" data-tab="notes" style="display:none">
+          <div class="field-row" style="align-items:flex-start"><div style="flex:1"><textarea class="input" id="note-text" rows="2" placeholder="Add an internal note (only admins see this)…" style="width:100%"></textarea></div><button class="am-btn primary" id="note-save">Save note</button></div>
+          <div class="timeline" style="margin-top:14px" id="notes-tl"></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="am-card" style="margin-bottom:16px"><div class="head"><div><h3>🛡️ Risk profile</h3><div class="sub">Automatic signals</div></div><span id="risk-chip"></span></div><div class="progress" style="margin-bottom:12px"><i id="risk-bar" style="width:0%"></i></div><div id="risk-body"></div></div>
+      <div class="am-card" style="margin-bottom:16px"><div class="head"><div><h3>📱 Devices &amp; linked accounts</h3></div></div><div id="dev-body"></div></div>
+      <div class="am-card"><div class="head"><div><h3>🔐 Account</h3></div></div><dl class="kv" id="acct"></dl></div>
+    </div>
+  </div>
+</div>
+
+<script>
+AD.boot({
+  range: false,
+  init: async function () {
+    const uid = new URLSearchParams(location.search).get('id');
+    if (!uid) { document.getElementById('page').innerHTML = '<div class="am-card empty-note">No player selected. <a href="admin-users.html">Open the users list</a>.</div>'; return; }
+    const C = AD.COLORS; let u, ledgerRows = [], ledgerEnd = false;
+    const canMoney = AD.can(['finance']), canSupport = AD.can(['support']), canNote = AD.can(['support', 'finance']);
+
+    async function load() {
+      u = await AD.rpc('admin_user_360', { p_user: uid });
+      render();
+      const [matches, xfers, ledger] = await Promise.all([AD.rpc('admin_user_matches', { p_user: uid, p_limit: 40 }), AD.rpc('admin_user_transfers', { p_user: uid }), AD.rpc('admin_user_ledger', { p_user: uid, p_limit: 100, p_before: null })]);
+      ledgerRows = ledger; ledgerEnd = ledger.length < 100; renderLedger(); renderMatches(matches); renderXfers(xfers); renderOverview(ledger);
+      const audit = await AD.sb.from('admin_audit_log').select('*').eq('target_id', uid).order('id', { ascending: false }).limit(30);
+      renderNotes(audit.data || []);
+    }
+    function render() {
+      const p = u.profile, s = u.stats, w = u.wallet;
+      document.getElementById('ad-title').textContent = p.name;
+      document.getElementById('u-av').innerHTML = '<span class="av" style="width:64px;height:64px;font-size:26px;background:' + AD.AVC[p.name.length % 6] + '">' + AD.esc((p.name || '?')[0].toUpperCase()) + '</span>';
+      document.getElementById('u-name').innerHTML = AD.esc(p.name) + ' ' + (p.is_pro ? AD.chip('PRO', 'purple') : AD.chip('Free')) + ' ' + (p.is_banned ? AD.chip('Banned', 'red') : AD.chip('Active', 'green')) + (p.frozen ? ' ' + AD.chip('Withdrawals frozen', 'yellow') : '') + (p.admin_role ? ' ' + AD.chip(p.admin_role, 'blue') : '') + (u.referred_by ? ' ' + '<a class="chip blue" href="admin-user.html?id=' + u.referred_by.id + '" style="text-decoration:none">Referred by ' + AD.esc(u.referred_by.name) + '</a>' : '');
+      document.getElementById('u-meta').innerHTML = 'Player ID <span class="mono">' + AD.esc(p.player_id) + '</span> · ' + AD.esc(u.email || '—') + ' · Referral code <span class="mono">' + AD.esc(p.referral_code || '—') + '</span> · Joined ' + AD.dtFull(p.created_at) + ' · Last seen ' + AD.ago(u.last_sign_in || null) + (p.pro_since ? ' · Pro since ' + AD.dt(p.pro_since) : '');
+      const acts = [];
+      if (canMoney) acts.push('<button class="am-btn primary" id="a-adjust">± Adjust balance</button>');
+      if (canSupport) { acts.push('<button class="am-btn" id="a-pro">' + (p.is_pro ? '👑 Revoke Pro' : '👑 Grant Pro') + '</button>'); acts.push('<button class="am-btn' + (p.is_banned ? '' : ' danger') + '" id="a-ban">' + (p.is_banned ? '✅ Unban' : '🚫 Ban') + '</button>'); }
+      if (canSupport || canMoney) acts.push('<button class="am-btn" id="a-freeze">' + (p.frozen ? '🔓 Unfreeze withdrawals' : '🧊 Freeze withdrawals') + '</button>');
+      document.getElementById('u-actions').innerHTML = acts.join('') || '<span class="dim" style="font-size:12px;font-weight:700">Read-only access</span>';
+      const bind = function (id, fn) { const el = document.getElementById(id); if (el) el.addEventListener('click', function () { AD.run(fn); }); };
+      bind('a-adjust', adjust); bind('a-pro', togglePro); bind('a-ban', toggleBan); bind('a-freeze', toggleFreeze);
+      document.getElementById('kpis').innerHTML = [
+        AD.kpiCard('Wallet balance', AD.inr(w.balance), null, w.held > 0 ? '🔒 ' + AD.inr(w.held) + ' held in a live game' : 'nothing held'),
+        AD.kpiCard('Lifetime deposits', AD.inr(s.deposited), null, 'USDT deposits'),
+        AD.kpiCard('Withdrawn', AD.inr(s.withdrawn), null, s.withdrawals_pending > 0 ? AD.inr(s.withdrawals_pending) + ' pending' : 'all paid'),
+        AD.kpiCard('Net P&L (games)', '<span class="' + (s.net >= 0 ? 'pos' : 'neg') + '">' + (s.net >= 0 ? '+' : '') + AD.inr(s.net) + '</span>', null, AD.num(s.games) + ' games · ' + (s.games ? Math.round(s.wins / s.games * 100) : 0) + '% wins'),
+        AD.kpiCard('Fees generated', AD.inr(s.fees_generated), null, 'their share of cash-match fees')].join('');
+      const rs = u.risk_score;
+      document.getElementById('risk-chip').innerHTML = AD.chip((rs >= 60 ? 'High · ' : rs >= 30 ? 'Medium · ' : 'Low · ') + rs, rs >= 60 ? 'red' : rs >= 30 ? 'yellow' : 'green');
+      document.getElementById('risk-bar').style.width = Math.min(100, rs) + '%';
+      document.getElementById('risk-body').innerHTML = (u.alerts.length ? u.alerts.map(function (a) { return '<div class="alert-row ' + (a.severity === 'high' ? 'high' : 'med') + '"><div class="body"><b>' + AD.esc(a.title) + '</b>' + AD.esc(a.status) + ' · ' + AD.ago(a.at) + '</div></div>'; }).join('') : '<div class="empty-note">No open risk alerts.</div>') +
+        '<dl class="kv" style="margin-top:8px"><dt>Largest transfer sent</dt><dd>—</dd><dt>Transfers out / in</dt><dd>' + AD.inr(s.transfers_out) + ' / ' + AD.inr(s.transfers_in) + '</dd><dt>Cash games played</dt><dd>' + AD.num(s.cash_games) + '</dd></dl>';
+      document.getElementById('dev-body').innerHTML = (u.devices.length ? u.devices.map(function (d) { return '<div class="list-row"><span class="chip ' + (d.accounts > 1 ? 'red' : 'green') + '">' + d.accounts + ' acct</span><div class="grow"><span class="mono">' + AD.esc(d.device) + '</span><small>first ' + AD.ago(d.first_seen) + ' · last ' + AD.ago(d.last_seen) + '</small></div></div>'; }).join('') : '<div class="empty-note">No device records yet (they appear after the player signs in on the new app).</div>') +
+        (u.linked.length ? '<div class="dim" style="font-size:11px;font-weight:800;margin:10px 0 4px">LINKED ACCOUNTS</div>' + u.linked.map(function (l) { return '<div class="list-row"><div class="grow"><a href="admin-user.html?id=' + l.id + '">' + AD.esc(l.name) + '</a><small>' + AD.esc(l.via) + ' · <span class="mono">' + AD.esc(l.player_id) + '</span></small></div></div>'; }).join('') : '');
+      document.getElementById('acct').innerHTML = '<dt>Email</dt><dd>' + AD.esc(u.email || '—') + '</dd><dt>Last sign-in</dt><dd>' + AD.ago(u.last_sign_in) + '</dd><dt>Invites</dt><dd>' + AD.num(s.invites) + '</dd><dt>Referral earned</dt><dd>' + AD.inr(s.referral_earned) + '</dd>';
+      document.getElementById('refs-sub').textContent = AD.num(s.invites) + ' direct invites · earned ' + AD.inr(s.referral_earned);
+      const node = function (n) { return '<li><span class="node">' + AD.av(n.name) + '<a href="admin-user.html?id=' + n.id + '" style="color:inherit;text-decoration:none">' + AD.esc(n.name) + '</a> ' + AD.chip(n.is_pro ? 'PRO' : 'Free', n.is_pro ? 'purple' : '') + (n.earned > 0 ? ' <span class="pos">+' + AD.inr(n.earned) + '</span>' : '') + '</span>' + (n.children && n.children.length ? '<ul>' + n.children.map(node).join('') + '</ul>' : '') + '</li>'; };
+      document.getElementById('tree').innerHTML = u.tree.length ? u.tree.map(node).join('') : '<li class="empty-note">No referrals yet.</li>';
+    }
+    function renderOverview(ledger) {
+      const res = ledger.filter(function (r) { return ['match_result', 'match_win', 'match_loss'].indexOf(r.kind) >= 0; }).reverse();
+      let cum = 0; const vals = res.map(function (r) { cum += Number(r.amount); return cum; });
+      if (vals.length) AD.line(document.getElementById('c-act'), { labels: res.map(function (r) { return AD.dt(r.at); }), legend: false, fmt: AD.inr, yfmt: function (v) { return '₹' + AD.short(v); }, series: [{ name: 'Cumulative result', color: C.blue, values: vals }] });
+      else document.getElementById('c-act').innerHTML = '<div class="empty-note">No settled cash matches yet.</div>';
+      const s = u.stats;
+      document.getElementById('over-extra').innerHTML = '<div><div class="dim" style="font-size:11px;font-weight:800">GAMES</div><div style="font-weight:800">' + AD.num(s.games) + ' (' + AD.num(s.cash_games) + ' cash)</div></div><div><div class="dim" style="font-size:11px;font-weight:800">WIN RATE</div><div style="font-weight:800">' + (s.games ? Math.round(s.wins / s.games * 100) : 0) + '%</div></div><div><div class="dim" style="font-size:11px;font-weight:800">LAST ACTIVE</div><div style="font-weight:800">' + (s.last_active || 'never') + '</div></div>';
+    }
+    function renderLedger() {
+      AD.table(document.getElementById('t-ledger'), [{ l: 'When', k: function (r) { return '<span class="dim">' + AD.dt(r.at) + '</span>'; } }, { l: 'Type', k: function (r) { return AD.esc(r.kind.replace(/_/g, ' ')); } },
+        { l: 'Amount', a: 'r', k: function (r) { return '<span class="' + (r.amount >= 0 ? 'pos' : 'neg') + '">' + (r.amount >= 0 ? '+' : '') + AD.inr(r.amount) + '</span>'; } }, { l: 'Balance after', a: 'r', k: function (r) { return AD.inr(r.balance_after); } },
+        { l: 'Note', k: function (r) { return '<span class="dim">' + AD.esc(r.note || '') + (r.actor && r.kind === 'admin_adjust' ? ' · by ' + AD.esc(r.actor) : '') + '</span>'; } }], ledgerRows, { empty: 'No wallet activity yet.' });
+      document.getElementById('ledger-more').style.display = ledgerEnd ? 'none' : '';
+    }
+    function renderMatches(rows) {
+      AD.table(document.getElementById('t-games'), [{ l: 'Game', k: function (r) { return r.game === 'ludo' ? '🎲 Ludo' : '🃏 Rummy ' + AD.esc(r.mode || ''); } }, { l: 'Stake', a: 'r', k: function (r) { return r.stake > 0 ? AD.inr(r.stake) : 'Free'; } }, { l: 'Players', a: 'r', k: function (r) { return r.players || '—'; } },
+        { l: 'Result', k: function (r) { return r.result === 'win' ? AD.chip('Win', 'green') : AD.chip('Loss', 'red'); } }, { l: 'Ended by', k: function (r) { return '<span class="dim">' + AD.esc((r.end_reason || 'unknown').replace(/_/g, ' ')) + '</span>'; } },
+        { l: 'Fee', a: 'r', k: function (r) { return r.fee ? AD.inr(r.fee) : '—'; } }, { l: 'When', k: function (r) { return '<span class="dim">' + AD.dt(r.at) + '</span>'; } }], rows, { empty: 'No matches yet.' });
+    }
+    function renderXfers(rows) {
+      AD.table(document.getElementById('t-xfer'), [{ l: 'Direction', k: function (r) { return r.direction === 'out' ? AD.chip('Sent', 'red') : AD.chip('Received', 'green'); } },
+        { l: 'Counterparty', k: function (r, i) { return '<a href="admin-user.html?id=' + r.counterparty_id + '" style="text-decoration:none;color:inherit">' + AD.who(r.counterparty, i, '<span class="mono">' + AD.esc(r.counterparty_player_id) + '</span>') + '</a>'; } },
+        { l: 'Amount', a: 'r', k: function (r) { return AD.inr(r.amount); } }, { l: 'When', k: function (r) { return '<span class="dim">' + AD.dt(r.at) + '</span>'; } }], rows, { empty: 'No transfers.' });
+    }
+    function renderNotes(audit) {
+      const items = u.notes.map(function (n) { return { at: n.at, html: '<b>Note</b> by ' + AD.esc(n.admin || 'admin') + ': ' + AD.esc(n.note) }; })
+        .concat(audit.filter(function (a) { return a.action !== 'note_added'; }).map(function (a) { return { at: a.created_at, html: '<b>' + AD.esc(a.action.replace(/_/g, ' ')) + '</b> by ' + AD.esc(a.admin_name || 'admin') + (a.reason ? ' · reason: “' + AD.esc(a.reason) + '”' : '') }; }));
+      items.sort(function (a, b) { return new Date(b.at) - new Date(a.at); });
+      document.getElementById('notes-tl').innerHTML = items.length ? items.map(function (i) { return '<div class="ev">' + i.html + '<small>' + AD.dtFull(i.at) + '</small></div>'; }).join('') : '<div class="empty-note">No notes or admin actions yet.</div>';
+    }
+    async function adjust() {
+      const f = await ludoForm({ tone: 'accent', icon: '±', title: 'Adjust balance', message: 'Use + to credit and − to debit. Every adjustment is written to the ledger and the audit log.', fields: [
+        { name: 'amount', label: 'Amount (₹, e.g. 500 or -200)', type: 'number', step: '0.01', required: true }, { name: 'reason', label: 'Reason', type: 'textarea', rows: 2, required: true }], confirmText: 'Apply' });
+      if (!f) return; const amt = Number(f.amount); if (!amt) { await ludoAlert({ tone: 'warn', title: 'Enter an amount', message: 'The amount cannot be zero.' }); return; }
+      const r = await AD.rpc('admin_adjust_wallet_balance', { p_user_id: uid, p_delta: amt, p_reason: f.reason });
+      await ludoAlert({ tone: r.status === 'applied' ? 'success' : 'info', title: r.status === 'applied' ? 'Balance updated' : 'Sent for approval', message: r.status === 'applied' ? 'New balance ' + AD.inr(r.balance) + '.' : 'This amount needs a second admin to approve it (see Audit & Roles → Approvals).', confirmText: 'OK' });
+      await load();
+    }
+    async function togglePro() {
+      const to = !u.profile.is_pro; const f = await ludoForm({ tone: 'accent', icon: '👑', title: (to ? 'Grant' : 'Revoke') + ' Pro?', message: to ? 'No fee is charged and no referral commission is paid.' : 'They lose access to cash tables and referrals.', fields: [{ name: 'reason', label: 'Reason', type: 'textarea', rows: 2, required: true }], confirmText: to ? 'Grant Pro' : 'Revoke Pro' });
+      if (!f) return; await AD.rpc('admin_set_user_pro', { p_user_id: uid, p_is_pro: to, p_reason: f.reason }); await load();
+    }
+    async function toggleBan() {
+      const to = !u.profile.is_banned; const f = await ludoForm({ tone: to ? 'danger' : 'info', icon: to ? '🚫' : '✅', title: (to ? 'Ban ' : 'Unban ') + u.profile.name + '?', message: to ? 'They will be blocked from joining any game.' : 'They will be able to join games again.', fields: [{ name: 'reason', label: 'Reason', type: 'textarea', rows: 2, required: true }], confirmText: to ? 'Ban' : 'Unban' });
+      if (!f) return; await AD.rpc('admin_set_user_banned', { p_user_id: uid, p_banned: to, p_reason: f.reason }); await load();
+    }
+    async function toggleFreeze() {
+      const to = !u.profile.frozen; const f = await ludoForm({ tone: 'warn', icon: '🧊', title: (to ? 'Freeze' : 'Unfreeze') + ' withdrawals?', message: to ? 'They can still play, but cannot request withdrawals until you unfreeze.' : 'They can request withdrawals again.', fields: [{ name: 'reason', label: 'Reason', type: 'textarea', rows: 2, required: true }], confirmText: to ? 'Freeze' : 'Unfreeze' });
+      if (!f) return; await AD.rpc('admin_set_withdrawal_freeze', { p_user_id: uid, p_frozen: to, p_reason: f.reason }); await load();
+    }
+    document.getElementById('note-save').addEventListener('click', function () { AD.run(async function () {
+      const t = document.getElementById('note-text').value; if (!t.trim()) return;
+      if (!canNote) { await ludoAlert({ tone: 'warn', title: 'Not allowed', message: 'Your role is read-only.' }); return; }
+      await AD.rpc('admin_add_note', { p_user_id: uid, p_note: t }); document.getElementById('note-text').value = ''; await load();
+    }); });
+    document.getElementById('ledger-more').addEventListener('click', function () { AD.run(async function () {
+      const last = ledgerRows[ledgerRows.length - 1]; const more = await AD.rpc('admin_user_ledger', { p_user: uid, p_limit: 100, p_before: last ? last.id : null });
+      ledgerRows = ledgerRows.concat(more); ledgerEnd = more.length < 100; renderLedger();
+    }); });
+    document.getElementById('ledger-csv').addEventListener('click', function () { AD.csv('ledger-' + u.profile.player_id + '.csv', [{ key: 'at', label: 'When' }, { key: 'kind', label: 'Type' }, { key: 'amount', label: 'Amount' }, { key: 'balance_after', label: 'Balance after' }, { key: 'note', label: 'Note' }], ledgerRows); });
+    await load();
+  }
+});
+</script>
+</body>
+</html>

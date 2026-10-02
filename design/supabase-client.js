@@ -86,6 +86,29 @@
     return data;
   };
 
+  // Records a login/app-open for fraud checks (shared device/IP) and activity charts.
+  // A random per-install device id lives in localStorage; failures never matter to the player.
+  window.ludoLogEvent = async function (event) {
+    try {
+      let dev = null;
+      try { dev = localStorage.getItem('ludo_device_id'); if (!dev) { dev = (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)); localStorage.setItem('ludo_device_id', dev); } } catch (e) { /* storage blocked */ }
+      await Promise.race([window.ludoSupabase.rpc('log_player_event', { p_event: event, p_device_id: dev }), new Promise((r) => setTimeout(r, 1500))]);
+    } catch (e) { /* analytics must never block the app */ }
+  };
+
+  // Admin announcement banner (app_settings.announcement), inserted at the top of .app.
+  window.ludoShowAnnouncement = async function () {
+    try {
+      const { data } = await window.ludoSupabase.from('app_settings').select('announcement, announcement_on, announcement_tone').eq('id', true).single();
+      if (!data || !data.announcement_on || !data.announcement) return;
+      const tones = { info: ['#e8f3ff', '#4da3ff', 'ℹ️'], warn: ['#fff6dc', '#ffc93c', '⚠️'], ok: ['#e6f9ee', '#2ecc71', '✅'] };
+      const t = tones[data.announcement_tone] || tones.info; const app = document.querySelector('.app'); if (!app) return;
+      const el = document.createElement('div'); el.setAttribute('role', 'status');
+      el.style.cssText = 'margin:0 0 12px;padding:10px 14px;border-radius:14px;border:2px solid ' + t[1] + ';background:' + t[0] + ';color:#4a3a2a;font-weight:700;font-size:14px;line-height:1.35';
+      el.textContent = t[2] + ' ' + data.announcement; const tb = app.querySelector('.topbar'); if (tb) tb.after(el); else app.prepend(el);
+    } catch (e) { /* optional */ }
+  };
+
   // Is this user an admin? Used by login.html to route to admin.html instead
   // of lobby.html, and by admin.html itself to bounce non-admins away.
   window.ludoIsAdmin = async function (userId) {

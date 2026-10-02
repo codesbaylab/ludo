@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Ludo Admin — Audit &amp; Roles</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="ui-dialog.js"></script>
+<script src="supabase-client.js"></script>
+<script src="app-update.js"></script>
+<script src="admin-core.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff8a3d">
+<link rel="icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+</head>
+<body data-page="audit" data-title="Audit &amp; Roles" data-sub="Who did what, who can do what, and what is waiting for a second pair of eyes">
+
+<div id="tools" style="display:contents"><a class="am-btn" href="admin-reports.html">⬇ Export audit log</a></div>
+
+<div id="page" style="display:none">
+  <div class="am-card">
+    <div class="am-tabs" data-tabs="a"><button class="on" data-t="log">Audit log</button><button data-t="staff">Staff &amp; roles</button><button data-t="matrix">Role matrix</button><button data-t="appr">Approvals <span class="chip red" id="appr-badge" style="display:none"></span></button></div>
+
+    <div data-tab-group="a" data-tab="log">
+      <div class="filters"><select id="f-action"><option value="">All actions</option></select><select id="f-admin"><option value="">All admins</option></select></div>
+      <div id="t-log"></div><div id="pg-log"></div>
+    </div>
+    <div data-tab-group="a" data-tab="staff" style="display:none"><div style="margin-bottom:10px"><button class="am-btn primary" id="add-admin" style="display:none">＋ Make a player an admin</button></div><div id="t-staff"></div><p class="hint" id="staff-hint"></p></div>
+    <div data-tab-group="a" data-tab="matrix" style="display:none"><div id="t-matrix"></div></div>
+    <div data-tab-group="a" data-tab="appr" style="display:none"><div id="t-appr"></div></div>
+  </div>
+</div>
+
+<script>
+AD.boot({
+  range: false,
+  init: async function () {
+    const isSuper = AD.role === 'super'; const canDecide = AD.can(['finance']); const LIMIT = 25; let offset = 0; const names = {};
+    const ACT = { setting_changed: ['⚙️', 'Setting changed'], balance_adjusted: ['💰', 'Balance adjusted'], withdrawal_paid: ['⬆️', 'Withdrawal paid'], withdrawal_rejected: ['↩️', 'Withdrawal declined'], user_banned: ['🚫', 'Ban changed'], pro_granted: ['⭐', 'Pro changed'], withdrawals_frozen: ['🧊', 'Withdrawal freeze'], admin_role_changed: ['🛡️', 'Role changed'], report_exported: ['⬇️', 'Report exported'], approval_granted: ['👍', 'Approval granted'], approval_declined: ['👎', 'Approval declined'], adjustment_approval_requested: ['📝', 'Adjustment needs approval'], payout_approval_requested: ['📝', 'Payout needs approval'], note_added: ['🗒️', 'Note added'], risk_rule_changed: ['🛡️', 'Risk rule edited'] };
+    const act = function (a) { const m = ACT[a]; return m ? m[0] + ' ' + m[1] : AD.esc(a.replace(/_/g, ' ')); };
+
+    // ----- audit log -----
+    const { data: acts } = await AD.sb.from('admin_audit_log').select('action').order('id', { ascending: false }).limit(500);
+    const uniq = Array.from(new Set((acts || []).map(function (a) { return a.action; }))).sort();
+    document.getElementById('f-action').innerHTML += uniq.map(function (a) { return '<option value="' + AD.esc(a) + '">' + (ACT[a] ? ACT[a][1] : AD.esc(a)) + '</option>'; }).join('');
+    function brief(o) { if (!o) return ''; const s = JSON.stringify(o); return s.length > 140 ? s.slice(0, 137) + '…' : s; }
+    async function loadLog() {
+      let q = AD.sb.from('admin_audit_log').select('*', { count: 'exact' }).order('id', { ascending: false }).range(offset, offset + LIMIT - 1);
+      const fa = document.getElementById('f-action').value, fm = document.getElementById('f-admin').value; if (fa) q = q.eq('action', fa); if (fm) q = q.eq('admin_id', fm);
+      const { data, count, error } = await q; if (error) throw new Error(error.message);
+      AD.table(document.getElementById('t-log'), [
+        { l: 'When', k: function (r) { return '<span class="dim">' + AD.dtFull(r.created_at) + '</span>'; } },
+        { l: 'Admin', k: function (r) { return AD.esc(r.admin_name || '—'); } },
+        { l: 'Action', k: function (r) { return act(r.action); } },
+        { l: 'Target', k: function (r) { return AD.esc(r.target_name || r.target_id || '—') + '<small class="dim" style="display:block">' + AD.esc(r.target_type || '') + '</small>'; } },
+        { l: 'Detail', k: function (r) { return '<span class="dim" style="font-size:12px">' + (r.reason ? '“' + AD.esc(r.reason) + '” ' : '') + AD.esc(brief(r.after)) + '</span>'; } }], data || [], { wide: true, empty: 'No audit entries match.' });
+      AD.pager(document.getElementById('pg-log'), { total: count || 0, offset: offset, limit: LIMIT, onPage: function (o) { offset = o; AD.run(loadLog); } });
+    }
+    ['f-action', 'f-admin'].forEach(function (id) { document.getElementById(id).addEventListener('change', function () { offset = 0; AD.run(loadLog); }); });
+
+    // ----- staff -----
+    async function loadStaff() {
+      const staff = await AD.rpc('admin_staff_list'); staff.forEach(function (s) { names[s.id] = s.name; });
+      document.getElementById('f-admin').innerHTML = '<option value="">All admins</option>' + staff.map(function (s) { return '<option value="' + s.id + '">' + AD.esc(s.name) + '</option>'; }).join('');
+      AD.table(document.getElementById('t-staff'), [
+        { l: 'Admin', k: function (s, i) { return AD.who(s.name, i, AD.esc(s.email || '')) + (s.id === AD.me.id ? ' ' + AD.chip('you') : ''); } },
+        { l: 'Role', k: function (s) { return AD.chip(AD.ROLE_LABEL[s.role] || s.role, s.role === 'super' ? 'purple' : s.role === 'finance' ? 'green' : s.role === 'support' ? 'yellow' : ''); } },
+        { l: 'Last sign-in', k: function (s) { return '<span class="dim">' + AD.ago(s.last_sign_in) + '</span>'; } },
+        { l: 'Actions (30d)', a: 'r', k: 'actions_30d' },
+        { l: 'Last action', k: function (s) { return '<span class="dim">' + AD.ago(s.last_action) + '</span>'; } },
+        { l: '', a: 'r', k: function (s) { return isSuper && s.id !== AD.me.id ? '<button class="am-btn sm" data-role="' + s.id + '" data-cur="' + s.role + '">Change role</button>' : ''; } }], staff, { wide: true });
+      document.getElementById('staff-hint').textContent = isSuper ? 'Only super admins can change roles, and nobody can lower their own role.' : 'Only a super admin can change roles.';
+      document.getElementById('add-admin').style.display = isSuper ? '' : 'none';
+      document.querySelectorAll('[data-role]').forEach(function (b) { b.addEventListener('click', function () { AD.run(async function () {
+        const f = await ludoForm({ tone: 'accent', icon: '🛡️', title: 'Change role for ' + names[b.dataset.role], message: 'Takes effect on their next page load. Recorded in the audit log.', fields: [{ name: 'role', label: 'Role', type: 'select', value: b.dataset.cur, options: [['super', 'Super admin'], ['finance', 'Finance'], ['support', 'Support'], ['analyst', 'Analyst (read-only)'], ['none', 'Remove admin access']] }], confirmText: 'Save' });
+        if (!f || f.role === b.dataset.cur) return; await AD.rpc('admin_set_admin_role', { p_user_id: b.dataset.role, p_role: f.role === 'none' ? null : f.role }); await loadStaff(); offset = 0; await loadLog();
+      }); }); });
+    }
+
+    document.getElementById('add-admin').addEventListener('click', function () { AD.run(async function () {
+      const f = await ludoForm({ tone: 'accent', icon: '🛡️', title: 'Make a player an admin', message: 'Enter their exact Player ID (from their profile or the Users page). They get access on their next page load.', fields: [{ name: 'pid', label: 'Player ID', type: 'text', required: true, placeholder: 'e.g. K7M2XQ9P' }, { name: 'role', label: 'Role', type: 'select', value: 'analyst', options: [['analyst', 'Analyst (read-only)'], ['support', 'Support'], ['finance', 'Finance'], ['super', 'Super admin']] }], confirmText: 'Make admin' });
+      if (!f) return; const pid = f.pid.trim().toUpperCase();
+      const d = await AD.rpc('admin_users_page', { p_search: pid, p_plan: 'any', p_status: 'any', p_segment: 'all', p_sort: 'name', p_limit: 5, p_offset: 0 });
+      const hit = d.rows.find(function (r) { return String(r.player_id).toUpperCase() === pid; }); if (!hit) throw new Error('No player has the Player ID “' + pid + '”.');
+      await AD.rpc('admin_set_admin_role', { p_user_id: hit.id, p_role: f.role }); await loadStaff(); offset = 0; await loadLog();
+    }); });
+
+    // ----- matrix -----
+    (function () {
+      const rows = [['Dashboard, Users, Games, Referrals, Reports (read)', 1, 1, 1, 1], ['See full emails', 1, 1, 1, 0], ['Add notes, ban/unban, freeze withdrawals', 1, 0, 1, 0], ['Handle risk alerts', 1, 0, 1, 0], ['Pay / decline withdrawals, adjust balances, USDT rate', 1, 1, 0, 0], ['Decide approvals (never your own)', 1, 1, 0, 0], ['Grant or remove Pro', 1, 0, 1, 0], ['Platform fee, flags, announcement, Pro fee, limits, levels', 1, 0, 0, 0], ['Edit risk rules, change roles', 1, 0, 0, 0]];
+      const t = function (v) { return v ? '<b class="pos">✔</b>' : '<span class="dim">—</span>'; };
+      AD.table(document.getElementById('t-matrix'), [{ l: 'Permission', k: function (r) { return AD.esc(r[0]); } }, { l: 'Super', a: 'c', k: function (r) { return t(r[1]); } }, { l: 'Finance', a: 'c', k: function (r) { return t(r[2]); } }, { l: 'Support', a: 'c', k: function (r) { return t(r[3]); } }, { l: 'Analyst', a: 'c', k: function (r) { return t(r[4]); } }], rows, {});
+    })();
+
+    // ----- approvals -----
+    async function loadAppr() {
+      const { data } = await AD.sb.from('admin_approvals').select('*').order('created_at', { ascending: false }).limit(50); const rows = data || [];
+      const ids = Array.from(new Set(rows.map(function (r) { return r.requested_by; }).concat(rows.map(function (r) { return r.decided_by; })).filter(Boolean)));
+      const missing = ids.filter(function (i) { return !names[i]; });
+      if (missing.length) { const { data: p } = await AD.sb.from('profiles').select('id, display_name').in('id', missing); (p || []).forEach(function (x) { names[x.id] = x.display_name; }); }
+      const pend = rows.filter(function (r) { return r.status === 'pending'; }).length; const b = document.getElementById('appr-badge'); b.style.display = pend ? '' : 'none'; b.textContent = pend;
+      AD.table(document.getElementById('t-appr'), [
+        { l: 'Requested', k: function (r) { return '<span class="dim">' + AD.ago(r.created_at) + '</span>'; } },
+        { l: 'Kind', k: function (r) { return r.kind === 'adjustment' ? '💰 Balance adjustment' : '⬆️ Withdrawal payout'; } },
+        { l: 'Detail', k: function (r) { const p = r.payload || {}; return AD.esc(r.kind === 'adjustment' ? (Number(p.delta) >= 0 ? '+' : '') + AD.inr(p.delta) : 'withdrawal ' + String(p.withdrawal_id || '').slice(0, 8)) + (r.reason ? '<small class="dim" style="display:block">' + AD.esc(r.reason) + '</small>' : ''); } },
+        { l: 'By', k: function (r) { return AD.esc(names[r.requested_by] || '—'); } },
+        { l: 'Status', k: function (r) { return AD.chip(r.status, r.status === 'pending' ? 'yellow' : r.status === 'approved' ? 'green' : 'red') + (r.decided_by ? '<small class="dim" style="display:block">' + AD.esc(names[r.decided_by] || '') + '</small>' : ''); } },
+        { l: '', a: 'r', k: function (r) { return r.status === 'pending' && canDecide ? (r.requested_by === AD.me.id ? '<span class="dim" style="font-size:12px">waiting for another admin</span>' : '<button class="am-btn sm green" data-ap="1" data-id="' + r.id + '">Approve</button> <button class="am-btn sm danger" data-ap="0" data-id="' + r.id + '">Decline</button>') : ''; } }], rows, { wide: true, empty: 'No approval requests. Turn the thresholds on in Settings to require a second admin for big payouts or adjustments.' });
+      document.querySelectorAll('[data-ap]').forEach(function (btn) { btn.addEventListener('click', function () { AD.run(async function () {
+        const yes = btn.dataset.ap === '1';
+        const f = await ludoForm({ tone: yes ? 'accent' : 'warn', icon: yes ? '👍' : '👎', title: yes ? 'Approve this request?' : 'Decline this request?', message: yes ? 'The action runs immediately and cannot be undone.' : 'Nothing is applied.', fields: [{ name: 'note', label: 'Note (optional)', type: 'text' }], confirmText: yes ? 'Approve' : 'Decline' });
+        if (!f) return; await AD.rpc('admin_decide_approval', { p_id: btn.dataset.id, p_approve: yes, p_note: f.note || null }); await loadAppr(); offset = 0; await loadLog();
+      }); }); });
+    }
+
+    await loadStaff(); await Promise.all([loadLog(), loadAppr()]);
+  }
+});
+</script>
+</body>
+</html>

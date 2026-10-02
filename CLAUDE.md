@@ -132,11 +132,14 @@ by a Supabase project for auth/wallet-ledger/match-history.
   recovery token in the URL and establishes a session; no session means an invalid/expired link
   (shown as such, with a link back to `login.html`), not a form. On success, routes the same way
   `login.html` does (`admin.html` vs `lobby.html` via `ludoIsAdmin`).
-- `design/admin.html` — same login form, no separate admin login page. Auth-guarded (redirects
-  non-admins to `lobby.html`, not just non-signed-in visitors to `login.html`) dashboard: platform
-  stats (`get_platform_stats()` RPC), every user with their real wallet balance and games/wins
-  (plus an inline balance-adjustment form calling `admin_adjust_wallet_balance()`), and every
-  match with its resolved winner name. See "Admin" under Backend for the RLS/RPC design.
+- `design/admin*.html` — the admin side is now 10 real pages (same login form, no separate admin
+  login; non-admins bounce to `lobby.html`): `admin.html` (dashboard), `admin-users.html`,
+  `admin-user.html?id=` (360° view + actions), `admin-finance.html`, `admin-games.html`,
+  `admin-referrals.html`, `admin-risk.html`, `admin-reports.html`, `admin-audit.html` (audit log,
+  staff/roles, approvals) and `admin-settings.html` (money rules, switches, announcement, system
+  health). All share `admin.css` + `admin-core.js` (`window.AD`: boot/auth guard/sidebar shell, `rpc`,
+  `run`, SVG charts, tables, CSV) and the `ludoForm` popup from `ui-dialog.js`. See "Admin
+  analytics & control" below.
 - `design/lobby.html`, `profile.html`, `history.html`, `wallet.html` — all require a real session
   (redirect to `login.html` otherwise — `profile.html`/`history.html`/`wallet.html` had NO auth
   guard at all before this was fixed) and show real data: signed-in name/email, real wallet
@@ -1053,6 +1056,49 @@ deliberately trimmed).
     a real browser against the real live server — still needs a real playthrough before this ships
     to real users for real money. Flagging this plainly rather than claiming end-to-end verification
     that wasn't actually possible here.
+
+## Admin analytics & control
+
+- **Roles**: `profiles.admin_role` ∈ super / finance / support / analyst. `require_admin_role(array[…])`
+  always allows super. Analyst is read-only and sees masked emails; support handles bans, notes, Pro,
+  freezes and risk alerts; finance handles payouts/adjustments/rate/approvals. Only super edits fees,
+  flags, announcement, referral levels, risk rules and roles (`admin_set_admin_role`, cannot lower
+  self). `prevent_is_admin_self_update` also protects admin_role/withdrawals_frozen/player_id.
+- **Append-only**: `wallet_ledger` (every money function calls `ledger_post`; Σ ledger = Σ wallets,
+  checked live by `admin_books_check`) and `admin_audit_log` (`audit_write` from every admin action)
+  forbid UPDATE/DELETE via `forbid_mutation()`. Report exports are audited too.
+- **Two-person approval**: `app_settings.withdrawal_approval_min` / `adjustment_approval_min` (0 = off).
+  Above it, the action becomes an `admin_approvals` row a *different* admin decides
+  (`admin_decide_approval`). Old 2-arg RPCs (`admin_adjust_wallet_balance(uuid,numeric)`,
+  `admin_mark_withdrawal_paid`, `admin_reject_withdrawal`, `admin_set_is_admin`) are stubs that raise.
+- **Settings & switches**: `app_settings` has `platform_fee_pct`, `flags` (maintenance, cash_tables,
+  transfers, withdrawals, deposits, referrals) and the announcement banner. The game server reads fee
+  % + flags with a 15 s cache (`getPlatformSettings`); maintenance blocks every join (ServerError
+  4503), cash_tables off blocks stake>0 / non-free tables (4504). The 4 join loops (waiting rooms,
+  `game.js`, `rummy-cash-board.html`) show a message for both codes. The lobby shows the announcement
+  (`ludoShowAnnouncement`); `ludoLogEvent` (login / app_open + a per-install device id) feeds
+  `player_events`, rate-limited server-side to one per 10 min.
+- **Reporting**: `daily_stats(day, metric, dim, value)` rollups (IST days) rebuilt lazily by
+  `_refresh_daily_stats`; `user_activity_days` → DAU/WAU/retention; matches carry `end_reason`,
+  `fee_amount`, `duration_s`, `player_count`; `dice_stats` counts rolls per face (χ² verdict).
+  `admin_report(name, from, to, params, export)` powers 12 downloadable reports (CSV; PDF = browser print).
+- **Risk engine**: 8 rules in `risk_rules` → `_risk_scan()` upserts `risk_alerts`; per-user score from
+  open alerts. Admins work alerts (investigate/dismiss/resolve, freeze withdrawals) on `admin-risk.html`.
+- **System health**: `GET /api/admin/status` on the game server (admin-verified; uptime, version,
+  players, tables, ₹ in play, deposit watcher) plus `admin_system()`/`admin_books_check()`.
+- **Deploy**: the Pages workflow's `sed` stamps `?v=<sha>` on a fixed asset list — `admin.css` and
+  `admin-core.js` are in it; any new shared asset must be added there.
+- **Verified** with Playwright (real Chrome, seeded QA accounts, since removed of admin rights): all 10
+  pages × 4 roles render with no errors, no horizontal overflow at 390px; settings edits, notes,
+  ban/unban, freeze, adjustments, reports (13 incl. CSV), two-person payout approval end-to-end (requester
+  can't approve own), role limits via direct RPC calls for support/analyst/plain player, plain player
+  cannot call admin RPCs / read or forge ledger+audit / self-promote; a live cash match on Render
+  recorded `end_reason=forfeit`, fee, duration and matching ledger rows; maintenance + cash-table
+  switches blocked joins live (4503 / 4504; free tables stayed open with cash off).
+- **Not built**: scheduled report e-mails and alert channels (no e-mail infra), Excel (CSV only), per-user
+  device history before players sign in on an updated client.
+- **Tooling gotcha**: the Supabase MCP here declines SQL containing DROP FUNCTION / DELETE FROM, so
+  migrations use stubs/forwarders and an `active` flag (referral levels) instead of deletes.
 
 ## Crypto deposits (USDT / TRC-20)
 

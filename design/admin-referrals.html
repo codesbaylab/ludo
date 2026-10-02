@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Ludo Admin — Referrals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="admin.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="ui-dialog.js"></script>
+<script src="supabase-client.js"></script>
+<script src="app-update.js"></script>
+<script src="admin-core.js"></script>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ff8a3d">
+<link rel="icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+</head>
+<body data-page="referrals" data-title="Referrals" data-sub="Growth from invites, what it costs, and who is gaming it">
+
+<div id="tools" style="display:contents"><a class="am-btn" href="admin-reports.html">⬇ Commission report</a><a class="am-btn primary" href="admin-settings.html">Edit levels →</a></div>
+
+<div id="page" style="display:none">
+  <div class="am-grid g5" id="kpis"></div>
+
+  <div class="am-grid g21">
+    <div class="am-card"><div class="head"><div><h3>📈 Signups from referral</h3><div class="sub">Referral signups and Pro purchases per day</div></div></div><div id="c-trend"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🚀 Referral funnel</h3><div class="sub">Everyone who joined through a link (all time)</div></div></div><div id="c-funnel"></div></div>
+  </div>
+
+  <div class="am-grid g3">
+    <div class="am-card"><div class="head"><div><h3>💸 Commission by level</h3><div class="sub">Paid this period</div></div></div><div id="c-lvl"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🧬 Network depth</h3><div class="sub">Commission payments by level</div></div></div><div id="c-depth"></div></div>
+    <div class="am-card"><div class="head"><div><h3>💡 ROI of referrals</h3><div class="sub">All time</div></div></div><dl class="kv" id="roi" style="margin-top:6px"></dl></div>
+  </div>
+
+  <div class="am-grid g21">
+    <div class="am-card"><div class="head"><div><h3>🏅 Top referrers</h3><div class="sub">Ranked by Pro conversions · click to explore the network</div></div></div><div id="t-top"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🌳 Network explorer</h3><div class="sub" id="tree-sub">Pick a referrer on the left</div></div></div><ul class="tree" id="tree"></ul></div>
+  </div>
+
+  <div class="am-card"><div class="head"><div><h3>🕵️ Referral abuse signals</h3><div class="sub">Patterns that usually mean fake accounts farming commission</div></div><a class="am-btn sm" href="admin-risk.html">Open Risk →</a></div><div id="abuse"></div></div>
+</div>
+
+<script>
+AD.boot({
+  init: async function () {
+    const C = AD.COLORS; let days = 30;
+    async function load() {
+      const d = await AD.rpc('admin_referrals', { p_days: days }); const k = d.kpis;
+      document.getElementById('kpis').innerHTML = [AD.kpiCard('Referrers', AD.num(k.referrers), null, 'people who invited someone'), AD.kpiCard('Referred signups', AD.num(k.signups_ref), null, 'of ' + AD.num(k.signups) + ' new accounts'), AD.kpiCard('Went Pro', AD.num(k.went_pro), null, 'referred players'),
+        AD.kpiCard('Commission paid', AD.inr(k.commission), null, 'this period'), AD.kpiCard('Earning referrers', AD.num(k.pro_referrers), null, 'paid at least once')].join('');
+      AD.line(document.getElementById('c-trend'), { labels: d.series.labels, h: 230, series: [{ name: 'Referral signups', color: C.pink, values: d.series.signups_ref }, { name: 'Pro purchases', color: C.purple, values: d.series.pro_purchases }] });
+      const f = d.funnel; AD.funnel(document.getElementById('c-funnel'), [{ label: 'Joined via a link', value: f.referred, color: C.blue }, { label: 'Played a game', value: f.played, color: C.teal }, { label: 'Deposited', value: f.deposited, color: C.green }, { label: 'Became Pro', value: f.pro, color: C.purple }]);
+      AD.bars(document.getElementById('c-lvl'), { w: 420, h: 215, legend: false, labels: d.by_level.map(function (l) { return 'Level ' + l.level + ' (' + l.percent + '%)'; }), fmt: AD.inr, yfmt: function (v) { return '₹' + AD.short(v); }, series: [{ name: 'Commission', color: C.orange, values: d.by_level.map(function (l) { return l.paid; }) }] });
+      AD.donut(document.getElementById('c-depth'), [{ label: 'Level 1', value: d.depth.l1, color: C.green, fmt: AD.num(d.depth.l1) }, { label: 'Level 2', value: d.depth.l2, color: C.blue, fmt: AD.num(d.depth.l2) }, { label: 'Level 3+', value: d.depth.l3, color: C.purple, fmt: AD.num(d.depth.l3) }], AD.num(d.depth.l1 + d.depth.l2 + d.depth.l3), 'payments');
+      const r = d.roi; document.getElementById('roi').innerHTML = [['Pro fees from referred players', AD.inr(r.pro_fees)], ['Commission paid (all levels)', AD.inr(r.commission)], ['Net from referral growth', '<b class="' + (r.net >= 0 ? 'pos' : 'neg') + '">' + AD.inr(r.net) + '</b>'], ['Cost per Pro acquired', AD.inr(r.cost_per_pro)]].map(function (x) { return '<dt>' + x[0] + '</dt><dd>' + x[1] + '</dd>'; }).join('');
+      AD.table(document.getElementById('t-top'), [{ l: '#', k: function (r, i) { return i + 1; } }, { l: 'Referrer', k: function (r, i) { return '<a href="#" data-tree="' + r.id + '" style="text-decoration:none;color:inherit">' + AD.who(r.name, i, '<span class="mono">' + AD.esc(r.player_id) + '</span>') + '</a>'; } },
+        { l: 'Invites', a: 'r', k: 'invites' }, { l: 'Pro', a: 'r', k: 'pro' }, { l: 'Conv.', a: 'r', k: function (r) { return r.invites ? Math.round(r.pro / r.invites * 100) + '%' : '—'; } }, { l: 'Earned', a: 'r', k: function (r) { return '<b class="pos">' + AD.inr(r.earned) + '</b>'; } },
+        { l: 'Quality', a: 'c', k: function (r) { return r.never_played > 0 && r.never_played >= r.pro / 2 ? AD.chip('Check', 'red') : r.pro >= 3 ? AD.chip('High', 'green') : AD.chip('Medium', 'yellow'); } }], d.top, { empty: 'No referrals yet.' });
+      document.querySelectorAll('[data-tree]').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); AD.run(function () { return showTree(a.dataset.tree); }); }); });
+      const { data: al } = await AD.sb.from('risk_alerts').select('title, detail, severity, status, user_ids').in('rule', ['pro_never_played', 'multi_account']).in('status', ['open', 'investigating']).order('updated_at', { ascending: false }).limit(6);
+      document.getElementById('abuse').innerHTML = (al && al.length) ? '<div class="am-grid g3" style="margin:0">' + al.map(function (a) { return '<div class="alert-row ' + (a.severity === 'high' ? 'high' : 'med') + '"><div class="body"><b>' + AD.esc(a.title) + '</b>' + AD.esc(a.detail) + '</div></div>'; }).join('') + '</div>' : '<div class="empty-note">✅ No referral abuse patterns detected.</div>';
+    }
+    async function showTree(id) {
+      const u = await AD.rpc('admin_user_360', { p_user: id });
+      document.getElementById('tree-sub').textContent = u.profile.name + ' · ' + u.stats.invites + ' direct invites';
+      const node = function (n) { return '<li><span class="node">' + AD.av(n.name) + '<a href="admin-user.html?id=' + n.id + '" style="color:inherit;text-decoration:none">' + AD.esc(n.name) + '</a> ' + AD.chip(n.is_pro ? 'PRO' : 'Free', n.is_pro ? 'purple' : '') + (n.earned > 0 ? ' <span class="pos">+' + AD.inr(n.earned) + '</span>' : '') + '</span>' + (n.children && n.children.length ? '<ul>' + n.children.map(node).join('') + '</ul>' : '') + '</li>'; };
+      document.getElementById('tree').innerHTML = '<li><span class="node">' + AD.av(u.profile.name) + '<b>' + AD.esc(u.profile.name) + '</b></span><ul>' + (u.tree.length ? u.tree.map(node).join('') : '<li class="empty-note">No referrals yet.</li>') + '</ul></li>';
+    }
+    AD.range(function (n) { days = n; AD.run(load); });
+    await load();
+  }
+});
+</script>
+</body>
+</html>

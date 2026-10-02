@@ -711,6 +711,10 @@
             connectingStatus.innerHTML = 'Not enough available balance for this table (funds locked in other games don\'t count). <a href="wallet.html">Open wallet</a>';
             return;
           }
+          if (err && (err.code === 4503 || err.code === 4504)) {
+            connectingStatus.innerHTML = (err.code === 4503 ? 'The game is briefly down for maintenance. Please try again soon.' : 'Cash tables are paused right now. Free tables are still open.') + ' <a href="lobby.html">Back to lobby</a>';
+            return;
+          }
           if (err && err.code === 4403) {
             connectingStatus.innerHTML = 'Cash tables are for Pro members. <a href="wallet.html#pro">Go Pro</a>';
             return;
