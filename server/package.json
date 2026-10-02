@@ -13,7 +13,8 @@
     "start": "node build/index.js",
     "test:sim": "tsx src/test/simulateMatch.ts",
     "test:sim:rummy": "tsx src/test/simulateRummyMatch.ts",
-    "test:rummy-engine": "tsx src/test/compareRummyEngine.ts"
+    "test:rummy-engine": "tsx src/test/compareRummyEngine.ts",
+    "sweep": "tsx src/tools/sweep.ts"
   },
   "dependencies": {
     "@colyseus/schema": "^2.0.35",

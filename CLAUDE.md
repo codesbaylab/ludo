@@ -1194,8 +1194,18 @@ compromised server means a compromised hot wallet) accepted for v1, with mitigat
   1; env override) and `wallet.html` hides ₹0 deposit rows. **While `TRONGRID_API_BASE` /
   `USDT_CONTRACT_ADDRESS_OVERRIDE` point at Nile, credited money is fake — remove both variables
   before real users deposit, and reverse any testnet credit with an admin adjustment.**
-- **Not built yet, on purpose**: automated sweeping of collected USDT out of per-user hot addresses
-  into cold storage (do this as a manual/periodic admin action for now, keeping v1 simpler and the
+- **Sweep tool (`server/src/tools/sweep.ts`, `npm run sweep`)**: a manual, run-on-your-own-computer CLI that
+  moves USDT from the per-user deposit addresses (derivation index >= 1) into one destination wallet
+  (`--to T…`). Never runs on Render. Index 0 of the seed (TronLink's "General" wallet) is the gas wallet: the
+  tool tops each deposit address up with TRX from it, then sends that address's whole USDT balance with a
+  `transfer(address,uint256)` signed by the re-derived key. Dry run is the default (`--execute` + typing
+  SWEEP to send); the address list comes from the DB (SUPABASE_URL + service key) or `--max-index N`;
+  refuses a destination that is itself a deposit address; keys never printed; appends `sweep-log.jsonl`.
+  Same env vars as Render for testnet (TRONGRID_API_BASE / USDT_CONTRACT_ADDRESS_OVERRIDE).
+  **Verified**: balance read against the real Nile chain (1000.000001 USDT at index 3), dry run, argument
+  guards. **Not yet verified: the `--execute` send path** (needs the real seed; first run it on Nile against
+  the 1000 test USDT at index 3 before ever using it on mainnet).
+- **Not built yet, on purpose**: *automated/scheduled* sweeping of collected USDT (the manual tool above exists; do it by hand for now, keeping v1 simpler and the
   blast radius of a server compromise limited to whatever hasn't been swept out yet); live USD/INR
   pricing. Withdrawal *requests* are built now — see "Withdrawals" below.
 - **Verification note**: `api.trongrid.io` is blocked by this project's own dev sandbox's network
