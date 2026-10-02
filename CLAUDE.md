@@ -970,8 +970,7 @@ deliberately trimmed).
   skip eliminated seats (a no-op in Points mode, where nobody is ever eliminated) — one shared code
   path for both modes, same reasoning `rummy-board.html`'s own `advanceTurn()` already documented.
   A declare attempt — valid or not — always ends the hand immediately (mirrors the practice table's
-  `endHand()` exactly); an invalid one costs the declarer the flat 80-point penalty and nobody else
-  is charged anything.
+  `endHand()` exactly); an invalid one costs the declarer the flat 80-point penalty.
 - **Auto-timeout keeps a table moving** if someone goes idle, same philosophy as `LudoRoom`'s
   auto-roll/auto-pick: a draw timeout (default 20s, overridable for tests) auto-draws from the
   closed deck; a discard timeout auto-discards whatever card is at the end of the current player's

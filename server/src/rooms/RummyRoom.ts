@@ -446,9 +446,7 @@ export class RummyRoom extends Room<RummyState> {
   private finishHandPoints(points: number[], winnerIdx: number | undefined) {
     this.state.matchOver = true;
     if (winnerIdx === undefined) {
-      // Invalid declare: nobody else owes anything — the penalty is a
-      // scoring concept (relevant if this table's players start another
-      // Points hand from the lobby) with no money movement here at all.
+      // Invalid declare: the declarer pays the flat penalty to the others (see persistPointsMatch).
       this.persistPointsMatch(points, null).catch((err) => console.error('[rummy] persistPointsMatch failed:', err));
       return;
     }
@@ -558,9 +556,8 @@ export class RummyRoom extends Room<RummyState> {
     await settleWallet(userId, delta, reserved, 'match_result', 'rummy_match', matchId);
   }
 
-  /** winnerIdx === null means an invalid declare with no money to move —
-   *  still recorded as a finished match (for history), just with a null
-   *  winner and every player's own `payout` at 0. */
+  /** winnerIdx === null means an invalid declare: the declarer pays the
+   *  flat penalty, split among the other players (minus the platform fee). */
   private async persistPointsMatch(points: number[], winnerIdx: number | null) {
     if (this.isFree) return; // no money, no wallet settlement
     const supabase = getSupabase();
@@ -575,8 +572,18 @@ export class RummyRoom extends Room<RummyState> {
 
     const pointValue = this.state.pointValue;
     let payouts: number[];
+    // An invalid declare used to move no money at all, which let a player who was about to lose
+    // end the hand for free (and contradicted the "-₹80" the result popup shows). Now the declarer
+    // pays the flat 80-point penalty, split equally among the other players, after the usual fee.
+    const declarer = winnerIdx === null ? this.state.lastHandInvalidDeclareBy : -1;
+    let invalidFee = 0;
     if (winnerIdx === null) {
-      payouts = points.map(() => 0);
+      const owed = Engine.MAX_PENALTY * pointValue;
+      const others = players.length - 1;
+      const share = Math.floor(owed / others);
+      const feeEach = Math.round(share * (this.feeRate ?? PLATFORM_FEE_RATE));
+      payouts = players.map((_, i) => (i === declarer ? -owed : share - feeEach));
+      invalidFee = owed - payouts.reduce((s, v, i) => (i === declarer ? s : s + v), 0);
     } else {
       const totalOwed = points.reduce((s, pts, i) => (i === winnerIdx ? s : s + pts * pointValue), 0);
       const fee = Math.round(totalOwed * (this.feeRate ?? PLATFORM_FEE_RATE));
@@ -591,11 +598,11 @@ export class RummyRoom extends Room<RummyState> {
         player_count: players.length,
         point_value: pointValue,
         status: 'finished',
-        winner_id: winnerIdx === null ? null : userIds[winnerIdx],
+        winner_id: winnerIdx === null ? (players.length === 2 ? userIds[1 - declarer] : null) : userIds[winnerIdx],
         finished_at: new Date().toISOString(),
         end_reason: this.endReason,
         duration_s: this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : null,
-        fee_amount: winnerIdx === null ? 0 : Math.round(payouts.filter((_, k) => k !== winnerIdx).reduce((s, v) => s + -v, 0) * (this.feeRate ?? PLATFORM_FEE_RATE)),
+        fee_amount: winnerIdx === null ? invalidFee : Math.round(payouts.filter((_, k) => k !== winnerIdx).reduce((s, v) => s + -v, 0) * (this.feeRate ?? PLATFORM_FEE_RATE)),
       })
       .select('id')
       .single();
@@ -608,7 +615,7 @@ export class RummyRoom extends Room<RummyState> {
       match_id: match.id,
       user_id: userIds[i],
       seat_idx: i,
-      result: winnerIdx === null ? 'lose' : i === winnerIdx ? 'win' : 'lose',
+      result: winnerIdx === null ? (i === declarer ? 'lose' : 'win') : i === winnerIdx ? 'win' : 'lose',
       points: points[i],
       payout: payouts[i],
     }));
