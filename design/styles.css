@@ -324,7 +324,13 @@ a:has(> .btn) { display: block; }
 }
 .dice-face:active .dice-cube { filter: brightness(.97); }
 .dice-face.disabled { cursor:default; opacity:.6; }
-.dice-face.rolling { animation: dice-hop 1.5s cubic-bezier(.36,.07,.19,.97); }
+.dice-face.flying .dice-cube { opacity: 0; transition: none !important; }
+/* the cube thrown across the board while a roll is revealed (see flyDice in game.js) */
+.dice-fly { position: fixed; left: 0; top: 0; width: 0; height: 0; z-index: 150; pointer-events: none; }
+.dice-fly-ground { position: absolute; left: 0; top: 0; width: 64px; height: 64px; will-change: transform; }
+.dice-fly-air { position: absolute; inset: 0; perspective: 320px; will-change: transform; }
+.dice-fly-shadow { position: absolute; left: 7px; top: 0; width: 50px; height: 12px; border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(0,0,0,.45), transparent); will-change: transform, opacity; }
 @keyframes dice-hop {
   0%   { transform: translateY(0) scale(1); }
   8%   { transform: translateY(-10px) scale(1.05); }
@@ -339,7 +345,7 @@ a:has(> .btn) { display: block; }
 .dice-cube {
   position:relative; width:100%; height:100%; transform-style: preserve-3d;
   transform: rotateX(-18deg) rotateY(24deg);
-  transition: transform 1.5s cubic-bezier(.2,.85,.32,1);
+  transition: opacity .22s ease;
 }
 .dice-face-3d {
   position:absolute; inset:0; width:64px; height:64px;
@@ -354,7 +360,7 @@ a:has(> .btn) { display: block; }
 .face-left   { transform: rotateY(-90deg)  translateZ(32px); }
 .face-top    { transform: rotateX(90deg)   translateZ(32px); }
 .face-bottom { transform: rotateX(-90deg)  translateZ(32px); }
-.dice-face .pip { width:10px; height:10px; border-radius:50%; background: var(--accent-2); margin:auto; box-shadow: inset 0 1px 2px rgba(0,0,0,.3); }
+.dice-face .pip, .dice-fly .pip { width:10px; height:10px; border-radius:50%; background: var(--accent-2); margin:auto; box-shadow: inset 0 1px 2px rgba(0,0,0,.3); }
 
 .dice-shadow {
   width:44px; height:10px; margin:4px auto 0; border-radius:50%;

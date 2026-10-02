@@ -696,7 +696,7 @@ Purely a renderer + network client now — **all game rules moved server-side** 
   status log, game-over — goes through `applySnapshot(snapshot)`, chained onto a single
   `renderQueue` promise so snapshots are always applied one at a time, in order. When a snapshot's
   `rollSeq` changed (see below for why that, not `diceValue`), `applySnapshot` calls `revealDice()`
-  and then `await`s `DICE_REVEAL_MS` (1550ms, matching the cube's own CSS animation) before
+  and then `await`s `DICE_REVEAL_MS` (1750ms: the flight plus a ~300ms hold so the landed face can be read) before
   touching anything else. Root cause this
   fixes: the server can move a token (or even pass the turn) in the very same patch as the roll
   that caused it (e.g. a single valid move gets auto-applied in `resolveRoll` itself), and
@@ -726,6 +726,19 @@ Purely a renderer + network client now — **all game rules moved server-side** 
   its reveal on that instead. Reproduced against the old logic with a rigged-timing 2-client test
   forcing a same-value-back-to-back roll and confirming the old check would have missed it while
   `rollSeq` catches it every time.
+- **Rolling-dice animation (`flyDice` in `game.js`)**: a roll no longer spins the button in place. A
+  clone of the cube (`.dice-fly`, `position:fixed`, `z-index:150`) is thrown from the roller (the dice
+  button for me, the roller's yard `yardEls[color]` for others, picked from `snapshot.currentPlayerIdx`)
+  to near the board center via four Web Animations on one `DICE_REVEAL_MS` timeline: ground path
+  (ease-out), height with 3 gravity bounces + squash (`DICE_PATH`), a shadow that shrinks with height,
+  and a 3-axis tumble ending exactly on the server's face. Only transform/opacity animate. The resting
+  cube jumps to the final orientation, is hidden (`.dice-face.flying`) during the flight and fades
+  back after; thuds sync to the impacts. Skipped under `prefers-reduced-motion`. A new roll calls
+  `endDiceFlight()` first so back-to-back rolls never overlap. The clone is outside `.dice-face`, so
+  the pip rule is `.dice-face .pip, .dice-fly .pip` (missing that left the thrown dice blank).
+  Verified in Chrome against a local server: 60fps (max frame gap 18ms with no screenshots), lands
+  inside the board, overlay removed, resting cube matches the server value, opponent rolls start
+  from their yard, no page errors.
 - `revealDice` cancels and clears any pending roll-cleanup `setTimeout` before starting a new roll
   (plus the same reflow-restart trick `hop()` uses). Rolling a 6 grants an extra roll, so
   back-to-back rolls are common — without this, a second roll landing inside the first roll's

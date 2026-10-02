@@ -467,36 +467,167 @@
     gameOverOverlay.classList.add('open');
   }
 
-  // How long the dice cube's CSS roll animation actually takes — also how
-  // long applySnapshot waits before revealing a roll's consequences (token
-  // move, turn change), so nothing appears to happen before the cube stops.
-  const DICE_REVEAL_MS = 1550;
-  let diceRollTimeout = null;
+  // How long a roll is shown before its consequences (token move, turn
+  // change) are applied: the flight itself plus a short hold so the landed
+  // face can actually be read.
+  const DICE_REVEAL_MS = 1750;
+  let diceFlight = null; // { el, anims, timer, timers } for the roll currently in the air
 
-  function revealDice(value) {
-    // Extra turns (rolling a 6) mean back-to-back rolls are common — without
-    // this, a second roll landing before the first roll's cleanup fires
-    // would get its ".rolling" animation cut short by that stale timer,
-    // snapping the dice cube mid-animation instead of finishing the second
-    // roll's spin. Cancel any pending cleanup and force-restart the CSS
-    // animation (same reflow trick hop() already uses) so every roll gets
-    // its own full, uninterrupted spin.
-    if (diceRollTimeout) clearTimeout(diceRollTimeout);
-    diceFace.classList.remove('rolling');
-    diceShadow.classList.remove('rolling');
-    void diceFace.offsetWidth;
-    diceFace.classList.add('rolling');
-    diceShadow.classList.add('rolling');
+  // A soft thud for each time the rolling dice hits the board.
+  function playDiceThud(vol) {
+    const ctx = ensureAudio();
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(190, t);
+    osc.frequency.exponentialRampToValueAtTime(70, t + 0.09);
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t);
+    osc.stop(t + 0.12);
+  }
+
+  // Heights (px above the board) the dice passes through, as fractions of
+  // DICE_REVEAL_MS. h = 0 means touching the board (hit = an impact). Scale
+  // grows with height so it reads as coming closer to the camera.
+  const DICE_PATH = [
+    { t: 0,    h: 0,  ease: 'cubic-bezier(.2,.6,.4,1)' },
+    { t: 0.16, h: 90, ease: 'cubic-bezier(.6,0,.8,.4)' },
+    { t: 0.34, h: 0,  hit: 1 },
+    { t: 0.45, h: 38, ease: 'cubic-bezier(.6,0,.8,.4)' },
+    { t: 0.55, h: 0,  hit: 1 },
+    { t: 0.62, h: 14, ease: 'cubic-bezier(.6,0,.8,.4)' },
+    { t: 0.69, h: 0,  hit: 1 },
+    { t: 0.74, h: 4,  ease: 'cubic-bezier(.6,0,.8,.4)' },
+    { t: 0.78, h: 0 },
+    { t: 1,    h: 0 },
+  ];
+  const DICE_LAND_SCALE = 0.8;
+
+  function prefersReducedMotion() {
+    return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  function endDiceFlight() {
+    if (!diceFlight) return;
+    clearTimeout(diceFlight.timer);
+    diceFlight.timers.forEach(clearTimeout);
+    diceFlight.anims.forEach(a => { try { a.cancel(); } catch (e) { /* already gone */ } });
+    diceFlight.el.remove();
+    diceFlight = null;
+    diceFace.classList.remove('flying');
+  }
+
+  // The roll animation: a clone of the cube is thrown from the roller's spot
+  // (the dice button for me, the roller's yard for everyone else), tumbles on
+  // all three axes, bounces three times with a shadow, and settles near the
+  // board center showing the true result. Only transform/opacity animate, so
+  // it stays on the GPU.
+  function flyDice(prevX, prevY, rollerEl) {
+    const board = document.getElementById('board-grid');
+    const src = (rollerEl || diceFace).getBoundingClientRect();
+    const dst = board.getBoundingClientRect();
+    const sx = src.left + src.width / 2 - 32, sy = src.top + src.height / 2 - 32;
+    const ex = dst.left + dst.width * (0.5 + (Math.random() - 0.5) * 0.18) - 32;
+    const ey = dst.top + dst.height * (0.5 + (Math.random() - 0.5) * 0.18) - 32;
+
+    const root = document.createElement('div');
+    root.className = 'dice-fly';
+    const ground = document.createElement('div');
+    ground.className = 'dice-fly-ground';
+    const shadow = document.createElement('div');
+    shadow.className = 'dice-fly-shadow';
+    const air = document.createElement('div');
+    air.className = 'dice-fly-air';
+    const cube = diceCube.cloneNode(true);
+    cube.removeAttribute('id');
+    cube.style.transition = 'none';
+    cube.style.opacity = '1';
+    air.appendChild(cube);
+    ground.append(shadow, air);
+    root.appendChild(ground);
+    document.body.appendChild(root);
+
+    const D = DICE_REVEAL_MS;
+    const anims = [];
+    const heightScale = (h) => (h === 0 ? DICE_LAND_SCALE : DICE_LAND_SCALE + (h / 90) * 0.5);
+
+    // 1. Ground path: ease-out so the dice decelerates as it travels.
+    anims.push(ground.animate([
+      { transform: `translate(${sx}px, ${sy}px)`, easing: 'cubic-bezier(.22,.55,.3,1)' },
+      { transform: `translate(${ex}px, ${ey}px)`, offset: 0.78 },
+      { transform: `translate(${ex}px, ${ey}px)` },
+    ], { duration: D, fill: 'forwards' }));
+
+    // 2. Height: gravity-style up/down with a squash on each impact.
+    anims.push(air.animate(DICE_PATH.map((k) => {
+      const sc = k.t === 0 ? 1 : heightScale(k.h);
+      const squash = k.hit ? ' scale(1.07, 0.9)' : '';
+      const f = { offset: k.t, transform: `translateY(${-k.h}px) scale(${sc})${squash}` };
+      if (k.ease) f.easing = k.ease;
+      return f;
+    }), { duration: D, fill: 'forwards' }));
+
+    // 3. Shadow stays on the board; smaller and fainter the higher the dice is.
+    anims.push(shadow.animate(DICE_PATH.map((k) => {
+      const sc = 1 / (1 + k.h / 70);
+      const f = { offset: k.t, transform: `translateY(48px) scale(${sc.toFixed(3)})`, opacity: (0.08 + 0.3 * sc).toFixed(3) };
+      if (k.ease) f.easing = k.ease;
+      return f;
+    }), { duration: D, fill: 'forwards' }));
+
+    // 4. Tumble: from where the cube was resting to the exact result face
+    // (plus whole spins), decelerating. Whole Z turns so the face ends upright.
+    const zTurns = (Math.random() < 0.5 ? -1 : 1) * (1 + Math.floor(Math.random() * 2)) * 360;
+    anims.push(cube.animate([
+      { transform: `rotateZ(0deg) rotateX(${prevX}deg) rotateY(${prevY}deg)`, easing: 'cubic-bezier(.12,.62,.28,1)' },
+      { offset: 0.78, transform: `rotateZ(${zTurns}deg) rotateX(${currentX}deg) rotateY(${currentY}deg)` },
+      { transform: `rotateZ(${zTurns}deg) rotateX(${currentX}deg) rotateY(${currentY}deg)` },
+    ], { duration: D, fill: 'forwards' }));
+
+    // Thuds on each impact, synced to the same timeline.
+    const timers = DICE_PATH.filter(k => k.hit)
+      .map((k, i) => setTimeout(() => playDiceThud([0.22, 0.14, 0.08][i] || 0.06), k.t * D));
+
+    // Hand back to the resting cube: crossfade, then drop the clone.
+    const timer = setTimeout(() => {
+      diceFace.classList.remove('flying');
+      const out = root.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 220, fill: 'forwards' });
+      anims.push(out);
+      out.onfinish = () => { if (diceFlight && diceFlight.el === root) endDiceFlight(); };
+    }, D - 40);
+    diceFlight = { el: root, anims, timer, timers };
+  }
+
+  function revealDice(value, snapshot) {
+    // Extra turns (rolling a 6) mean back-to-back rolls are common: abort any
+    // flight still in the air so every roll gets its own full, uninterrupted
+    // animation instead of two overlapping clones.
+    endDiceFlight();
     playDiceSound();
     const target = faceOrientation[value];
+    const prevX = currentX, prevY = currentY;
     currentX = spinTo(target.x, currentX, 2, 3);
     currentY = spinTo(target.y, currentY, 3, 5);
+
+    // The resting cube jumps (no transition) to the final orientation; it is
+    // hidden while the flying clone is in the air and fades back in after.
+    diceCube.style.transition = 'none';
     diceCube.style.transform = `rotateX(${currentX}deg) rotateY(${currentY}deg)`;
-    diceRollTimeout = setTimeout(() => {
-      diceFace.classList.remove('rolling');
-      diceShadow.classList.remove('rolling');
-      diceRollTimeout = null;
-    }, DICE_REVEAL_MS);
+    void diceCube.offsetWidth;
+    diceCube.style.transition = '';
+
+    if (prefersReducedMotion() || !diceFace.animate) return;
+    // Who rolled? me -> the dice button; anyone else -> their yard on the board.
+    let rollerEl = null;
+    const p = snapshot && snapshot.players && snapshot.players[snapshot.currentPlayerIdx];
+    if (p && p.sessionId !== room.sessionId && yardEls[p.color]) rollerEl = yardEls[p.color];
+    diceFace.classList.add('flying');
+    flyDice(prevX, prevY, rollerEl);
   }
 
   // Per-element so a previous hop's cleanup can't strip the class out from
@@ -790,7 +921,7 @@
       // silently skipped the whole reveal (and the move/turn-pass it
       // gates) whenever it happened, making the dice look frozen mid-game.
       if (snapshot.rollSeq !== prevSnapshot.rollSeq) {
-        revealDice(snapshot.diceValue);
+        revealDice(snapshot.diceValue, snapshot);
         await new Promise(resolve => setTimeout(resolve, DICE_REVEAL_MS));
       }
 
