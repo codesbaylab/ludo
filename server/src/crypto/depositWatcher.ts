@@ -122,6 +122,10 @@ export async function processAddress(supabase: SupabaseClient, known: KnownAddre
 let pollTimer: ReturnType<typeof setTimeout> | null = null;
 let stopped = false;
 
+// Read by the admin System page (GET /api/admin/status).
+const watcherStatus = { enabled: false, lastTickAt: 0, lastOk: false, lastError: '', addresses: 0, ticks: 0 };
+export function getWatcherStatus() { return { ...watcherStatus }; }
+
 export function startDepositWatcher(): void {
   if (!cryptoDepositsEnabled()) {
     console.warn('[crypto-watcher] TRON_MASTER_SEED not set — USDT deposit watching disabled.');
@@ -134,17 +138,25 @@ export function startDepositWatcher(): void {
   }
 
   stopped = false;
+  watcherStatus.enabled = true;
 
   const tick = async () => {
     try {
       const [addresses, rate] = await Promise.all([loadKnownAddresses(supabase), loadUsdtInrRate(supabase)]);
+      watcherStatus.addresses = addresses.length;
       for (let i = 0; i < addresses.length; i += POLL_CONCURRENCY) {
         const batch = addresses.slice(i, i + POLL_CONCURRENCY);
         await Promise.all(batch.map((addr) => processAddress(supabase, addr, rate)));
       }
+      watcherStatus.lastOk = true;
+      watcherStatus.lastError = '';
     } catch (err) {
+      watcherStatus.lastOk = false;
+      watcherStatus.lastError = String((err as Error)?.message ?? err).slice(0, 200);
       console.error('[crypto-watcher] poll tick failed:', err);
     } finally {
+      watcherStatus.lastTickAt = Date.now();
+      watcherStatus.ticks++;
       if (!stopped) pollTimer = setTimeout(tick, POLL_INTERVAL_MS);
     }
   };

@@ -96,11 +96,11 @@ export async function releaseFunds(userId: string, amount: number): Promise<void
   if (error) console.error(`[holds] failed to release ${amount} for ${userId}:`, error);
 }
 
-/** Apply a match result (`delta`) and release this match's hold atomically. */
-export async function settleWallet(userId: string, delta: number, release: number): Promise<void> {
+/** Apply a match result (`delta`) and release this match's hold atomically; the ledger records kind + ref. */
+export async function settleWallet(userId: string, delta: number, release: number, kind = 'match_result', refType: string | null = null, refId: string | null = null): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
-  const { error } = await supabase.rpc('settle_wallet', { p_user_id: userId, p_delta: delta, p_release: release });
+  const { error } = await supabase.rpc('settle_wallet', { p_user_id: userId, p_delta: delta, p_release: release, p_kind: kind, p_ref_type: refType, p_ref_id: refId });
   if (error) console.error(`[holds] failed to settle wallet for ${userId}:`, error);
 }
 
@@ -110,4 +110,37 @@ export async function releaseAllHolds(): Promise<void> {
   if (!supabase) return;
   const { error } = await supabase.rpc('release_all_holds');
   if (error) console.error('[holds] failed to release stale holds at boot:', error);
+}
+
+// ---- Admin-controlled platform settings ----------------------------------
+// Fee % and the on/off switches live in app_settings (edited from the admin page). Read with a
+// short cache so a busy server doesn't query on every join; a change takes effect within ~15 s.
+export interface PlatformSettings { feeRate: number; maintenance: boolean; cashTables: boolean }
+let settingsCache: { at: number; value: PlatformSettings } | null = null;
+
+export async function getPlatformSettings(): Promise<PlatformSettings> {
+  const fallback: PlatformSettings = { feeRate: 0.1, maintenance: false, cashTables: true };
+  if (settingsCache && Date.now() - settingsCache.at < 15000) return settingsCache.value;
+  const supabase = getSupabase();
+  if (!supabase) return fallback;
+  const { data, error } = await supabase.from('app_settings').select('platform_fee_pct, flags').eq('id', true).single();
+  if (error || !data) return settingsCache?.value ?? fallback;
+  const flags = (data.flags ?? {}) as Record<string, boolean>;
+  const value: PlatformSettings = {
+    feeRate: Math.max(0, Math.min(0.5, Number(data.platform_fee_pct ?? 10) / 100)),
+    maintenance: flags.maintenance === true,
+    cashTables: flags.cash_tables !== false,
+  };
+  settingsCache = { at: Date.now(), value };
+  return value;
+}
+
+/** Per-face roll counts for the admin fairness check (flushed once per match). */
+export async function recordDiceCounts(counts: Record<number, number>): Promise<void> {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+  if (total === 0) return;
+  const { error } = await supabase.rpc('record_dice_counts', { p_counts: counts });
+  if (error) console.error('[dice] failed to record roll counts:', error);
 }

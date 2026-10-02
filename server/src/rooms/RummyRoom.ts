@@ -2,7 +2,7 @@ import { Room, Client, ServerError } from 'colyseus';
 import { ArraySchema } from '@colyseus/schema';
 import { RummyState, RummyPlayerState, CardState } from './schema/RummyState';
 import * as Engine from '../rummy/engine';
-import { getSupabase, authorizeJoin, holdFunds, releaseFunds, settleWallet, Hold } from '../supabase';
+import { getSupabase, authorizeJoin, holdFunds, releaseFunds, settleWallet, getPlatformSettings, Hold } from '../supabase';
 import { newRoomCode } from '../roomCode';
 
 interface JoinOptions {
@@ -65,6 +65,9 @@ export class RummyRoom extends Room<RummyState> {
   // one at join time. Not part of the synced schema (opponents don't need it).
   private sessionUserIds: Record<string, string> = {};
   private isFree = false;
+  private feeRate: number | null = null;   // admin-editable; fixed when the table is first joined
+  private startedAt = 0;
+  private endReason = 'declare';
   // Reserved worst-case loss per session (see holdFunds in supabase.ts).
   private holds: Record<string, Hold> = {};
 
@@ -128,6 +131,10 @@ export class RummyRoom extends Room<RummyState> {
   async onJoin(client: Client, options: JoinOptions = {}) {
     // Same real-money ban check as LudoRoom.onJoin, checked before reserving
     // a slot so a banned user can never occupy a seat even briefly.
+    const settings = await getPlatformSettings();
+    if (this.feeRate === null) this.feeRate = settings.feeRate;
+    if (settings.maintenance) throw new ServerError(4503, 'maintenance');
+    if (!this.isFree && !settings.cashTables) throw new ServerError(4504, 'cash_tables_off');
     const check = await authorizeJoin(options, !this.isFree);
     if (!check.ok) {
       if (check.reason === 'banned') {
@@ -169,6 +176,7 @@ export class RummyRoom extends Room<RummyState> {
 
     if (this.state.players.every((p) => p.connected)) {
       this.state.started = true;
+      this.startedAt = Date.now();
       this.startNewHand();
     } else {
       const connected = this.state.players.filter((p) => p.connected).length;
@@ -194,7 +202,7 @@ export class RummyRoom extends Room<RummyState> {
 
     if (consented) {
       this.state.statusMessage = `${player.name} left the game.`;
-      this.checkForfeit();
+      this.checkForfeit('forfeit');
       return;
     }
 
@@ -203,7 +211,7 @@ export class RummyRoom extends Room<RummyState> {
       await this.allowReconnection(client, this.reconnectGraceSeconds);
     } catch {
       this.state.statusMessage = `${player.name} disconnected and never reconnected.`;
-      this.checkForfeit();
+      this.checkForfeit('timeout');
       return;
     }
 
@@ -224,8 +232,9 @@ export class RummyRoom extends Room<RummyState> {
    *  match — every other seat is force-eliminated), with everyone who
    *  isn't the survivor scored at the flat max penalty for this hand as
    *  a forfeit penalty, same as a real declare-invalid. */
-  private checkForfeit() {
+  private checkForfeit(kind: 'forfeit' | 'timeout') {
     if (this.state.matchOver) return;
+    this.endReason = kind;
     const stillConnected = this.state.players.filter((p) => p.connected);
     if (stillConnected.length !== 1) return;
     const winnerIdx = this.state.players.indexOf(stillConnected[0]!);
@@ -396,6 +405,7 @@ export class RummyRoom extends Room<RummyState> {
 
     if (result.invalidDeclareBy !== undefined) {
       points[result.invalidDeclareBy] = Engine.MAX_PENALTY;
+      this.endReason = 'invalid_declare';
       this.state.lastHandInvalidDeclareBy = result.invalidDeclareBy;
       const who = this.state.players[result.invalidDeclareBy]!.name;
       this.state.statusMessage = `${who} declared invalidly and takes the ${Engine.MAX_PENALTY}-point penalty.`;
@@ -541,11 +551,11 @@ export class RummyRoom extends Room<RummyState> {
   }
 
   /** Apply one seat's result and release its reservation in a single statement. */
-  private async settleSeat(i: number, userId: string, delta: number) {
+  private async settleSeat(i: number, userId: string, delta: number, matchId: string) {
     const sid = this.state.players[i]!.sessionId;
     const reserved = this.holds[sid]?.amount ?? 0;
     delete this.holds[sid];
-    await settleWallet(userId, delta, reserved);
+    await settleWallet(userId, delta, reserved, 'match_result', 'rummy_match', matchId);
   }
 
   /** winnerIdx === null means an invalid declare with no money to move —
@@ -569,7 +579,7 @@ export class RummyRoom extends Room<RummyState> {
       payouts = points.map(() => 0);
     } else {
       const totalOwed = points.reduce((s, pts, i) => (i === winnerIdx ? s : s + pts * pointValue), 0);
-      const fee = Math.round(totalOwed * PLATFORM_FEE_RATE);
+      const fee = Math.round(totalOwed * (this.feeRate ?? PLATFORM_FEE_RATE));
       const winnerPayout = totalOwed - fee;
       payouts = points.map((pts, i) => (i === winnerIdx ? winnerPayout : -(pts * pointValue)));
     }
@@ -583,6 +593,9 @@ export class RummyRoom extends Room<RummyState> {
         status: 'finished',
         winner_id: winnerIdx === null ? null : userIds[winnerIdx],
         finished_at: new Date().toISOString(),
+        end_reason: this.endReason,
+        duration_s: this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : null,
+        fee_amount: winnerIdx === null ? 0 : Math.round(payouts.filter((_, k) => k !== winnerIdx).reduce((s, v) => s + -v, 0) * (this.feeRate ?? PLATFORM_FEE_RATE)),
       })
       .select('id')
       .single();
@@ -604,7 +617,7 @@ export class RummyRoom extends Room<RummyState> {
 
     for (let i = 0; i < players.length; i++) {
       // Even a 0 payout still has to release the seat's reservation.
-      await this.settleSeat(i, userIds[i]!, payouts[i]!);
+      await this.settleSeat(i, userIds[i]!, payouts[i]!, match.id);
     }
   }
 
@@ -622,7 +635,7 @@ export class RummyRoom extends Room<RummyState> {
 
     const entryFee = this.state.entryFee;
     const pot = entryFee * players.length;
-    const fee = Math.round(pot * PLATFORM_FEE_RATE);
+    const fee = Math.round(pot * (this.feeRate ?? PLATFORM_FEE_RATE));
     const payout = pot - fee;
     // No upfront debit ever happened (see the module-level note on
     // settlement timing) — the whole match settles in one deferred delta
@@ -640,6 +653,9 @@ export class RummyRoom extends Room<RummyState> {
         status: 'finished',
         winner_id: userIds[survivorIdx],
         finished_at: new Date().toISOString(),
+        end_reason: this.endReason,
+        duration_s: this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : null,
+        fee_amount: fee,
       })
       .select('id')
       .single();
@@ -660,7 +676,7 @@ export class RummyRoom extends Room<RummyState> {
     if (playersErr) console.error('[rummy] failed to insert rummy_match_players rows:', playersErr);
 
     for (let i = 0; i < players.length; i++) {
-      await this.settleSeat(i, userIds[i]!, payouts[i]!);
+      await this.settleSeat(i, userIds[i]!, payouts[i]!, match.id);
     }
   }
 }

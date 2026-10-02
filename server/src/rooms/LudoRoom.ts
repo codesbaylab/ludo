@@ -8,7 +8,7 @@ import {
   isSafeAbsoluteIndex,
   movableTokenIndices,
 } from '../rules';
-import { getSupabase, authorizeJoin, holdFunds, releaseFunds, settleWallet, Hold } from '../supabase';
+import { getSupabase, authorizeJoin, holdFunds, releaseFunds, settleWallet, getPlatformSettings, recordDiceCounts, Hold } from '../supabase';
 import { newRoomCode } from '../roomCode';
 
 interface JoinOptions {
@@ -67,6 +67,11 @@ export class LudoRoom extends Room<LudoState> {
   private sessionUserIds: Record<string, string> = {};
   // Reserved stake per session (see holdFunds). Entries are removed as they're released/settled.
   private holds: Record<string, Hold> = {};
+  // Admin-editable fee, read when the table is first joined so a running match keeps the fee it started with.
+  private feeRate: number | null = null;
+  private startedAt = 0;
+  private diceCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0 };
+  private diceFlushed = false;
 
   onCreate(options: CreateOptions) {
     this.rollTimeoutMs = options.rollTimeoutMs ?? 15000;
@@ -114,6 +119,11 @@ export class LudoRoom extends Room<LudoState> {
     // is a real, playing participant. Real-money stakes are on the line, so
     // this is enforced here (the authoritative room), not just by hiding
     // the "Play" buttons client-side.
+    const settings = await getPlatformSettings();
+    if (this.feeRate === null) this.feeRate = settings.feeRate;
+    // Admin switches: maintenance blocks every new join; cash tables off blocks stake > 0 tables.
+    if (settings.maintenance) throw new ServerError(4503, 'maintenance');
+    if (this.state.stake > 0 && !settings.cashTables) throw new ServerError(4504, 'cash_tables_off');
     const check = await authorizeJoin(options, this.state.stake > 0);
     if (!check.ok) {
       if (check.reason === 'banned') {
@@ -150,6 +160,7 @@ export class LudoRoom extends Room<LudoState> {
 
     if (this.state.players.every((p) => p.connected)) {
       this.state.started = true;
+      this.startedAt = Date.now();
       this.state.statusMessage = `${this.state.players[0]!.name}'s turn.`;
       this.armRollTimer(0);
     } else {
@@ -182,7 +193,7 @@ export class LudoRoom extends Room<LudoState> {
       // reconnect either way.
       const reason = `${player.name} left the game.`;
       this.state.statusMessage = reason;
-      this.checkForfeitWin(reason);
+      this.checkForfeitWin(reason, 'forfeit');
       return;
     }
 
@@ -193,7 +204,7 @@ export class LudoRoom extends Room<LudoState> {
       // Grace period expired without a reconnect — they're gone for good.
       const reason = `${player.name} disconnected and never reconnected.`;
       this.state.statusMessage = reason;
-      this.checkForfeitWin(reason);
+      this.checkForfeitWin(reason, 'timeout');
       return;
     }
 
@@ -225,11 +236,11 @@ export class LudoRoom extends Room<LudoState> {
    *  the departed player — those timers never checked connection status,
    *  so they already auto-play an absent player's turn the same way they
    *  already auto-play an idle-but-connected one) carries on unaffected. */
-  private checkForfeitWin(reason: string) {
+  private checkForfeitWin(reason: string, kind: 'forfeit' | 'timeout') {
     const stillConnected = this.state.players.filter((p) => p.connected);
     if (stillConnected.length !== 1) return;
     const winnerIdx = this.state.players.indexOf(stillConnected[0]!);
-    this.declareWinner(winnerIdx, `${stillConnected[0]!.name} wins — ${reason}`);
+    this.declareWinner(winnerIdx, `${stillConnected[0]!.name} wins — ${reason}`, kind);
   }
 
   // --- Turn flow -----------------------------------------------------
@@ -256,6 +267,7 @@ export class LudoRoom extends Room<LudoState> {
   private resolveRoll(playerIdx: number) {
     const player = this.state.players[playerIdx]!;
     const result = 1 + Math.floor(Math.random() * 6);
+    this.diceCounts[result] = (this.diceCounts[result] ?? 0) + 1;
     this.state.diceValue = result;
     this.state.rollSeq++;
     this.state.consecutiveSixes = result === 6 ? this.state.consecutiveSixes + 1 : 0;
@@ -412,13 +424,14 @@ export class LudoRoom extends Room<LudoState> {
     }
   }
 
-  private declareWinner(winnerIdx: number, statusMessage: string) {
+  private declareWinner(winnerIdx: number, statusMessage: string, endReason: 'normal' | 'forfeit' | 'timeout' = 'normal') {
     const winner = this.state.players[winnerIdx]!;
     this.state.gameOver = true;
     this.state.winnerColor = winner.color;
     this.state.statusMessage = statusMessage;
     this.clearTimers();
-    this.persistResult(winnerIdx).catch((err) => console.error('[ludo] persistResult failed:', err));
+    this.flushDice();
+    this.persistResult(winnerIdx, endReason).catch((err) => console.error('[ludo] persistResult failed:', err));
   }
 
   private passTurn() {
@@ -496,10 +509,17 @@ export class LudoRoom extends Room<LudoState> {
 
   /** Anything still reserved when the room goes away (match never settled) is refunded. */
   async onDispose() {
+    this.flushDice(); // a game that never finished still counts for the dice-fairness check
     await Promise.all(Object.keys(this.holds).map((sid) => this.releaseHold(sid)));
   }
 
-  private async persistResult(winnerIdx: number) {
+  private flushDice() {
+    if (this.diceFlushed) return;
+    this.diceFlushed = true;
+    recordDiceCounts(this.diceCounts).catch(() => {});
+  }
+
+  private async persistResult(winnerIdx: number, endReason: string) {
     const supabase = getSupabase();
     if (!supabase) return;
 
@@ -517,6 +537,10 @@ export class LudoRoom extends Room<LudoState> {
         status: 'finished',
         winner_id: userIds[winnerIdx],
         finished_at: new Date().toISOString(),
+        end_reason: endReason,
+        player_count: players.length,
+        duration_s: this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : null,
+        fee_amount: this.state.stake > 0 ? Math.round(this.state.stake * players.length * (this.feeRate ?? 0.1)) : 0,
       })
       .select('id')
       .single();
@@ -536,7 +560,7 @@ export class LudoRoom extends Room<LudoState> {
 
     if (this.state.stake > 0) {
       const pot = this.state.stake * players.length;
-      const fee = Math.round(pot * 0.1);
+      const fee = Math.round(pot * (this.feeRate ?? 0.1));
       const payout = pot - fee;
       // increment_wallet_balance does `balance = balance + delta` in one
       // UPDATE statement (see migration add_atomic_increment_wallet_balance_rpc),
@@ -549,7 +573,7 @@ export class LudoRoom extends Room<LudoState> {
         const sid = players[i]!.sessionId;
         const reserved = this.holds[sid]?.amount ?? 0;
         delete this.holds[sid];
-        await settleWallet(uid, delta, reserved);
+        await settleWallet(uid, delta, reserved, 'match_result', 'match', match.id);
       }
     }
   }

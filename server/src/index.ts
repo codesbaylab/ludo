@@ -1,13 +1,14 @@
 import http from 'http';
 import express from 'express';
 import cors from 'cors';
-import { Server } from 'colyseus';
+import { Server, matchMaker } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { LudoRoom } from './rooms/LudoRoom';
 import { RummyRoom } from './rooms/RummyRoom';
 import { getSupabase, releaseAllHolds } from './supabase';
 import { getOrCreateDepositAddress } from './crypto/depositAddress';
 import { cryptoDepositsEnabled } from './crypto/tron';
+import { getWatcherStatus } from './crypto/depositWatcher';
 import { startDepositWatcher } from './crypto/depositWatcher';
 
 const app = express();
@@ -37,6 +38,44 @@ async function requireUser(req: express.Request, res: express.Response): Promise
   }
   return data.user.id;
 }
+
+const bootedAt = Date.now();
+
+// Live server facts for the admin System page. Admin-only: verified with the caller's Supabase token.
+app.get('/api/admin/status', async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  const supabase = getSupabase();
+  if (!supabase) { res.status(503).json({ error: 'database not configured' }); return; }
+  const { data: me } = await supabase.from('profiles').select('is_admin').eq('id', userId).single();
+  if (!me?.is_admin) { res.status(403).json({ error: 'admins only' }); return; }
+  try {
+    const listings = await matchMaker.query({});
+    let players = 0;
+    let inPlay = 0;
+    const rooms = listings.map((r: any) => {
+      const m = r.metadata ?? {};
+      const clients = Number(r.clients ?? 0);
+      players += clients;
+      if (r.name === 'ludo') inPlay += Number(m.stake ?? 0) * clients;
+      if (r.name === 'rummy' && !m.free) inPlay += Number(m.mode === 'pool' ? m.entryFee ?? 0 : (m.pointValue ?? 0) * 80) * clients;
+      return { id: r.roomId, game: r.name, clients, maxClients: r.maxClients, private: !!r.private, locked: !!r.locked, stake: m.stake ?? null, mode: m.mode ?? null, free: !!m.free, playerCount: m.playerCount ?? null };
+    });
+    const mem = process.memoryUsage();
+    res.json({
+      ok: true,
+      uptime_s: Math.round((Date.now() - bootedAt) / 1000),
+      started_at: new Date(bootedAt).toISOString(),
+      version: (process.env.RENDER_GIT_COMMIT || process.env.GIT_COMMIT || '').slice(0, 7) || 'unknown',
+      node: process.version,
+      memory_mb: Math.round(mem.rss / 1048576),
+      players, tables: rooms.length, in_play_inr: inPlay, rooms,
+      watcher: { ...getWatcherStatus(), configured: cryptoDepositsEnabled() },
+    });
+  } catch (err) {
+    res.status(500).json({ error: String((err as Error)?.message ?? err) });
+  }
+});
 
 app.post('/api/crypto/deposit-address', async (req, res) => {
   if (!cryptoDepositsEnabled()) {
