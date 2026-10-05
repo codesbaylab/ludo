@@ -1,7 +1,7 @@
 import { getSupabase } from '../supabase';
-import { deriveTronAccount } from './tron';
+import { deriveSolanaAddress } from './solana';
 
-// Returns the caller's permanent USDT (TRC-20) deposit address, deriving
+// Returns the caller's permanent USDT (Solana) deposit address, deriving
 // and persisting one on first call. Never returns/handles a private key —
 // only next_crypto_deposit_index() (server-only RPC) and the address
 // itself ever leave this function.
@@ -13,17 +13,18 @@ export async function getOrCreateDepositAddress(userId: string): Promise<string>
     .from('crypto_deposit_addresses')
     .select('address')
     .eq('user_id', userId)
+    .eq('chain', 'solana')
     .maybeSingle();
   if (existing.error) throw existing.error;
   if (existing.data) return existing.data.address;
 
   const { data: index, error: indexError } = await supabase.rpc('next_crypto_deposit_index');
   if (indexError) throw indexError;
-  const { address } = deriveTronAccount(index as number);
+  const address = deriveSolanaAddress(index as number);
 
   const inserted = await supabase
     .from('crypto_deposit_addresses')
-    .insert({ user_id: userId, derivation_index: index, address })
+    .insert({ user_id: userId, derivation_index: index, address, chain: 'solana' })
     .select('address')
     .single();
 
@@ -37,6 +38,7 @@ export async function getOrCreateDepositAddress(userId: string): Promise<string>
         .from('crypto_deposit_addresses')
         .select('address')
         .eq('user_id', userId)
+        .eq('chain', 'solana')
         .single();
       if (retry.error) throw retry.error;
       return retry.data.address;

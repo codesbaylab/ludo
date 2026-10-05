@@ -85,43 +85,28 @@ guarantee that the server's processed that handoff leave before the resume
 attempt lands, so `board.html` retries the reconnect a few times rather than
 treating a single failure as final.
 
-## Crypto deposits (USDT / TRC-20)
+## Crypto deposits (USDT on Solana)
 
-Custodial USDT deposits, no third-party payment gateway — see `CLAUDE.md`'s
-"Crypto deposits" section for the full design rationale. In short:
+Custodial USDT (SPL) deposits, no third-party payment gateway - see `CLAUDE.md`'s
+"Crypto deposits" section. Tron/TRC-20 was removed (gas cost too high for small deposits).
 
-- One permanent Tron address per user, deterministically derived from a
-  single server-side master seed (`TRON_MASTER_SEED`, a BIP39 mnemonic) plus
-  a per-user index — `src/crypto/tron.ts`. No private key is ever stored
-  anywhere; every one is re-derivable on demand from the seed + index alone.
-- `src/crypto/depositAddress.ts` + the `POST /api/crypto/deposit-address`
-  route in `index.ts` hand out (creating on first call) a user's address,
-  authenticated via their Supabase session token.
-- `src/crypto/depositWatcher.ts` polls TronGrid every 30s for confirmed
-  USDT transfers to known addresses and credits them atomically via the
-  `credit_crypto_deposit` Postgres RPC (idempotent on the transaction hash —
-  see the migration `add_crypto_usdt_deposits`).
-- Both env-gated the same way `SUPABASE_SERVICE_ROLE_KEY` already is: unset
-  `TRON_MASTER_SEED` and the server logs one warning and runs everything
-  else completely normally.
+- One permanent Solana address per user, derived from a single server-side BIP39 master seed
+  (`SOLANA_MASTER_SEED`; `TRON_MASTER_SEED` is still accepted so an existing phrase keeps working) at
+  `m/44'/501'/{index}'/0'` - `src/crypto/solana.ts`. No private key is stored; index 0 is the gas wallet.
+- `src/crypto/depositAddress.ts` + `POST /api/crypto/deposit-address` hand out a user's address.
+- `src/crypto/depositWatcher.ts` polls the RPC every 30s: finalized transactions on each address's USDT token
+  account, credited via the idempotent `credit_crypto_deposit` RPC (keyed on the tx signature).
+- Env: `SOLANA_MASTER_SEED` (required), `SOLANA_RPC_URL` (set a Helius/QuickNode-style URL in production; the
+  public RPC is rate-limited), `USDT_MINT_OVERRIDE` (devnet rehearsal), `MIN_DEPOSIT_USDT` (default 1).
+- Whoever sends USDT creates the recipient's token account (~0.002 SOL rent); exchanges normally do this.
 
-**To generate a master seed** (do this once, keep the output somewhere safe,
-set it as `TRON_MASTER_SEED` in Render's dashboard — never in `.env`, never
-committed, never logged):
+**Generate a seed** once, keep it safe, set it in Render's dashboard only:
 ```
-node -e "console.log(require('tronweb').TronWeb.createRandom().mnemonic.phrase)"
+node -e "console.log(require('bip39').generateMnemonic())"
 ```
 
-**Important, unverified from this repo's dev environment:** the TronGrid API
-calls in `depositWatcher.ts` could not be exercised against a real network
-response while building this — outbound requests to `api.trongrid.io` are
-blocked by that sandbox's network policy. The code is written against
-TronGrid's documented API shape and the database-level crediting/idempotency
-logic *has* been verified directly against the real Supabase project, but
-the TronGrid integration itself needs a real run before it's trusted with
-real funds. `USDT_CONTRACT_ADDRESS_OVERRIDE` + `TRONGRID_API_BASE` exist
-specifically to let this be rehearsed end-to-end against Tron's Shasta/Nile
-testnet (using a test TRC-20 token) first.
+**Not yet exercised against a live Solana RPC** from the dev sandbox - the derivation and the transfer parsing
+are unit-checked; rehearse on devnet (`SOLANA_RPC_URL` + `USDT_MINT_OVERRIDE`) before real funds.
 
 **Not built yet, on purpose (see CLAUDE.md):** withdrawals, automated
 sweeping to cold storage (do this manually/periodically for now — funds sit

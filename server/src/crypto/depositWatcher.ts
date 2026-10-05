@@ -1,54 +1,52 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabase } from '../supabase';
-import { USDT_CONTRACT_ADDRESS, cryptoDepositsEnabled } from './tron';
+import { USDT_MINT, USDT_DECIMALS, cryptoDepositsEnabled, getConnection, usdtTokenAccount } from './solana';
 
-// api.trongrid.io could not be reached from this project's own dev sandbox
-// (network policy blocks it — only a handful of package registries are
-// allowlisted there) so this integration is written against TronGrid's
-// documented API shape but has NOT been exercised against a real response.
-// Rehearse this end-to-end against Shasta/Nile testnet (see
-// server/README.md "Crypto deposits") before trusting it with real funds.
-const TRONGRID_API_BASE = process.env.TRONGRID_API_BASE?.trim() || 'https://api.trongrid.io';
+// Deposits are detected by watching each user's USDT token account (the associated token account of their
+// deposit address). Only FINALIZED transactions are read, so nothing can be reorged away after crediting.
+const ASSUMED_CONFIRMATIONS = 32;
 
-// TronGrid's own confirmed-transaction filter (only_confirmed=true) queries
-// its "solidity" node, which only ever exposes blocks Tron's own consensus
-// already considers irreversible — roughly 19 blocks / ~1 minute behind the
-// chain tip. That's the industry-standard "safe" threshold for TRC-20 USDT,
-// so nothing here does its own block-counting on top of it; this constant
-// is only used as the recorded confirmations value for the audit trail.
-const ASSUMED_CONFIRMATIONS = 19;
-
-// Transfers smaller than this are ignored entirely (no deposit row, no credit). Faucets and spammers
-// send "dust" (e.g. 0.000001 USDT) that would otherwise show up as empty "₹0 deposits" in every history.
+// Transfers smaller than this are ignored entirely (dust / spam would otherwise show as empty deposits).
 const MIN_DEPOSIT_USDT = Number(process.env.MIN_DEPOSIT_USDT) > 0 ? Number(process.env.MIN_DEPOSIT_USDT) : 1;
 
 const POLL_INTERVAL_MS = 30_000;
-// Caps how many deposit addresses are polled concurrently per tick, so this
-// doesn't blow through TronGrid's free-tier rate limit as the user base
-// grows. Revisit (or add a TRON_PRO_API_KEY) if this ever needs to scale
-// past a few hundred addresses.
-const POLL_CONCURRENCY = 5;
+// Caps concurrent addresses per tick to stay inside RPC rate limits.
+const POLL_CONCURRENCY = 3;
+const SIGNATURE_LIMIT = 25;
 
-interface Trc20Transfer {
-  transaction_id: string;
-  to: string;
-  from: string;
-  value: string;
-  token_info?: { address?: string; decimals?: number };
+interface SolTransfer {
+  signature: string;
+  amountUsdt: number;
 }
 
-async function fetchTrc20TransfersTo(address: string): Promise<Trc20Transfer[]> {
-  const url =
-    `${TRONGRID_API_BASE}/v1/accounts/${address}/transactions/trc20` +
-    `?limit=50&contract_address=${USDT_CONTRACT_ADDRESS}&only_to=true&only_confirmed=true`;
-  const headers: Record<string, string> = {};
-  if (process.env.TRONGRID_API_KEY) headers['TRON-PRO-API-KEY'] = process.env.TRONGRID_API_KEY;
+/** Net USDT received by `owner` in one parsed transaction (post - pre of their USDT balance; 0 if none). */
+export function usdtReceived(tx: any, owner: string): number {
+  const meta = tx?.meta;
+  if (!meta || meta.err) return 0;
+  const sum = (list: any[] | null | undefined) =>
+    (list ?? [])
+      .filter((b) => b.mint === USDT_MINT && b.owner === owner)
+      .reduce((acc, b) => acc + Number(b.uiTokenAmount?.amount ?? 0), 0);
+  const delta = sum(meta.postTokenBalances) - sum(meta.preTokenBalances);
+  return delta > 0 ? delta / 10 ** USDT_DECIMALS : 0;
+}
 
-  const res = await fetch(url, { headers });
-  if (!res.ok) throw new Error(`TronGrid returned ${res.status} for ${address}`);
-  const body = (await res.json()) as { data?: unknown };
-  if (!Array.isArray(body?.data)) throw new Error(`unexpected TronGrid response shape for ${address}`);
-  return body.data as Trc20Transfer[];
+async function fetchTransfersTo(supabase: SupabaseClient, address: string): Promise<SolTransfer[]> {
+  const conn = getConnection();
+  const sigs = await conn.getSignaturesForAddress(usdtTokenAccount(address), { limit: SIGNATURE_LIMIT }, 'finalized');
+  const fresh = sigs.filter((s) => !s.err).map((s) => s.signature);
+  if (fresh.length === 0) return [];
+  // Skip transactions already credited, so a steady-state poll costs one DB query, not N RPC calls.
+  const { data } = await supabase.from('crypto_deposits').select('tx_hash').in('tx_hash', fresh);
+  const known = new Set((data ?? []).map((r) => r.tx_hash as string));
+  const out: SolTransfer[] = [];
+  for (const signature of fresh) {
+    if (known.has(signature)) continue;
+    const tx = await conn.getParsedTransaction(signature, { commitment: 'finalized', maxSupportedTransactionVersion: 0 });
+    const amountUsdt = usdtReceived(tx, address);
+    if (amountUsdt > 0) out.push({ signature, amountUsdt });
+  }
+  return out;
 }
 
 export interface KnownAddress {
@@ -57,7 +55,7 @@ export interface KnownAddress {
 }
 
 async function loadKnownAddresses(supabase: SupabaseClient): Promise<KnownAddress[]> {
-  const { data, error } = await supabase.from('crypto_deposit_addresses').select('user_id, address');
+  const { data, error } = await supabase.from('crypto_deposit_addresses').select('user_id, address').eq('chain', 'solana');
   if (error) {
     console.error('[crypto-watcher] failed to load deposit addresses:', error);
     return [];
@@ -74,52 +72,39 @@ async function loadUsdtInrRate(supabase: SupabaseClient): Promise<number> {
   return Number(data.usdt_inr_rate);
 }
 
-// Exported so the filtering/crediting logic can be unit-tested with a
-// mocked fetch + mocked Supabase client, without needing a real TronGrid
-// connection (blocked from this project's dev sandbox — see the
-// TRONGRID_API_BASE comment above).
 export async function processAddress(supabase: SupabaseClient, known: KnownAddress, rate: number): Promise<void> {
-  let transfers: Trc20Transfer[];
+  let transfers: SolTransfer[];
   try {
-    transfers = await fetchTrc20TransfersTo(known.address);
+    transfers = await fetchTransfersTo(supabase, known.address);
   } catch (err) {
     console.error(`[crypto-watcher] failed to fetch transfers for ${known.address}:`, err);
     return;
   }
 
   for (const transfer of transfers) {
-    // Defensive re-checks even though the query already filtered on these —
-    // never trust a single layer of filtering with real money on the line.
-    if (transfer.to !== known.address) continue;
-    if (transfer.token_info?.address !== USDT_CONTRACT_ADDRESS) continue;
+    if (!(transfer.amountUsdt >= MIN_DEPOSIT_USDT)) continue;
 
-    const decimals = transfer.token_info?.decimals ?? 6; // USDT on Tron uses 6 decimals
-    const amountUsdt = Number(transfer.value) / 10 ** decimals;
-    if (!(amountUsdt >= MIN_DEPOSIT_USDT)) continue;
-
+    // credit_crypto_deposit is idempotent on tx_hash, so re-seeing a transfer is a costless no-op.
     const { data, error } = await supabase.rpc('credit_crypto_deposit', {
       p_user_id: known.userId,
-      p_tx_hash: transfer.transaction_id,
+      p_tx_hash: transfer.signature,
       p_address: known.address,
-      p_amount_usdt: amountUsdt,
+      p_amount_usdt: transfer.amountUsdt,
       p_rate: rate,
       p_confirmations: ASSUMED_CONFIRMATIONS,
     });
 
     if (error) {
-      console.error(`[crypto-watcher] credit_crypto_deposit failed for tx ${transfer.transaction_id}:`, error);
+      console.error(`[crypto-watcher] credit_crypto_deposit failed for tx ${transfer.signature}:`, error);
       continue;
     }
     const result = Array.isArray(data) ? data[0] : data;
     if (result?.credited) {
       console.log(
-        `[crypto-watcher] credited ${amountUsdt} USDT (~₹${(amountUsdt * rate).toFixed(2)}) ` +
-        `to user ${known.userId} (tx ${transfer.transaction_id})`
+        `[crypto-watcher] credited ${transfer.amountUsdt} USDT (~₹${(transfer.amountUsdt * rate).toFixed(2)}) ` +
+        `to user ${known.userId} (tx ${transfer.signature})`
       );
     }
-    // credited === false means this tx_hash was already recorded by an
-    // earlier tick — expected steady-state noise (the same confirmed
-    // transfer keeps showing up in TronGrid's history), not an error.
   }
 }
 
@@ -132,7 +117,7 @@ export function getWatcherStatus() { return { ...watcherStatus }; }
 
 export function startDepositWatcher(): void {
   if (!cryptoDepositsEnabled()) {
-    console.warn('[crypto-watcher] TRON_MASTER_SEED not set — USDT deposit watching disabled.');
+    console.warn('[crypto-watcher] SOLANA_MASTER_SEED not set — USDT deposit watching disabled.');
     return;
   }
   const supabase = getSupabase();
@@ -165,7 +150,7 @@ export function startDepositWatcher(): void {
     }
   };
 
-  console.log(`[crypto-watcher] started (polling every ${POLL_INTERVAL_MS / 1000}s, contract ${USDT_CONTRACT_ADDRESS})`);
+  console.log(`[crypto-watcher] started (polling every ${POLL_INTERVAL_MS / 1000}s, mint ${USDT_MINT})`);
   tick();
 }
 

@@ -146,7 +146,7 @@ by a Supabase project for auth/wallet-ledger/match-history.
   balance, real games-played/wins/win-rate, real per-match results (via the `supabase-client.js`
   helpers above), and a real merged transaction list on `wallet.html` (match stakes/winnings +
   real USDT deposits, time-sorted together — see "Crypto deposits" below; no more mock/fabricated
-  entries in that list). `wallet.html`'s Deposit panel is a real USDT (TRC-20) address + QR code
+  entries in that list). `wallet.html`'s Deposit panel is a real USDT (Solana) address + QR code
   (fetched from the game server, not the Colyseus WS connection — see "Crypto deposits"); Withdraw
   is still the explicitly-labeled "Mock gateway" demo UI (deposits only so far, on purpose — see
   "Crypto deposits"). `profile.html`'s Log Out now actually calls `auth.signOut()` (it previously
@@ -1120,108 +1120,32 @@ deliberately trimmed).
 - **Tooling gotcha**: the Supabase MCP here declines SQL containing DROP FUNCTION / DELETE FROM, so
   migrations use stubs/forwarders and an `active` flag (referral levels) instead of deletes.
 
-## Crypto deposits (USDT / TRC-20)
+## Crypto deposits (USDT on Solana)
 
-Custodial, no third-party payment gateway (explicit product decision — the alternative would be a
-service like CoinPayments/BitPay, which the user wanted to avoid). Self-hosted: this app's own
-server holds the key material and derives/watches addresses itself, rather than a vault/custody
-service holding it on the app's behalf — a deliberate simple-to-start tradeoff (real risk: a
-compromised server means a compromised hot wallet) accepted for v1, with mitigations noted below.
+**Tron/TRC-20 was removed; Solana USDT (SPL) is the only network for deposits AND withdrawals** (Tron gas of
+$1-3 per deposit was too costly for small users). Custodial, self-hosted, no payment gateway.
 
-- **One deposit address per user, deterministically derived.** `server/src/crypto/tron.ts` reads
-  a single BIP39 mnemonic from `TRON_MASTER_SEED` (a server-only env var, never in the database,
-  never logged) and derives a Tron address + private key per user via `TronWeb.fromMnemonic(seed,
-  "m/44'/195'/0'/0/{index}")` — standard BIP44, Tron's coin type 195. Critically, **no private key
-  is ever stored anywhere** — every one is perfectly reproducible on demand from the seed + that
-  user's `derivation_index` alone (verified deterministic: same index always derives the same
-  address/key). Losing the database loses no money; losing the seed (without a separate backup of
-  the mnemonic) means every address it controls becomes permanently unsweepable.
-- **Race-free index allocation.** `crypto_deposit_index_seq` (a Postgres sequence) plus the
-  `next_crypto_deposit_index()` RPC hands out each user's index atomically — no address is ever
-  derived twice for two different users, and sequence gaps (e.g. from an aborted request) are
-  harmless by design.
-- **`server/src/crypto/depositAddress.ts`** — `getOrCreateDepositAddress(userId)`: reads
-  `crypto_deposit_addresses` first: existing user, existing row (Postgres `PRIMARY KEY (user_id)`
-  is the idempotency guard) — return it. New user — reserve an index, derive off-chain, insert.
-  Handles the insert racing against a concurrent request for the same user (Postgres error code
-  `23505`, unique violation) by simply reading back whatever the other request already wrote,
-  rather than erroring — verified directly against the real database (a duplicate insert for the
-  same `user_id` does hit `23505`, exactly as the retry branch expects).
-- **`POST /api/crypto/deposit-address`** (`server/src/index.ts`) — the one HTTP route on an
-  otherwise pure-WebSocket server (Colyseus doesn't need this; only crypto deposits do). Verifies
-  the caller via `Authorization: Bearer <supabase access_token>` (the same token supabase-js
-  already attaches to its own requests, just forwarded manually since this is a plain Express
-  route, not a Supabase Edge Function) using `supabase.auth.getUser(token)`. `cors()` is wide open
-  on origin here — deliberately: the actual access control is the bearer token, not the calling
-  origin, and this needs to be reachable from GitHub Pages, local dev, and any future domain
-  without maintaining an allowlist.
-- **`server/src/crypto/depositWatcher.ts`** — polls TronGrid (`GET
-  /v1/accounts/{address}/transactions/trc20?contract_address={USDT}&only_to=true&only_confirmed=true`)
-  every 30s for every known deposit address (small batches, `POLL_CONCURRENCY = 5`, to stay under
-  TronGrid's free-tier rate limit as the user base grows — add `TRONGRID_API_KEY` and raise this if
-  it ever needs to scale further). `only_confirmed=true` queries TronGrid's "solidity" node
-  specifically, which only ever exposes blocks Tron's own consensus already considers irreversible
-  (~19 blocks / ~1 minute behind the tip — the industry-standard "safe" threshold for TRC-20 USDT),
-  so nothing here does its own block-counting on top of that.
-  - **Contract-address check is the real security boundary.** USDT is itself just a token contract
-    on Tron; a transfer's `token_info.address` is checked against the one true USDT contract
-    (`TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t`, `USDT_CONTRACT_ADDRESS` in `tron.ts`) before anything is
-    credited. Skipping this would let anyone send a worthless look-alike token with USDT's name/
-    symbol and get real ₹ credited for it — verified with a unit test asserting a scam-contract
-    transfer alongside a genuine one only ever credits the genuine one.
-  - **Idempotent by design, not by accident.** `credit_crypto_deposit(...)` (the Postgres RPC —
-    migration `add_crypto_usdt_deposits`) does `insert into crypto_deposits (..., tx_hash, ...) on
-    conflict (tx_hash) do nothing` and only credits `wallets.balance` if that insert actually
-    happened (checked via PL/pgSQL's `FOUND`, which `on conflict do nothing` correctly sets false
-    when the row already existed) — so a transaction TronGrid's history surfaces again on a later
-    poll (the steady-state common case, not an error) is a costless no-op, never a double-credit.
-    Verified directly against the real database: crediting the same `tx_hash` twice credits the
-    wallet once, returns `credited: false` the second time, and leaves the balance unchanged.
-  - **USDT → ₹ conversion**: `crypto_settings.usdt_inr_rate` (a plain singleton-row table,
-    admin-editable via SQL/dashboard) — no live price-feed dependency, on purpose, for v1.
-- **`design/wallet.html`**: the Deposit panel calls the server endpoint above (lazily — only once
-  actually opened, since it's a network round trip that can hit Render's cold-start delay) and
-  renders the returned address as both text (with a Copy button) and a QR code (`qrcode-generator`
-  from jsdelivr — a plain dependency-free script, not a build-step library, so it works the same
-  way `colyseus.js`/`supabase-js` already do from CDN). A clear warning that TRC-20 is the *only*
-  supported network sits above the address, since funds sent on any other network are unrecoverable.
-  "Transaction History" now merges two real sources — match results and `crypto_deposits` (via the
-  new `ludoFetchCryptoDeposits` helper in `supabase-client.js`) — sorted together by time; no more
-  mock/fabricated entries anywhere in that list.
-- **Dust filter + Nile rehearsal (verified)**: a live Nile-testnet run credited a 1000 test-USDT faucet
-  transfer exactly once (₹100,000 at the ₹100 rate, one ledger row) and also recorded a 0.000001 USDT
-  dust transfer as a ₹0.00 deposit. The watcher now ignores transfers under `MIN_DEPOSIT_USDT` (default
-  1; env override) and `wallet.html` hides ₹0 deposit rows. **While `TRONGRID_API_BASE` /
-  `USDT_CONTRACT_ADDRESS_OVERRIDE` point at Nile, credited money is fake — remove both variables
-  before real users deposit, and reverse any testnet credit with an admin adjustment.**
-- **Sweep tool (`server/src/tools/sweep.ts`, `npm run sweep`)**: a manual, run-on-your-own-computer CLI that
-  moves USDT from the per-user deposit addresses (derivation index >= 1) into one destination wallet
-  (`--to T…`). Never runs on Render. Index 0 of the seed (TronLink's "General" wallet) is the gas wallet: the
-  tool tops each deposit address up with TRX from it, then sends that address's whole USDT balance with a
-  `transfer(address,uint256)` signed by the re-derived key. Dry run is the default (`--execute` + typing
-  SWEEP to send); the address list comes from the DB (SUPABASE_URL + service key) or `--max-index N`;
-  refuses a destination that is itself a deposit address; keys never printed; appends `sweep-log.jsonl`.
-  Same env vars as Render for testnet (TRONGRID_API_BASE / USDT_CONTRACT_ADDRESS_OVERRIDE).
-  **Verified**: balance read against the real Nile chain (1000.000001 USDT at index 3), dry run, argument
-  guards. **Not yet verified: the `--execute` send path** (needs the real seed; first run it on Nile against
-  the 1000 test USDT at index 3 before ever using it on mainnet).
-- **Not built yet, on purpose**: *automated/scheduled* sweeping of collected USDT (the manual tool above exists; do it by hand for now, keeping v1 simpler and the
-  blast radius of a server compromise limited to whatever hasn't been swept out yet); live USD/INR
-  pricing. Withdrawal *requests* are built now — see "Withdrawals" below.
-- **Verification note**: `api.trongrid.io` is blocked by this project's own dev sandbox's network
-  policy (only a handful of package registries are allowlisted there), so the TronGrid HTTP
-  integration itself could only be written against its documented API shape and unit-tested with a
-  mocked `fetch` — not exercised against a real response from this environment. Everything else
-  (address derivation determinism, the atomic-credit/idempotency RPC, the deposit-panel UI
-  end-to-end with a mocked server response) *was* verified for real — directly against the live
-  Supabase project for the database logic, and in a real Chromium browser for the UI. Rehearse the
-  TronGrid piece specifically against Tron's Shasta/Nile testnet (`USDT_CONTRACT_ADDRESS_OVERRIDE`
-  + `TRONGRID_API_BASE` exist for exactly this) before this touches real mainnet funds.
-- **Legal note**: accepting/custodying crypto deposits for users can plausibly make this platform
-  a "Virtual Asset Service Provider" under Indian law (FIU-IND/PMLA registration, TDS deduction
-  duties under Section 194S) — a second, separate layer of legal exposure on top of the real-money
-  Ludo question already flagged elsewhere in this file. Not something resolved here; flagged for
-  whenever this goes further than internal testing.
+- **Addresses**: `server/src/crypto/solana.ts` derives one address per user from `SOLANA_MASTER_SEED`
+  (`TRON_MASTER_SEED` still accepted as a fallback) at `m/44'/501'/{index}'/0'` (SLIP-0010 ed25519). No key is
+  stored. Index 0 = gas wallet. `next_crypto_deposit_index()` allocates indexes. `crypto_deposit_addresses` PK is
+  now `(user_id, chain)`; the old Tron row(s) stay in the table (chain='tron') but are no longer served or watched.
+  `crypto_deposits`/`crypto_withdrawals` have a `chain` column (old rows 'tron', new 'solana').
+- **Watcher** (`depositWatcher.ts`): every 30s, `getSignaturesForAddress` on each address's USDT token account
+  (finalized only), skips signatures already in `crypto_deposits`, parses the rest and credits the net USDT
+  received by the owner for the exact USDT mint (`usdtReceived`; look-alike mints ignored) via the idempotent
+  `credit_crypto_deposit` (tx_hash = signature). Dust under `MIN_DEPOSIT_USDT` (default 1) ignored.
+  Env: `SOLANA_RPC_URL` (use a provider URL in prod), `USDT_MINT_OVERRIDE` (devnet rehearsal).
+- **Sender pays the recipient's token-account rent** (~0.002 SOL); exchanges do this automatically.
+- **Sweep** (`npm run sweep -- --to <solana addr> [--execute]`, run by hand on your own PC): fee payer is the gas
+  wallet (index 0), so deposit addresses need no SOL; it also creates the destination token account if missing.
+  Dry run default. **Not yet run on devnet/mainnet - rehearse first.**
+- **Withdrawals**: `request_withdrawal` now validates a Solana base58 address (32-44 chars); payout is still manual.
+- **Verified**: tsc clean; derivation deterministic; transfer parsing (net delta, fake mint ignored, failed tx = 0).
+  **Not verified against a live Solana RPC or the DB credit path end-to-end.**
+- **Render**: set `SOLANA_MASTER_SEED` (or keep `TRON_MASTER_SEED`) and `SOLANA_RPC_URL`; remove
+  `TRONGRID_*` / `USDT_CONTRACT_ADDRESS_OVERRIDE`. The old Nile testnet credits are fake money.
+- **Legal note**: custodying crypto for users can plausibly make this a VASP under Indian law (FIU-IND/PMLA, TDS
+  194S) - separate from the real-money Ludo question; unresolved, flagged for anything beyond internal testing.
 
 ## Withdrawals
 
@@ -1247,7 +1171,7 @@ moved out of the per-user deposit addresses.
 - **RLS**: same shape as `crypto_deposits` — `crypto_withdrawals_select_own` (a user sees their own
   requests) + `crypto_withdrawals_select_admin` (`is_admin(auth.uid())` sees all). No client insert
   policy on the table itself — the only way a row is created is through `request_withdrawal()`.
-- **`design/wallet.html`**: the Withdraw panel now takes a real amount + TRC-20 address and calls
+- **`design/wallet.html`**: the Withdraw panel now takes a real amount + Solana address and calls
   `request_withdrawal` directly; "Transaction History" merges withdrawals in as a third source
   alongside match results and deposits, showing Pending/Paid/Rejected status per row.
 - **`design/admin.html`**: a "Withdrawal Requests" section lists pending (and past) requests with
