@@ -1140,8 +1140,11 @@ $1-3 per deposit was too costly for small users). Custodial, self-hosted, no pay
   wallet (index 0), so deposit addresses need no SOL; it also creates the destination token account if missing.
   Dry run default. **Not yet run on devnet/mainnet - rehearse first.**
 - **Withdrawals**: `request_withdrawal` now validates a Solana base58 address (32-44 chars); payout is still manual.
-- **Verified**: tsc clean; derivation deterministic; transfer parsing (net delta, fake mint ignored, failed tx = 0).
-  **Not verified against a live Solana RPC or the DB credit path end-to-end.**
+- **USDT and USDC both accepted** (`ASSETS` in `solana.ts`; `USDT_MINT_OVERRIDE` / `USDC_MINT_OVERRIDE` for devnet only - never set on prod).
+  `crypto_deposits.asset`; tx_hash is the bare signature for USDT, `<sig>:USDC` for USDC; `credit_crypto_deposit` has a 7-arg overload with `p_asset`.
+- **Verified on devnet** (`npm run test:devnet`, needs `DEVNET_PAYER_FILE` funded from faucet.solana.com): test USDT+USDC credited once
+  each, look-alike coin ignored, 2nd poll idempotent, real sweep `--execute` moved both coins. Watcher ran against a fake Supabase, so the
+  real DB credit path and mainnet are still unverified. Watcher polls every address every 30s (costly on Helius free: ~5 addresses) - planned: on-demand + slow safety net.
 - **Render**: set `SOLANA_MASTER_SEED` (or keep `TRON_MASTER_SEED`) and `SOLANA_RPC_URL`; remove
   `TRONGRID_*` / `USDT_CONTRACT_ADDRESS_OVERRIDE`. The old Nile testnet credits are fake money.
 - **Legal note**: custodying crypto for users can plausibly make this a VASP under Indian law (FIU-IND/PMLA, TDS
