@@ -1,8 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { getSupabase } from '../supabase';
-import { USDT_MINT, USDT_DECIMALS, cryptoDepositsEnabled, getConnection, usdtTokenAccount } from './solana';
+import { ASSETS, Asset, USDT_DECIMALS, cryptoDepositsEnabled, getConnection, tokenAccount } from './solana';
 
-// Deposits are detected by watching each user's USDT token account (the associated token account of their
+// Deposits are detected by watching each user's USDT and USDC token accounts (the associated token accounts of their
 // deposit address). Only FINALIZED transactions are read, so nothing can be reorged away after crediting.
 const ASSUMED_CONFIRMATIONS = 32;
 
@@ -16,35 +16,42 @@ const SIGNATURE_LIMIT = 25;
 
 interface SolTransfer {
   signature: string;
+  txHash: string; // unique per (tx, coin): the bare signature for USDT, `<sig>:USDC` for USDC
+  asset: Asset['symbol'];
   amountUsdt: number;
 }
 
-/** Net USDT received by `owner` in one parsed transaction (post - pre of their USDT balance; 0 if none). */
-export function usdtReceived(tx: any, owner: string): number {
+/** Net amount of `mint` received by `owner` in one parsed transaction (post - pre; 0 if none). */
+export function usdtReceived(tx: any, owner: string, mint: string): number {
   const meta = tx?.meta;
   if (!meta || meta.err) return 0;
   const sum = (list: any[] | null | undefined) =>
     (list ?? [])
-      .filter((b) => b.mint === USDT_MINT && b.owner === owner)
+      .filter((b) => b.mint === mint && b.owner === owner)
       .reduce((acc, b) => acc + Number(b.uiTokenAmount?.amount ?? 0), 0);
   const delta = sum(meta.postTokenBalances) - sum(meta.preTokenBalances);
   return delta > 0 ? delta / 10 ** USDT_DECIMALS : 0;
 }
 
+const txHashFor = (signature: string, a: Asset) => (a.symbol === 'USDT' ? signature : `${signature}:${a.symbol}`);
+
 async function fetchTransfersTo(supabase: SupabaseClient, address: string): Promise<SolTransfer[]> {
   const conn = getConnection();
-  const sigs = await conn.getSignaturesForAddress(usdtTokenAccount(address), { limit: SIGNATURE_LIMIT }, 'finalized');
-  const fresh = sigs.filter((s) => !s.err).map((s) => s.signature);
-  if (fresh.length === 0) return [];
-  // Skip transactions already credited, so a steady-state poll costs one DB query, not N RPC calls.
-  const { data } = await supabase.from('crypto_deposits').select('tx_hash').in('tx_hash', fresh);
-  const known = new Set((data ?? []).map((r) => r.tx_hash as string));
   const out: SolTransfer[] = [];
-  for (const signature of fresh) {
-    if (known.has(signature)) continue;
-    const tx = await conn.getParsedTransaction(signature, { commitment: 'finalized', maxSupportedTransactionVersion: 0 });
-    const amountUsdt = usdtReceived(tx, address);
-    if (amountUsdt > 0) out.push({ signature, amountUsdt });
+  for (const asset of ASSETS) {
+    const sigs = await conn.getSignaturesForAddress(tokenAccount(address, asset.mint), { limit: SIGNATURE_LIMIT }, 'finalized');
+    const fresh = sigs.filter((s) => !s.err).map((s) => s.signature);
+    if (fresh.length === 0) continue;
+    // Skip transactions already credited, so a steady-state poll costs one DB query, not N RPC calls.
+    const { data } = await supabase.from('crypto_deposits').select('tx_hash').in('tx_hash', fresh.map((s) => txHashFor(s, asset)));
+    const known = new Set((data ?? []).map((r) => r.tx_hash as string));
+    for (const signature of fresh) {
+      const txHash = txHashFor(signature, asset);
+      if (known.has(txHash)) continue;
+      const tx = await conn.getParsedTransaction(signature, { commitment: 'finalized', maxSupportedTransactionVersion: 0 });
+      const amountUsdt = usdtReceived(tx, address, asset.mint);
+      if (amountUsdt > 0) out.push({ signature, txHash, asset: asset.symbol, amountUsdt });
+    }
   }
   return out;
 }
@@ -87,11 +94,12 @@ export async function processAddress(supabase: SupabaseClient, known: KnownAddre
     // credit_crypto_deposit is idempotent on tx_hash, so re-seeing a transfer is a costless no-op.
     const { data, error } = await supabase.rpc('credit_crypto_deposit', {
       p_user_id: known.userId,
-      p_tx_hash: transfer.signature,
+      p_tx_hash: transfer.txHash,
       p_address: known.address,
       p_amount_usdt: transfer.amountUsdt,
       p_rate: rate,
       p_confirmations: ASSUMED_CONFIRMATIONS,
+      p_asset: transfer.asset,
     });
 
     if (error) {
@@ -101,7 +109,7 @@ export async function processAddress(supabase: SupabaseClient, known: KnownAddre
     const result = Array.isArray(data) ? data[0] : data;
     if (result?.credited) {
       console.log(
-        `[crypto-watcher] credited ${transfer.amountUsdt} USDT (~₹${(transfer.amountUsdt * rate).toFixed(2)}) ` +
+        `[crypto-watcher] credited ${transfer.amountUsdt} ${transfer.asset} (~₹${(transfer.amountUsdt * rate).toFixed(2)}) ` +
         `to user ${known.userId} (tx ${transfer.signature})`
       );
     }
@@ -150,7 +158,7 @@ export function startDepositWatcher(): void {
     }
   };
 
-  console.log(`[crypto-watcher] started (polling every ${POLL_INTERVAL_MS / 1000}s, mint ${USDT_MINT})`);
+  console.log(`[crypto-watcher] started (polling every ${POLL_INTERVAL_MS / 1000}s, mints ${ASSETS.map((a) => a.symbol + ' ' + a.mint).join(', ')})`);
   tick();
 }
 

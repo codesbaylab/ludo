@@ -78,7 +78,7 @@
   window.ludoFetchCryptoDeposits = async function (userId, limit) {
     const { data, error } = await window.ludoSupabase
       .from('crypto_deposits')
-      .select('tx_hash, amount_usdt, inr_credited, detected_at')
+      .select('tx_hash, amount_usdt, inr_credited, detected_at, asset')
       .eq('user_id', userId)
       .order('detected_at', { ascending: false })
       .limit(limit || 20);

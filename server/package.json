@@ -14,7 +14,8 @@
     "test:sim": "tsx src/test/simulateMatch.ts",
     "test:sim:rummy": "tsx src/test/simulateRummyMatch.ts",
     "test:rummy-engine": "tsx src/test/compareRummyEngine.ts",
-    "sweep": "tsx src/tools/sweep.ts"
+    "sweep": "tsx src/tools/sweep.ts",
+    "test:devnet": "tsx src/test/testDevnetDeposits.ts"
   },
   "dependencies": {
     "@colyseus/schema": "^2.0.35",

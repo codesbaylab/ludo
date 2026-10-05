@@ -72,15 +72,15 @@
 
     <!-- Deposit panel -->
     <div class="card" id="panel-deposit" style="margin-top:16px; display:none;">
-      <div class="section-title" style="margin-top:0;">Deposit USDT</div>
+      <div class="section-title" style="margin-top:0;">Deposit USDT / USDC</div>
       <div class="card" style="background:var(--yellow-soft); border:none; padding:12px 14px; margin-bottom:14px;">
-        <div style="font-size:12px; font-weight:700; color:#a36a00;">⚠️ Send USDT on the Solana network only (SPL token). Funds sent on any other network (Tron, Ethereum, BSC, etc.) cannot be recovered.</div>
+        <div style="font-size:12px; font-weight:700; color:#a36a00;">⚠️ Send USDT or USDC on the Solana network only. Funds sent on any other network or any other coin (Tron, Ethereum, BSC, etc.) cannot be recovered.</div>
       </div>
       <p class="hint" id="deposit-status" style="margin-top:0;">Loading your deposit address…</p>
       <div id="deposit-address-block" style="display:none; text-align:center;">
         <div id="deposit-qr" style="width:180px; margin:0 auto 14px; background:#fff; padding:10px; border-radius:12px; display:inline-block;"></div>
         <div class="field" style="text-align:left;">
-          <label>Your permanent USDT (Solana) address</label>
+          <label>Your permanent Solana address (USDT or USDC)</label>
           <div style="display:flex; gap:8px;">
             <input class="input" id="deposit-address-input" readonly style="font-family:monospace; font-size:12px;" />
             <button class="btn btn-secondary" id="btn-copy-address" style="white-space:nowrap;">Copy</button>
@@ -184,7 +184,7 @@
       const rate = Number(rateRes.data?.usdt_inr_rate ?? 90);
 
       document.getElementById('deposit-address-input').value = address;
-      document.getElementById('deposit-rate-hint').textContent = `Current rate: 1 USDT ≈ ₹${rate.toFixed(2)}`;
+      document.getElementById('deposit-rate-hint').textContent = `Current rate: 1 USDT / USDC ≈ ₹${rate.toFixed(2)}`;
 
       const qr = qrcode(0, 'M');
       qr.addData(address);
@@ -399,8 +399,8 @@
         time: d.detected_at,
         icon: '💵',
         iconBg: 'linear-gradient(135deg, #26a17b, #178a4c)', // Tether green
-        title: 'USDT Deposit',
-        subtitle: `${ludoTimeAgo(d.detected_at)} · ${Number(d.amount_usdt).toFixed(2)} USDT (Solana)`,
+        title: (d.asset || 'USDT') + ' Deposit',
+        subtitle: `${ludoTimeAgo(d.detected_at)} · ${Number(d.amount_usdt).toFixed(2)} ${d.asset || 'USDT'} (Solana)`,
         delta: Number(d.inr_credited),
       });
     });
