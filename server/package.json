@@ -12,6 +12,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node build/index.js",
     "test:sim": "tsx src/test/simulateMatch.ts",
+    "test:sim:bots": "tsx src/test/simulateBotMatch.ts",
     "test:sim:rummy": "tsx src/test/simulateRummyMatch.ts",
     "test:rummy-engine": "tsx src/test/compareRummyEngine.ts",
     "sweep": "tsx src/tools/sweep.ts",

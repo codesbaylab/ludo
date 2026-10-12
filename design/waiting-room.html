@@ -78,7 +78,8 @@
   let playerCount = [2, 4].includes(playersParam) ? playersParam : 4;
   // Private rooms: ?room=create makes one (host), ?code=ABC123 joins one (guest).
   const joinCode = (new URLSearchParams(location.search).get('code') || '').trim().toUpperCase();
-  const createPrivate = new URLSearchParams(location.search).get('room') === 'create';
+  const vsBots = new URLSearchParams(location.search).get('bots') === '1'; // server fills the other seats with bots
+  const createPrivate = vsBots || new URLSearchParams(location.search).get('room') === 'create';
   const isPrivate = !!joinCode || createPrivate;
   const isFree = stake <= 0;
   const pot = stake * playerCount;
@@ -90,10 +91,10 @@
   document.getElementById('max-players-value').textContent = String(playerCount);
 
   if (isFree) {
-    document.getElementById('table-badge').textContent = isPrivate ? 'Private Room' : 'Free Match';
+    document.getElementById('table-badge').textContent = vsBots ? 'vs Computer' : isPrivate ? 'Private Room' : 'Free Match';
     document.getElementById('table-badge').className = 'badge badge-ready';
     document.getElementById('prize-card').style.display = 'none';
-    document.getElementById('room-type').textContent = isPrivate ? 'Private · Free' : 'Public · Free';
+    document.getElementById('room-type').textContent = vsBots ? 'vs Computer · Free' : isPrivate ? 'Private · Free' : 'Public · Free';
   } else {
     document.getElementById('table-badge').textContent = `₹${stake} Table`;
     document.getElementById('prize-amount').textContent = `₹${payout}`;
@@ -150,7 +151,7 @@
           playerCount,
         };
         room = joinCode ? await client.joinById(joinCode, joinOptions)
-          : createPrivate ? await client.create('ludo', { ...joinOptions, private: true })
+          : createPrivate ? await client.create('ludo', { ...joinOptions, private: true, bots: vsBots })
           : await client.joinOrCreate('ludo', joinOptions);
       } catch (err) {
         // A wrong/finished/full code will never start working — say so instead
@@ -194,7 +195,8 @@
     }
 
     document.getElementById('room-code').textContent = room.roomId;
-    if (createPrivate) document.getElementById('start-hint').textContent = 'Share this room code with your friend — the game starts as soon as everyone has joined.';
+    if (vsBots) document.querySelector('.room-code-box').style.display = 'none';
+    if (createPrivate && !vsBots) document.getElementById('start-hint').textContent = 'Share this room code with your friend — the game starts as soon as everyone has joined.';
     document.getElementById('copy-code-btn').addEventListener('click', () => {
       navigator.clipboard?.writeText(room.roomId).catch(() => {});
     });

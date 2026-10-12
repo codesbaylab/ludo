@@ -77,6 +77,13 @@ by a Supabase project for auth/wallet-ledger/match-history.
   as true/false). Quick match, private rooms and join-by-code all work for free; a guest joining by code adopts
   the room's `free` flag from state. UI shows play coins (🪙), never ₹, and no wallet chip. Cash tables still
   require Pro. Verified live in Chrome with non-Pro, ₹0 accounts (wallets untouched, no match rows written).
+- **Ludo vs Computer**: lobby "🤖 Play vs Computer" -> `stake-confirm.html?stake=0&bots=1` (2/4 players) -> `waiting-room.html`
+  `client.create('ludo', {private:true, bots:true})`. `LudoRoom` (create option `bots`) forces stake 0 + private, seats the
+  human at seat 0 and fills the rest with connected bot seats (`botSeats`, names in `server/src/bot.ts`). Bots roll/pick on a
+  server timer (1.5s / 1.2s, `botDelayMs` overrides for tests) using `chooseBotToken` (capture > home > leave yard > safe/out
+  of danger > furthest). Bot games skip `persistResult` (no history/wallet) and dice stats, and just end when the human leaves
+  (no forfeit). Handoff/reconnect reuse the private-room `&code=` path. Verified with `npm run test:sim:bots` (full game vs 3
+  bots) + `test:sim`; NOT yet clicked through in a real browser (needs a Supabase login).
 - **Leave warnings**: Rummy cash/free board Exit asks "Leave this table?" (cash wording mentions losing the
   stake), the practice board asks "Leave this game?"; both via `ludoConfirm`.
 - **Installed-app staleness**: an iOS home-screen app resumes the last page frozen in memory and a cold start can

@@ -11,6 +11,7 @@ import {
 } from '../rules';
 import { getSupabase, authorizeJoin, holdFunds, releaseFunds, settleWallet, getPlatformSettings, recordDiceCounts, recordMatchRolls, Hold } from '../supabase';
 import { newRoomCode } from '../roomCode';
+import { BOT_NAMES, chooseBotToken } from '../bot';
 
 interface JoinOptions {
   name?: string;
@@ -21,6 +22,10 @@ interface JoinOptions {
 interface CreateOptions {
   // true = private table joined by code only (see onCreate).
   private?: boolean;
+  // Free table where the other seats are computer players (the lobby's "Play vs Computer").
+  bots?: boolean;
+  // Overridable so tests don't wait through the bots' "thinking" pauses.
+  botDelayMs?: number;
   stake?: number;
   // 2 or 4; defaults to 4 (a full table) when omitted or out of range.
   playerCount?: number;
@@ -75,6 +80,11 @@ export class LudoRoom extends Room<LudoState> {
   // Every roll in order, per seat, so a dispute ("I never got a 6") can be settled from stored data.
   private rollLog: number[][] = [];
   private diceFlushed = false;
+  // vs-Computer table: seats other than the human's are bots driven by the server.
+  private botSeats = new Set<number>();
+  private botTimer: any = null;
+  private botRollDelayMs = 1500;
+  private botPickDelayMs = 1200;
 
   onCreate(options: CreateOptions) {
     this.rollTimeoutMs = options.rollTimeoutMs ?? 15000;
@@ -87,6 +97,13 @@ export class LudoRoom extends Room<LudoState> {
     // Private table (created via the lobby's "Create Room"): a short shareable
     // code as the roomId, and hidden from automatic matchmaking so joinOrCreate
     // never drops strangers into it — friends join it by code (joinById) only.
+    if (options.botDelayMs !== undefined) { this.botRollDelayMs = options.botDelayMs; this.botPickDelayMs = options.botDelayMs; }
+    if (options.bots) {
+      // Bot tables are free, unrecorded and invite-only (nobody else may be seated).
+      options.private = true;
+      options.stake = 0;
+      this.diceFlushed = true; // keep bot rolls out of the dice-fairness stats
+    }
     if (options.private) {
       this.roomId = newRoomCode();
       this.setPrivate(true);
@@ -100,6 +117,16 @@ export class LudoRoom extends Room<LudoState> {
       for (let i = 0; i < 4; i++) player.tokens.push(new TokenState());
       state.players.push(player);
     });
+    if (options.bots) {
+      // Seat 0 is the human; every other seat is a connected bot from the start.
+      state.players.forEach((p, i) => {
+        if (i === 0) return;
+        p.sessionId = `bot-${i}`;
+        p.name = BOT_NAMES[i - 1] ?? `Bot ${i}`;
+        p.connected = true;
+        this.botSeats.add(i);
+      });
+    }
     this.setState(state);
     // Read by filterBy(['playerCount', 'stake']) in index.ts so joinOrCreate
     // only matches players who asked for the same table size and stake.
@@ -196,6 +223,7 @@ export class LudoRoom extends Room<LudoState> {
       // reconnect either way.
       const reason = `${player.name} left the game.`;
       this.state.statusMessage = reason;
+      if (this.botSeats.size > 0) { this.clearTimers(); return; } // room disposes itself once empty
       this.checkForfeitWin(reason, 'forfeit');
       return;
     }
@@ -207,6 +235,7 @@ export class LudoRoom extends Room<LudoState> {
       // Grace period expired without a reconnect — they're gone for good.
       const reason = `${player.name} disconnected and never reconnected.`;
       this.state.statusMessage = reason;
+      if (this.botSeats.size > 0) { this.clearTimers(); return; }
       this.checkForfeitWin(reason, 'timeout');
       return;
     }
@@ -475,6 +504,15 @@ export class LudoRoom extends Room<LudoState> {
       if (this.state.awaitingMove) return;
       this.resolveRoll(playerIdx);
     }, this.rollTimeoutMs);
+    // A bot rolls on its own after a short "thinking" beat.
+    if (this.botSeats.has(playerIdx)) {
+      this.botTimer?.clear();
+      this.botTimer = this.clock.setTimeout(() => {
+        if (this.state.gameOver || this.state.currentPlayerIdx !== playerIdx || this.state.awaitingMove || this.state.turnPassPending) return;
+        this.rollTimer?.clear();
+        this.resolveRoll(playerIdx);
+      }, this.botRollDelayMs);
+    }
   }
 
   private armSelectTimer(playerIdx: number, options: number[]) {
@@ -485,6 +523,18 @@ export class LudoRoom extends Room<LudoState> {
       if (!this.state.awaitingMove) return;
       this.autoPickToken(playerIdx, options);
     }, this.selectTimeoutMs);
+    if (this.botSeats.has(playerIdx)) {
+      this.botTimer?.clear();
+      this.botTimer = this.clock.setTimeout(() => {
+        if (this.state.gameOver || !this.state.awaitingMove || this.state.currentPlayerIdx !== playerIdx) return;
+        this.selectTimer?.clear();
+        const seats = this.state.players.map((p) => ({
+          color: p.color as Color,
+          tokens: p.tokens.map((t) => ({ state: t.state, pos: t.pos })),
+        }));
+        this.applyMove(playerIdx, chooseBotToken(seats, playerIdx, this.state.diceValue, options), this.state.diceValue);
+      }, this.botPickDelayMs);
+    }
   }
 
   /** Tells clients a fresh countdown window just started, and how long it
@@ -501,6 +551,7 @@ export class LudoRoom extends Room<LudoState> {
     this.rollTimer?.clear();
     this.selectTimer?.clear();
     this.passTurnTimer?.clear();
+    this.botTimer?.clear();
   }
 
   // --- Persistence ------------------------------------------------------
@@ -529,6 +580,7 @@ export class LudoRoom extends Room<LudoState> {
   }
 
   private async persistResult(winnerIdx: number, endReason: string) {
+    if (this.botSeats.size > 0) return; // practice vs computer: no history, no wallet
     const supabase = getSupabase();
     if (!supabase) return;
 
