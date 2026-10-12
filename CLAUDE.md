@@ -83,11 +83,14 @@ by a Supabase project for auth/wallet-ledger/match-history.
   server timer (1.5s / 1.2s, `botDelayMs` overrides for tests) using `chooseBotToken` (capture > home > leave yard > safe/out
   of danger > furthest). Bot games skip `persistResult` (no history/wallet) and dice stats, and just end when the human leaves
   (no forfeit). Handoff/reconnect reuse the private-room `&code=` path. Verified with `npm run test:sim:bots` (full game vs 3
-  bots) + `test:sim`; NOT yet clicked through in a real browser (needs a Supabase login).
+  bots) + `test:sim`; NOT yet clicked through in a real browser (needs a Supabase login). Server must be redeployed on Render for it.
 - **Branding**: the app is **Table Kings** (was "Ludo Online") — gold crown + spade on racing green (`#0f2b24`). Name lives in
   `manifest.json`, every page `<title>` and `apple-mobile-web-app-title`. Icons in `design/icons/`: `icon-192/512` (rounded,
   transparent corners), `apple-touch-icon` (square, full-bleed), `icon-maskable-192/512` (square, art in the 80% safe zone).
-  Regenerated from SVG via headless Chromium + ImageMagick (no committed source SVG; `design/icon-preview.html` has the artwork).
+  Regenerated from SVG via headless Chromium + ImageMagick (no committed source SVG; `design/icon-preview.html` has the artwork —
+  an unlinked standalone page with the 3 options considered: Chaupar / Royal Ludo / Table Kings; Table Kings won). `login.html` and the
+  lobby top bar show `icons/icon-192.png` as the logo (login tagline: "Ludo & Rummy · play for real prizes"); the reset-password and
+  Rummy lobby headers still use emoji tiles. Installed apps must be removed/re-added to pick up a new home-screen icon.
 - **Custom cash rooms (Pro)**: lobby Cash Tables "➕ Create Cash Room" -> `stake-confirm.html?room=create&custom=1` (stake chips
   or typed amount, ₹10-₹5000 whole rupees, 2/4 players) -> `waiting-room.html?stake=X&room=create` -> `client.create('ludo',
   {private:true, stake})`. Private + stake>0 needs nothing new server-side: the host's `onJoin` already runs the Pro check +
@@ -177,7 +180,7 @@ by a Supabase project for auth/wallet-ledger/match-history.
   status badge (`#server-status-badge`) polls `GET {SERVER_URL}/health` (same `?server=`
   override/default-URL pattern as `game.js`/`waiting-room.html`, WS scheme swapped for HTTP) every
   4s while down, greying out (`.server-gated.disabled`: `opacity:.45; filter:grayscale(.4);
-  pointer-events:none`) Quick Match/Create Room/Join-with-code/Join Room/both Cash Tables tiles
+  pointer-events:none`) Quick Match/Create Room/Play vs Computer/Join-with-code/Join Room/Create Cash Room/both Cash Tables tiles
   until it succeeds — added after a real cold-start trace showed a player could tap straight into
   a dead room and only find out in the waiting room, a screen later, that the server wasn't up
   yet. **Rummy is deliberately not gated** (no `.server-gated` class) since it's fully client-side,

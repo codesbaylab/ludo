@@ -33,6 +33,10 @@ a valid game-over state with a winner at exactly 4 tokens home. This is the
 main regression check after touching `rules.ts` or `LudoRoom.ts` — run it
 after any change to either.
 
+Also run after touching `LudoRoom.ts`:
+- `npm run test:sim:bots` — one real client plays a full game against 3 server-driven bots (vs-Computer tables).
+- `npm run test:sim:cash` — custom cash-room stake clamping (₹10–₹5000) and a guest joining by code adopting the host's stake.
+
 There's no unit-test framework wired up yet; `rules.ts` is written as pure
 functions specifically so it's easy to add one later without touching
 `LudoRoom.ts`.
