@@ -84,6 +84,10 @@ by a Supabase project for auth/wallet-ledger/match-history.
   of danger > furthest). Bot games skip `persistResult` (no history/wallet) and dice stats, and just end when the human leaves
   (no forfeit). Handoff/reconnect reuse the private-room `&code=` path. Verified with `npm run test:sim:bots` (full game vs 3
   bots) + `test:sim`; NOT yet clicked through in a real browser (needs a Supabase login).
+- **Branding**: the app is **Table Kings** (was "Ludo Online") — gold crown + spade on racing green (`#0f2b24`). Name lives in
+  `manifest.json`, every page `<title>` and `apple-mobile-web-app-title`. Icons in `design/icons/`: `icon-192/512` (rounded,
+  transparent corners), `apple-touch-icon` (square, full-bleed), `icon-maskable-192/512` (square, art in the 80% safe zone).
+  Regenerated from SVG via headless Chromium + ImageMagick (no committed source SVG; `design/icon-preview.html` has the artwork).
 - **Leave warnings**: Rummy cash/free board Exit asks "Leave this table?" (cash wording mentions losing the
   stake), the practice board asks "Leave this game?"; both via `ludoConfirm`.
 - **Installed-app staleness**: an iOS home-screen app resumes the last page frozen in memory and a cold start can
