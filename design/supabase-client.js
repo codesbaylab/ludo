@@ -116,3 +116,10 @@
     return !!data?.is_admin;
   };
 })();
+
+// Rupee amount for display: Indian digit grouping (51,04,000), decimals only when the amount has paise.
+function ludoMoney(n) {
+  const v = Number(n) || 0;
+  const whole = Math.abs(v - Math.round(v)) < 0.005;
+  return '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
+}

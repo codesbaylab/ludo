@@ -123,7 +123,7 @@
       document.getElementById('stat-pot').textContent = `₹${pot}`;
       document.getElementById('stat-fee').textContent = `-₹${fee}`;
       document.getElementById('stat-payout').textContent = `₹${payout}`;
-      document.getElementById('stat-after').textContent = `₹${(WALLET_BALANCE - stake).toFixed(2)}`;
+      document.getElementById('stat-after').textContent = ludoMoney(WALLET_BALANCE - stake);
       document.getElementById('confirm-btn').textContent = customStake ? (stakeValid() ? `Create Room & Lock ₹${stake}` : 'Enter a stake') : `Confirm & Lock ₹${stake}`;
       document.getElementById('confirm-hint').textContent = 'Your stake is locked the moment you join and returned in full if the table never fills.';
     }

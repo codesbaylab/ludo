@@ -645,7 +645,7 @@
       ludoSupabase.from('profiles').select('display_name').eq('id', session.user.id).single(),
       ludoSupabase.from('wallets').select('balance').eq('user_id', session.user.id).single(),
     ]);
-    if (wallet) document.getElementById('wallet-chip').textContent = `💰 ₹${Number(wallet.balance).toFixed(2)}`;
+    if (wallet) document.getElementById('wallet-chip').textContent = `💰 ${ludoMoney(wallet.balance)}`;
 
     client = new Colyseus.Client(SERVER_URL);
     let joined;

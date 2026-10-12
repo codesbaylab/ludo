@@ -224,7 +224,7 @@
     const { data: { session } } = await ludoSupabase.auth.getSession();
     if (!session) return;
     const { data: wallet } = await ludoSupabase.from('wallets').select('balance').eq('user_id', session.user.id).single();
-    if (wallet) document.getElementById('wallet-chip').textContent = `💰 ₹${Number(wallet.balance).toFixed(2)}`;
+    if (wallet) document.getElementById('wallet-chip').textContent = `💰 ${ludoMoney(wallet.balance)}`;
     const { data: profile } = await ludoSupabase.from('profiles').select('display_name').eq('id', session.user.id).single();
     const name = profile?.display_name || session.user.email || 'Player';
 

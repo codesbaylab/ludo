@@ -69,7 +69,7 @@
       <a class="tile tile-join tile-wide server-gated" href="stake-confirm.html?stake=0&bots=1">
         <div>
           <div class="tile-title">🤖 Play vs Computer</div>
-          <div class="tile-sub">Practice against bots · no stakes, starts instantly</div>
+          <div class="tile-sub">Practice vs bots · no stakes</div>
         </div>
         <div class="tile-icon">🤖</div>
       </a>
@@ -125,7 +125,7 @@
       <a class="tile tile-cash tile-wide server-gated" href="stake-confirm.html?stake=50&room=create&custom=1">
         <div>
           <div class="tile-title">➕ Create Cash Room</div>
-          <div class="tile-sub">Pick your own stake · share the code with friends</div>
+          <div class="tile-sub">Set your stake · invite friends</div>
         </div>
         <div class="tile-icon">💵</div>
       </a>
@@ -231,7 +231,7 @@
 
     const name = profile?.display_name || session.user.email || 'Player';
     document.getElementById('welcome-name').textContent = `${name} 👋`;
-    document.getElementById('wallet-chip').textContent = `💰 ₹${Number(wallet?.balance ?? 0).toFixed(2)}`;
+    document.getElementById('wallet-chip').textContent = `💰 ${ludoMoney(wallet?.balance)}`;
 
     // Cash tables are Pro-only (enforced server-side in the room's join check
     // too — this is just the UI). Free users get the tiles locked and

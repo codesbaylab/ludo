@@ -365,8 +365,8 @@
     // Only unreserved funds can be sent / withdrawn / spent on Pro (stakes in active games are held).
     const heldAmount = Number(wallet?.held ?? 0);
     walletBalance = Number(wallet?.balance ?? 0) - heldAmount;
-    document.getElementById('wallet-locked').textContent = `🔒 ₹${heldAmount.toFixed(2)} locked in active games`;
-    document.getElementById('wallet-balance').textContent = `₹${Number(wallet?.balance ?? 0).toFixed(2)}`;
+    document.getElementById('wallet-locked').textContent = `🔒 ${ludoMoney(heldAmount)} locked in active games`;
+    document.getElementById('wallet-balance').textContent = ludoMoney(wallet?.balance);
     loadProCard(walletBalance).catch(err => console.error('[ludo] pro card failed:', err));
 
     const stakedMatches = matches.filter(m => m.matches.stake > 0);
