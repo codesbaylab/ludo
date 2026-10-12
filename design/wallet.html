@@ -37,12 +37,13 @@
     </div>
 
     <!-- Your Player ID: what others use to send you money -->
-    <div class="card" style="margin-top:14px; padding:12px 16px; display:flex; align-items:center; gap:10px;">
-      <div style="flex:1;">
-        <div class="hint" style="margin:0;">Your Player ID — share it to receive money</div>
-        <div id="my-player-id" style="font-size:20px; font-weight:800; letter-spacing:2px; font-family:monospace;">…</div>
+    <div class="card" style="margin-top:14px; padding:14px 16px; display:flex; align-items:center; gap:12px; border:1.5px dashed var(--border);">
+      <div style="flex:1; min-width:0;">
+        <div style="font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:var(--text-dim);">Your Player ID</div>
+        <div id="my-player-id" style="font-size:24px; font-weight:800; letter-spacing:3px; font-family:ui-monospace,Menlo,monospace; line-height:1.25; margin:2px 0;">…</div>
+        <div style="font-size:12px; font-weight:600; color:var(--text-faint);">Share it to receive money</div>
       </div>
-      <button class="btn btn-secondary btn-sm" id="btn-copy-player-id" style="width:auto;">📋 Copy</button>
+      <button class="btn btn-secondary btn-sm" id="btn-copy-player-id" style="width:auto; white-space:nowrap; flex-shrink:0;">📋 Copy</button>
     </div>
 
     <!-- Pro membership -->
@@ -241,7 +242,7 @@
       ludoSupabase.from('app_settings').select('transfer_min, transfer_max, transfer_daily_max').eq('id', true).single(),
     ]);
     myPlayerId = profile?.player_id || '';
-    document.getElementById('my-player-id').textContent = myPlayerId || '—';
+    document.getElementById('my-player-id').textContent = myPlayerId ? myPlayerId.replace(/(.{4})(?=.)/g, '$1 ') : '—'; // grouped for reading; copy uses the raw ID
     if (settings) transferLimits = { min: Number(settings.transfer_min), max: Number(settings.transfer_max), daily: Number(settings.transfer_daily_max) };
     document.getElementById('send-limits').textContent = `${fmtINR(transferLimits.min)} – ${fmtINR(transferLimits.max)} per transfer · up to ${fmtINR(transferLimits.daily)} per 24 hours`;
   }
