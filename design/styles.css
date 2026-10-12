@@ -176,7 +176,7 @@ a:has(> .btn) { display: block; }
 .player-chip.empty { border-style:dashed; opacity:.6; box-shadow:none; }
 .player-chip.ready .status { color: var(--green); }
 
-.badge { font-size:11px; font-weight:800; padding:4px 10px; border-radius:100px; }
+.badge { font-size:11px; font-weight:800; padding:4px 10px; border-radius:100px; white-space:nowrap; flex-shrink:0; }
 .badge-host { background: var(--yellow-soft); color:#a36a00; }
 .badge-ready { background: var(--green-soft); color:#178a4c; }
 .badge-waiting { background: var(--paper-2); color: var(--text-faint); border:2px solid var(--border); }

@@ -443,7 +443,7 @@
             <div class="name">${e.title}</div>
             <div class="status">${e.subtitle}</div>
           </div>
-          <span class="badge ${e.delta >= 0 ? 'badge-ready' : 'badge-waiting'}">${e.delta >= 0 ? '+' : '-'}₹${Math.abs(e.delta)}</span>
+          <span class="badge ${e.delta >= 0 ? 'badge-ready' : 'badge-waiting'}">${e.delta >= 0 ? '+' : '-'}${ludoMoney(Math.abs(e.delta))}</span>
         `;
         list.appendChild(row);
       });

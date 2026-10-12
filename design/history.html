@@ -68,7 +68,7 @@
     // can only have come from match stakes/payouts, so this is exact today —
     // it'll need real deposit/withdrawal tracking once that ships for real.
     const net = Number(wallet?.balance ?? 240) - 240;
-    document.getElementById('stat-net').textContent = `${net >= 0 ? '+' : ''}₹${net.toFixed(0)}`;
+    document.getElementById('stat-net').textContent = `${net >= 0 ? "+" : "-"}${ludoMoney(Math.abs(net))}`;
 
     const list = document.getElementById('games-list');
     list.innerHTML = '';
