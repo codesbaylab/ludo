@@ -149,3 +149,77 @@ function ludoMoneyShort(n) {
   if (v >= 1e5) return '₹' + trim(v / 1e5) + 'L';
   return ludoMoney(v);
 }
+
+function ludoEscapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/**
+ * Everything that moved this user's money, newest first, merged from four sources:
+ * cash match results, USDT/USDC deposits, withdrawal requests and player transfers.
+ * Each entry: { type: 'match'|'deposit'|'withdrawal'|'sent'|'received', time, icon, iconBg, title, detail, delta }.
+ * (delta is ₹, signed.) Shared by wallet.html and history.html.
+ */
+async function ludoFetchTransactions(userId, limit) {
+  const n = limit || 50;
+  const [matches, deposits, wd, tr] = await Promise.all([
+    ludoFetchMatches(userId, n),
+    ludoFetchCryptoDeposits(userId, n),
+    window.ludoSupabase.from('crypto_withdrawals').select('amount_inr, destination_address, status, tx_hash, requested_at').eq('user_id', userId).order('requested_at', { ascending: false }).limit(n),
+    window.ludoSupabase.rpc('my_transfers', { p_limit: n }),
+  ]);
+  const staked = matches.filter((m) => m.matches.stake > 0);
+  const counts = await ludoFetchPlayerCounts(staked.map((m) => m.matches.id));
+  const entries = [];
+  staked.forEach((m) => {
+    const won = m.result === 'win';
+    const stake = Number(m.matches.stake);
+    const pot = stake * (counts[m.matches.id] || 2);
+    const payout = pot - Math.round(pot * 0.1);
+    entries.push({
+      type: 'match', time: m.matches.finished_at, icon: won ? '🏆' : '🎲',
+      iconBg: won ? 'linear-gradient(135deg, var(--accent), var(--accent-2))' : 'linear-gradient(135deg, var(--red), #c93a3a)',
+      title: won ? 'Match Winnings' : 'Table Stake', detail: `₹${stake} table`,
+      delta: won ? payout - stake : -stake,
+    });
+  });
+  deposits.forEach((d) => {
+    if (!(Number(d.inr_credited) > 0)) return; // dust that credited nothing
+    entries.push({
+      type: 'deposit', time: d.detected_at, icon: '💵', iconBg: 'linear-gradient(135deg, #26a17b, #178a4c)',
+      title: (d.asset || 'USDT') + ' Deposit', detail: `${Number(d.amount_usdt).toFixed(2)} ${d.asset || 'USDT'} (Solana)`,
+      delta: Number(d.inr_credited),
+    });
+  });
+  (wd.data || []).forEach((w) => {
+    const label = w.status === 'pending' ? '⏳ Pending' : w.status === 'paid' ? '✅ Paid' : '❌ Rejected (refunded)';
+    const a = w.destination_address;
+    entries.push({
+      type: 'withdrawal', time: w.requested_at, icon: '⬆️', iconBg: 'linear-gradient(135deg, #ff8a3d, #ff5c8a)',
+      title: 'USDT Withdrawal', detail: `${a.length > 14 ? a.slice(0, 6) + '…' + a.slice(-4) : a} · ${label}`,
+      delta: -Number(w.amount_inr),
+    });
+  });
+  (tr.data || []).forEach((t) => {
+    const sent = t.direction === 'sent';
+    entries.push({
+      type: sent ? 'sent' : 'received', time: t.created_at, icon: sent ? '➡️' : '⬅️',
+      iconBg: sent ? 'linear-gradient(135deg, #8ec5ff, #4da3ff)' : 'linear-gradient(135deg, #7fe3a6, #2ecc71)',
+      title: sent ? `Sent to ${ludoEscapeHtml(t.counterparty)}` : `Received from ${ludoEscapeHtml(t.counterparty)}`,
+      detail: 'Player transfer', delta: sent ? -Number(t.amount) : Number(t.amount),
+    });
+  });
+  entries.sort((a, b) => new Date(b.time) - new Date(a.time));
+  return entries;
+}
+
+/** One transaction row (shared markup for wallet.html and history.html). */
+function ludoTxRowHtml(e) {
+  return `
+    <div class="avatar" style="width:34px; height:34px; font-size:15px; background:${e.iconBg};">${e.icon}</div>
+    <div style="min-width:0;">
+      <div class="name">${e.title}</div>
+      <div class="status">${ludoTimeAgo(e.time)} · ${e.detail}</div>
+    </div>
+    <span class="badge ${e.delta >= 0 ? 'badge-ready' : 'badge-waiting'}">${e.delta >= 0 ? '+' : '−'}${ludoMoney(Math.abs(e.delta))}</span>`;
+}

@@ -532,3 +532,9 @@ a:has(> .btn) { display: block; }
 .net-hero .num { font-size: clamp(28px, 9vw, 40px); color: #178a4c; line-height: 1.1; letter-spacing: -.5px; }
 .net-hero.neg { background: linear-gradient(135deg, var(--red-soft), #fff); border-color: var(--red); }
 .net-hero.neg .lbl, .net-hero.neg .num { color: #c0392b; }
+
+/* Filter chips (History > Transactions) */
+.filter-chips { display:flex; gap:8px; overflow-x:auto; padding:2px 4px 12px 0; margin:0; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+.filter-chips::-webkit-scrollbar { display:none; }
+.chip { flex:0 0 auto; white-space:nowrap; font:inherit; font-weight:800; font-size:13px; padding:8px 14px; border-radius:100px; cursor:pointer; background:var(--paper); color:var(--text-dim); border:2px solid var(--border); transition:background .15s, color .15s, border-color .15s; }
+.chip.active { background:linear-gradient(135deg, var(--accent), var(--accent-2)); color:#fff; border-color:transparent; box-shadow:0 4px 10px rgba(255,92,138,.28); }

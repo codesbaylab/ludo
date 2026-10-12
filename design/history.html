@@ -42,8 +42,20 @@
       <p class="hint" style="margin:0;">Loading…</p>
     </div>
 
-    <div class="section-title">Wallet Activity</div>
-    <p class="hint" style="margin-top:0; margin-bottom:12px;">Deposits, withdrawals, and stakes are in your <a href="wallet.html">Wallet</a>.</p>
+    <div class="section-title">Transactions</div>
+    <div class="filter-chips" id="tx-filters" role="tablist" aria-label="Filter transactions">
+      <button type="button" class="chip active" data-f="all">All</button>
+      <button type="button" class="chip" data-f="deposit">Deposits</button>
+      <button type="button" class="chip" data-f="withdrawal">Withdrawals</button>
+      <button type="button" class="chip" data-f="sent">Sent</button>
+      <button type="button" class="chip" data-f="received">Received</button>
+      <button type="button" class="chip" data-f="match">Matches</button>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:10px;" id="tx-list">
+      <p class="hint" style="margin:0;">Loading…</p>
+    </div>
+    <button type="button" class="btn btn-secondary" id="tx-more" style="display:none; margin-top:12px;">Show more</button>
+    <p class="hint" style="margin-top:10px;">Make deposits, withdrawals and transfers from your <a href="wallet.html">Wallet</a>.</p>
   </div>
 
   <div class="bottom-nav">
@@ -99,6 +111,39 @@
         list.appendChild(row);
       });
     }
+
+    // ---- Transactions with filters ----
+    const txList = document.getElementById('tx-list');
+    const txMore = document.getElementById('tx-more');
+    const PAGE = 15;
+    let allTx = [], filter = 'all', shown = PAGE;
+    const EMPTY = { all: 'No transactions yet.', deposit: 'No deposits yet.', withdrawal: 'No withdrawals yet.', sent: 'You haven\'t sent money yet.', received: 'You haven\'t received money yet.', match: 'No cash matches yet.' };
+    function renderTx() {
+      const rows = allTx.filter(e => filter === 'all' || e.type === filter);
+      txList.innerHTML = '';
+      if (rows.length === 0) {
+        txList.innerHTML = `<p class="hint" style="margin:0;">${EMPTY[filter]}</p>`;
+      } else {
+        rows.slice(0, shown).forEach(e => {
+          const row = document.createElement('div');
+          row.className = 'player-chip';
+          row.innerHTML = ludoTxRowHtml(e);
+          txList.appendChild(row);
+        });
+      }
+      txMore.style.display = rows.length > shown ? '' : 'none';
+      txMore.textContent = `Show more (${rows.length - shown} left)`;
+    }
+    document.getElementById('tx-filters').addEventListener('click', (ev) => {
+      const b = ev.target.closest('.chip');
+      if (!b) return;
+      filter = b.dataset.f; shown = PAGE;
+      document.querySelectorAll('#tx-filters .chip').forEach(c => c.classList.toggle('active', c === b));
+      renderTx();
+    });
+    txMore.addEventListener('click', () => { shown += PAGE; renderTx(); });
+    try { allTx = await ludoFetchTransactions(session.user.id, 50); } catch (err) { console.error('[ludo] transactions failed:', err); }
+    renderTx();
   })();
 </script>
 </body>

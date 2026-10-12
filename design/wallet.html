@@ -345,12 +345,9 @@
   }
 
   async function loadWalletAndTransactions() {
-    const [{ data: wallet }, matches, cryptoDeposits, { data: withdrawals }, { data: transfers }] = await Promise.all([
+    const [{ data: wallet }, entries] = await Promise.all([
       ludoSupabase.from('wallets').select('balance, held').eq('user_id', currentUserId).single(),
-      ludoFetchMatches(currentUserId, 20),
-      ludoFetchCryptoDeposits(currentUserId, 20),
-      ludoSupabase.from('crypto_withdrawals').select('amount_inr, destination_address, status, tx_hash, requested_at').eq('user_id', currentUserId).order('requested_at', { ascending: false }).limit(20),
-      ludoSupabase.rpc('my_transfers', { p_limit: 20 }),
+      ludoFetchTransactions(currentUserId, 20),
     ]);
     // Only unreserved funds can be sent / withdrawn / spent on Pro (stakes in active games are held).
     const heldAmount = Number(wallet?.held ?? 0);
@@ -358,66 +355,6 @@
     document.getElementById('wallet-locked').textContent = `🔒 ${ludoMoney(heldAmount)} locked in active games`;
     document.getElementById('wallet-balance').textContent = ludoMoney(wallet?.balance);
     loadProCard(walletBalance).catch(err => console.error('[ludo] pro card failed:', err));
-
-    const stakedMatches = matches.filter(m => m.matches.stake > 0);
-    const counts = await ludoFetchPlayerCounts(stakedMatches.map(m => m.matches.id));
-
-    // Three different sources (match results, USDT deposits, withdrawal
-    // requests) merged into one time-ordered feed so "Transaction History"
-    // is actually complete — no more mock/fabricated entries in this list.
-    const entries = [];
-    stakedMatches.forEach(m => {
-      const won = m.result === 'win';
-      const stake = m.matches.stake;
-      const playerCount = counts[m.matches.id] || 2;
-      const pot = stake * playerCount;
-      const fee = Math.round(pot * 0.1);
-      const payout = pot - fee;
-      const delta = won ? payout - stake : -stake;
-      entries.push({
-        time: m.matches.finished_at,
-        icon: won ? '🏆' : '🎲',
-        iconBg: won ? 'linear-gradient(135deg, var(--accent), var(--accent-2))' : 'linear-gradient(135deg, var(--red), #c93a3a)',
-        title: won ? 'Match Winnings' : 'Table Stake',
-        subtitle: `${ludoTimeAgo(m.matches.finished_at)} · ₹${stake} table`,
-        delta,
-      });
-    });
-    cryptoDeposits.forEach(d => {
-      if (!(Number(d.inr_credited) > 0)) return; // dust transfers that credited nothing
-      entries.push({
-        time: d.detected_at,
-        icon: '💵',
-        iconBg: 'linear-gradient(135deg, #26a17b, #178a4c)', // Tether green
-        title: (d.asset || 'USDT') + ' Deposit',
-        subtitle: `${ludoTimeAgo(d.detected_at)} · ${Number(d.amount_usdt).toFixed(2)} ${d.asset || 'USDT'} (Solana)`,
-        delta: Number(d.inr_credited),
-      });
-    });
-    (withdrawals || []).forEach(w => {
-      const statusLabel = w.status === 'pending' ? '⏳ Pending' : w.status === 'paid' ? '✅ Paid' : '❌ Rejected (refunded)';
-      const shortAddr = w.destination_address.length > 14 ? `${w.destination_address.slice(0, 6)}…${w.destination_address.slice(-4)}` : w.destination_address;
-      entries.push({
-        time: w.requested_at,
-        icon: '⬆️',
-        iconBg: 'linear-gradient(135deg, #ff8a3d, #ff5c8a)',
-        title: 'USDT Withdrawal',
-        subtitle: `${ludoTimeAgo(w.requested_at)} · ${shortAddr} · ${statusLabel}`,
-        delta: -Number(w.amount_inr),
-      });
-    });
-    (transfers || []).forEach(t => {
-      const sent = t.direction === 'sent';
-      entries.push({
-        time: t.created_at,
-        icon: sent ? '➡️' : '⬅️',
-        iconBg: sent ? 'linear-gradient(135deg, #8ec5ff, #4da3ff)' : 'linear-gradient(135deg, #7fe3a6, #2ecc71)',
-        title: sent ? `Sent to ${escapeHtml(t.counterparty)}` : `Received from ${escapeHtml(t.counterparty)}`,
-        subtitle: `${ludoTimeAgo(t.created_at)} · Player transfer`,
-        delta: sent ? -Number(t.amount) : Number(t.amount),
-      });
-    });
-    entries.sort((a, b) => new Date(b.time) - new Date(a.time));
 
     const list = document.getElementById('transactions-list');
     list.innerHTML = '';
@@ -427,14 +364,7 @@
       entries.forEach(e => {
         const row = document.createElement('div');
         row.className = 'player-chip';
-        row.innerHTML = `
-          <div class="avatar" style="width:34px; height:34px; font-size:15px; background:${e.iconBg};">${e.icon}</div>
-          <div>
-            <div class="name">${e.title}</div>
-            <div class="status">${e.subtitle}</div>
-          </div>
-          <span class="badge ${e.delta >= 0 ? 'badge-ready' : 'badge-waiting'}">${e.delta >= 0 ? '+' : '-'}${ludoMoney(Math.abs(e.delta))}</span>
-        `;
+        row.innerHTML = ludoTxRowHtml(e);
         list.appendChild(row);
       });
     }
