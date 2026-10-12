@@ -98,6 +98,11 @@ by a Supabase project for auth/wallet-ledger/match-history.
   `state.stake`. `LudoRoom.onCreate` floors/clamps the stake (`MIN_STAKE`/`MAX_STAKE`, keep in sync with stake-confirm.html);
   bot rooms still force 0. A guest's waiting room adopts the host's stake from room state (`renderStakeUI`). Verified with
   `npm run test:sim:cash` (clamping + join-by-code); the Pro/hold paths need a live Supabase, NOT clicked through in a browser.
+- **Lobby layout (`lobby.html`)**: order is Free Play (Quick Match | Create Room, Play vs Computer, Join with code + box) ->
+  Cash Tables (Pro card, ₹10 | ₹50, Create Cash Room) -> Other Games (Rummy) -> Recent Games. Keep tile subtitles short
+  (one line on a phone). Rupee amounts shown to players go through `ludoMoney(n)` in `supabase-client.js` (Indian grouping,
+  decimals only when there are paise); used for the wallet chips, Wallet balance/locked and stake-confirm "after stake".
+  Transaction rows and the USDT rate still use plain `toFixed`.
 - **Leave warnings**: Rummy cash/free board Exit asks "Leave this table?" (cash wording mentions losing the
   stake), the practice board asks "Leave this game?"; both via `ludoConfirm`.
 - **Installed-app staleness**: an iOS home-screen app resumes the last page frozen in memory and a cold start can
