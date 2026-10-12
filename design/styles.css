@@ -151,8 +151,8 @@ a:has(> .btn) { display: block; }
 .tile-wide { grid-column: 1/-1; flex-direction:row; align-items:center; justify-content:space-between; }
 
 .stat-row { display:flex; gap:10px; }
-.stat { flex:1; background: var(--paper); border-radius: var(--radius-md); padding:14px; text-align:center; box-shadow: var(--shadow); border: 2px solid rgba(255,255,255,.6); }
-.stat .num { font-size:21px; font-weight:800; color: var(--accent-2); }
+.stat { flex:1 1 0; min-width:0; background: var(--paper); border-radius: var(--radius-md); padding:14px; text-align:center; box-shadow: var(--shadow); border: 2px solid rgba(255,255,255,.6); }
+.stat .num { font-size:21px; font-weight:800; white-space:nowrap; color: var(--accent-2); }
 .stat .lbl { font-size:11px; color: var(--text-dim); margin-top:2px; font-weight:700; }
 
 .bottom-nav {

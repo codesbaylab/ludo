@@ -140,3 +140,12 @@ async function ludoCopy(btn, text) {
   }
   return ok;
 }
+
+// Compact rupee amount for tight spots (stat tiles): ₹51.04L, ₹1.2Cr; small amounts use ludoMoney.
+function ludoMoneyShort(n) {
+  const v = Math.abs(Number(n) || 0);
+  const trim = (x) => String(Math.round(x * 100) / 100);
+  if (v >= 1e7) return '₹' + trim(v / 1e7) + 'Cr';
+  if (v >= 1e5) return '₹' + trim(v / 1e5) + 'L';
+  return ludoMoney(v);
+}
