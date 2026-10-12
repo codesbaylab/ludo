@@ -525,3 +525,10 @@ a:has(> .btn) { display: block; }
 .copy-btn.copied .ic-copy { display: none; }
 .copy-btn.copied .ic-check { display: block; animation: copy-pop .25s ease; }
 @keyframes copy-pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* History: full-width net winnings hero tile (shows the whole amount) */
+.net-hero { flex: none; width: 100%; box-sizing: border-box; padding: 18px 16px 16px; background: linear-gradient(135deg, var(--green-soft), #fff); border-color: var(--green); }
+.net-hero .lbl { order: -1; margin: 0 0 4px; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: #178a4c; }
+.net-hero .num { font-size: clamp(28px, 9vw, 40px); color: #178a4c; line-height: 1.1; letter-spacing: -.5px; }
+.net-hero.neg { background: linear-gradient(135deg, var(--red-soft), #fff); border-color: var(--red); }
+.net-hero.neg .lbl, .net-hero.neg .num { color: #c0392b; }

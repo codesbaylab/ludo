@@ -28,10 +28,13 @@
   </div>
 
   <div style="padding: 10px 20px;">
+    <div class="stat net-hero" id="net-hero" style="margin-bottom:10px;">
+      <div class="lbl">Net Winnings</div>
+      <div class="num" id="stat-net">…</div>
+    </div>
     <div class="stat-row" style="margin-bottom:18px;">
       <div class="stat"><div class="num" id="stat-games">…</div><div class="lbl">Games Played</div></div>
       <div class="stat"><div class="num" id="stat-wins">…</div><div class="lbl">Wins</div></div>
-      <div class="stat"><div class="num" id="stat-net">…</div><div class="lbl">Net Winnings</div></div>
     </div>
 
     <div class="section-title">All Games</div>
@@ -55,20 +58,25 @@
     const { data: { session } } = await ludoSupabase.auth.getSession();
     if (!session) { location.href = 'login.html'; return; }
 
-    const [stats, matches, { data: wallet }] = await Promise.all([
+    const [stats, matches] = await Promise.all([
       ludoFetchStats(session.user.id),
       ludoFetchMatches(session.user.id, 50),
-      ludoSupabase.from('wallets').select('balance').eq('user_id', session.user.id).single(),
     ]);
 
     document.getElementById('stat-games').textContent = stats.gamesPlayed;
     document.getElementById('stat-wins').textContent = stats.wins;
-    // Net winnings since signup: with no deposit/withdrawal feature live yet
-    // (see wallet.html), every ₹ above or below the starting ₹240 balance
-    // can only have come from match stakes/payouts, so this is exact today —
-    // it'll need real deposit/withdrawal tracking once that ships for real.
-    const net = Number(wallet?.balance ?? 240) - 240;
-    document.getElementById('stat-net').textContent = `${net >= 0 ? "+" : "-"}${ludoMoneyShort(net)}`;
+    // Net winnings = what cash matches actually paid minus stakes (same payout math as wallet.html).
+    // Deposits, withdrawals and transfers are NOT winnings, so they're deliberately left out.
+    const counts = await ludoFetchPlayerCounts(matches.map(m => m.matches.id));
+    const net = matches.reduce((sum, m) => {
+      const stake = Number(m.matches.stake) || 0;
+      if (stake <= 0) return sum;
+      const pot = stake * (counts[m.matches.id] || 2);
+      const payout = pot - Math.round(pot * 0.1);
+      return sum + (m.result === 'win' ? payout - stake : -stake);
+    }, 0);
+    document.getElementById('stat-net').textContent = `${net > 0 ? '+' : net < 0 ? '−' : ''}${ludoMoney(Math.abs(net))}`;
+    document.getElementById('net-hero').classList.toggle('neg', net < 0);
 
     const list = document.getElementById('games-list');
     list.innerHTML = '';
