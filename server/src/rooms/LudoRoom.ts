@@ -47,6 +47,10 @@ const COLORS_BY_PLAYER_COUNT: Record<number, Color[]> = {
   4: TURN_ORDER,
 };
 
+// Allowed stake range for a (custom) cash table, in whole rupees.
+export const MIN_STAKE = 10;
+export const MAX_STAKE = 5000;
+
 export class LudoRoom extends Room<LudoState> {
   maxClients = 4;
 
@@ -110,7 +114,10 @@ export class LudoRoom extends Room<LudoState> {
     }
 
     const state = new LudoState();
-    state.stake = options.stake ?? 0;
+    // Custom cash rooms: whole rupees only, within a sane range. (Pro is enforced for
+    // the creator in onJoin like any cash table; guests joining by code are checked there too.)
+    const rawStake = Math.floor(Number(options.stake ?? 0));
+    state.stake = !Number.isFinite(rawStake) || rawStake <= 0 ? 0 : Math.min(MAX_STAKE, Math.max(MIN_STAKE, rawStake));
     COLORS_BY_PLAYER_COUNT[playerCount]!.forEach((color) => {
       const player = new PlayerState();
       player.color = color;

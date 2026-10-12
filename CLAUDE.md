@@ -36,7 +36,7 @@ by a Supabase project for auth/wallet-ledger/match-history.
   `rummy-waiting-room.html`; a guest adopts the host's table size/mode/stakes from room state). Wrong code ->
   "not found", full/started -> "locked" (shown at once, no 2-minute retry loop). The code is passed on to the
   board (`&code=`) so a failed handoff re-joins THAT room by code, not `joinOrCreate`. Ludo private rooms are
-  free-play only; Rummy cash join/create is Pro-gated like everything else. Verified end-to-end in Chrome
+  free by default (Pro can create custom cash rooms, see below); Rummy cash join/create is Pro-gated like everything else. Verified end-to-end in Chrome
   against the live server (create, stranger isolation, join by code, wrong code, full room, forfeit in the
   same room; Rummy host+guest dealt in the same table). **Gotcha**: don't anchor python string edits on
   `.table-type-btn'/.mode-btn forEach` in `rummy-lobby.html` — the same selector also appears inside
@@ -88,6 +88,13 @@ by a Supabase project for auth/wallet-ledger/match-history.
   `manifest.json`, every page `<title>` and `apple-mobile-web-app-title`. Icons in `design/icons/`: `icon-192/512` (rounded,
   transparent corners), `apple-touch-icon` (square, full-bleed), `icon-maskable-192/512` (square, art in the 80% safe zone).
   Regenerated from SVG via headless Chromium + ImageMagick (no committed source SVG; `design/icon-preview.html` has the artwork).
+- **Custom cash rooms (Pro)**: lobby Cash Tables "➕ Create Cash Room" -> `stake-confirm.html?room=create&custom=1` (stake chips
+  or typed amount, ₹10-₹5000 whole rupees, 2/4 players) -> `waiting-room.html?stake=X&room=create` -> `client.create('ludo',
+  {private:true, stake})`. Private + stake>0 needs nothing new server-side: the host's `onJoin` already runs the Pro check +
+  stake hold, guests joining by code hit the same checks (4403 pro_required / 4402 insufficient_funds) using the room's own
+  `state.stake`. `LudoRoom.onCreate` floors/clamps the stake (`MIN_STAKE`/`MAX_STAKE`, keep in sync with stake-confirm.html);
+  bot rooms still force 0. A guest's waiting room adopts the host's stake from room state (`renderStakeUI`). Verified with
+  `npm run test:sim:cash` (clamping + join-by-code); the Pro/hold paths need a live Supabase, NOT clicked through in a browser.
 - **Leave warnings**: Rummy cash/free board Exit asks "Leave this table?" (cash wording mentions losing the
   stake), the practice board asks "Leave this game?"; both via `ludoConfirm`.
 - **Installed-app staleness**: an iOS home-screen app resumes the last page frozen in memory and a cold start can

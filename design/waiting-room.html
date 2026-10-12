@@ -73,7 +73,7 @@
 </div>
 <script>
   const stakeParam = new URLSearchParams(location.search).get('stake');
-  const stake = stakeParam === null ? 50 : Math.max(0, Number(stakeParam) || 0);
+  let stake = stakeParam === null ? 50 : Math.max(0, Number(stakeParam) || 0);
   const playersParam = Number(new URLSearchParams(location.search).get('players'));
   let playerCount = [2, 4].includes(playersParam) ? playersParam : 4;
   // Private rooms: ?room=create makes one (host), ?code=ABC123 joins one (guest).
@@ -81,25 +81,30 @@
   const vsBots = new URLSearchParams(location.search).get('bots') === '1'; // server fills the other seats with bots
   const createPrivate = vsBots || new URLSearchParams(location.search).get('room') === 'create';
   const isPrivate = !!joinCode || createPrivate;
-  const isFree = stake <= 0;
-  const pot = stake * playerCount;
-  const fee = Math.round(pot * 0.1);
-  const payout = pot - fee;
   // Same default/override pattern as design/game.js.
   const SERVER_URL = new URLSearchParams(location.search).get('server') || 'wss://ludo-x96u.onrender.com';
 
   document.getElementById('max-players-value').textContent = String(playerCount);
 
-  if (isFree) {
-    document.getElementById('table-badge').textContent = vsBots ? 'vs Computer' : isPrivate ? 'Private Room' : 'Free Match';
-    document.getElementById('table-badge').className = 'badge badge-ready';
-    document.getElementById('prize-card').style.display = 'none';
-    document.getElementById('room-type').textContent = vsBots ? 'vs Computer · Free' : isPrivate ? 'Private · Free' : 'Public · Free';
-  } else {
-    document.getElementById('table-badge').textContent = `₹${stake} Table`;
-    document.getElementById('prize-amount').textContent = `₹${payout}`;
-    document.getElementById('stake-amount').textContent = `₹${stake}`;
+  // Joining by code, the host's table (not this URL) decides the stake, so this is re-run
+  // once the room state arrives (see onStateChange below).
+  function renderStakeUI() {
+    const isFree = stake <= 0;
+    const payout = stake * playerCount - Math.round(stake * playerCount * 0.1);
+    if (isFree) {
+      document.getElementById('table-badge').textContent = vsBots ? 'vs Computer' : isPrivate ? 'Private Room' : 'Free Match';
+      document.getElementById('table-badge').className = 'badge badge-ready';
+      document.getElementById('prize-card').style.display = 'none';
+      document.getElementById('room-type').textContent = vsBots ? 'vs Computer · Free' : isPrivate ? 'Private · Free' : 'Public · Free';
+    } else {
+      document.getElementById('table-badge').textContent = `₹${stake} ${isPrivate ? 'Room' : 'Table'}`;
+      document.getElementById('prize-card').style.display = '';
+      document.getElementById('prize-amount').textContent = `₹${payout}`;
+      document.getElementById('stake-amount').textContent = `₹${stake}`;
+      document.getElementById('room-type').textContent = isPrivate ? 'Private · Cash' : 'Public · Cash';
+    }
   }
+  renderStakeUI();
 
   function renderPlayers(snapshot, mySessionId) {
     const connected = snapshot.players.filter(p => p.connected).length;
@@ -196,7 +201,7 @@
 
     document.getElementById('room-code').textContent = room.roomId;
     if (vsBots) document.querySelector('.room-code-box').style.display = 'none';
-    if (createPrivate && !vsBots) document.getElementById('start-hint').textContent = 'Share this room code with your friend — the game starts as soon as everyone has joined.';
+    if (createPrivate && !vsBots) document.getElementById('start-hint').textContent = stake > 0 ? 'Share this room code — each player locks ₹' + stake + ' when they join, and the game starts as soon as everyone has joined.' : 'Share this room code with your friend — the game starts as soon as everyone has joined.';
     document.getElementById('copy-code-btn').addEventListener('click', () => {
       navigator.clipboard?.writeText(room.roomId).catch(() => {});
     });
@@ -213,6 +218,11 @@
         // Joining by code: the host chose the table size, not this URL.
         playerCount = snapshot.players.length;
         document.getElementById('max-players-value').textContent = String(playerCount);
+        renderStakeUI();
+      }
+      if (typeof snapshot.stake === 'number' && snapshot.stake !== stake) {
+        stake = snapshot.stake;
+        renderStakeUI();
       }
 
       if (!navigated && snapshot.players.every(p => p.connected)) {
