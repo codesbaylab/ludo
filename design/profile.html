@@ -144,7 +144,7 @@
         <div class="hint" style="margin:0 0 6px;">Your referral link</div>
         <div style="display:flex; gap:8px; align-items:center; background:var(--paper); border:2px dashed var(--accent); border-radius:var(--radius-md); padding:10px 12px;">
           <code id="ref-link" style="flex:1; font-size:12px; font-weight:700; word-break:break-all;">${escapeHtml(link)}</code>
-          <button class="btn btn-sm btn-primary" id="ref-copy" style="width:auto;">Copy</button>
+          <button type="button" class="copy-btn" id="ref-copy" aria-label="Copy" title="Copy"><svg class="ic-copy" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><svg class="ic-check" viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7"/></svg></button>
         </div>
         ${navigator.share ? '<button class="btn btn-secondary" id="ref-share" style="width:100%; margin-top:10px;">Share link</button>' : ''}
         <div class="stat-row" style="margin-top:14px;">
@@ -155,10 +155,7 @@
       </div>
       ${levels ? `<div class="section-title">Earnings by level</div><div class="card"><table style="width:100%; border-collapse:collapse; font-size:13px; font-weight:700;"><tr style="color:var(--text-dim); font-size:11px; text-align:left;"><th>Level</th><th>Rate</th><th>People</th><th>Earned</th></tr>${levels}</table></div>` : ''}
       ${recent ? `<div class="section-title">Recent rewards</div><div style="display:flex; flex-direction:column; gap:8px;">${recent}</div>` : ''}`;
-    document.getElementById('ref-copy').addEventListener('click', async (e) => {
-      try { await navigator.clipboard.writeText(link); e.target.textContent = 'Copied!'; } catch { e.target.textContent = 'Copy failed'; }
-      setTimeout(() => { e.target.textContent = 'Copy'; }, 1500);
-    });
+    document.getElementById('ref-copy').addEventListener('click', (e) => ludoCopy(e.currentTarget, link));
     document.getElementById('ref-share')?.addEventListener('click', () => {
       navigator.share({ title: 'Table Kings', text: 'Join me on Table Kings!', url: link }).catch(() => {});
     });

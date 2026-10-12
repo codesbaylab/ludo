@@ -43,7 +43,7 @@
         <div id="my-player-id" style="font-size:24px; font-weight:800; letter-spacing:3px; font-family:ui-monospace,Menlo,monospace; line-height:1.25; margin:2px 0;">…</div>
         <div style="font-size:12px; font-weight:600; color:var(--text-faint);">Share it to receive money</div>
       </div>
-      <button class="btn btn-secondary btn-sm" id="btn-copy-player-id" style="width:auto; white-space:nowrap; flex-shrink:0;">📋 Copy</button>
+      <button type="button" class="copy-btn" id="btn-copy-player-id" aria-label="Copy" title="Copy"><svg class="ic-copy" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><svg class="ic-check" viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7"/></svg></button>
     </div>
 
     <!-- Pro membership -->
@@ -84,7 +84,7 @@
           <label>Your permanent Solana address (USDT or USDC)</label>
           <div style="display:flex; gap:8px;">
             <input class="input" id="deposit-address-input" readonly style="font-family:monospace; font-size:12px;" />
-            <button class="btn btn-secondary" id="btn-copy-address" style="white-space:nowrap;">Copy</button>
+            <button type="button" class="copy-btn" id="btn-copy-address" aria-label="Copy" title="Copy" style="height:auto; align-self:stretch;"><svg class="ic-copy" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><svg class="ic-check" viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7"/></svg></button>
           </div>
         </div>
         <p class="hint" id="deposit-rate-hint"></p>
@@ -212,15 +212,7 @@
 
   document.getElementById('btn-copy-address').addEventListener('click', async () => {
     const input = document.getElementById('deposit-address-input');
-    try {
-      await navigator.clipboard.writeText(input.value);
-      const btn = document.getElementById('btn-copy-address');
-      const original = btn.textContent;
-      btn.textContent = 'Copied!';
-      setTimeout(() => { btn.textContent = original; }, 1500);
-    } catch {
-      input.select();
-    }
+    if (!(await ludoCopy(document.getElementById('btn-copy-address'), input.value))) input.select();
   });
 
   let currentUserId = null;
@@ -246,10 +238,7 @@
     if (settings) transferLimits = { min: Number(settings.transfer_min), max: Number(settings.transfer_max), daily: Number(settings.transfer_daily_max) };
     document.getElementById('send-limits').textContent = `${fmtINR(transferLimits.min)} – ${fmtINR(transferLimits.max)} per transfer · up to ${fmtINR(transferLimits.daily)} per 24 hours`;
   }
-  document.getElementById('btn-copy-player-id').addEventListener('click', async (e) => {
-    try { await navigator.clipboard.writeText(myPlayerId); e.target.textContent = 'Copied!'; } catch { e.target.textContent = 'Copy failed'; }
-    setTimeout(() => { e.target.textContent = '📋 Copy'; }, 1500);
-  });
+  document.getElementById('btn-copy-player-id').addEventListener('click', (e) => ludoCopy(e.currentTarget, myPlayerId));
   document.getElementById('btn-send').addEventListener('click', () => {
     sendPanel.style.display = sendPanel.style.display === 'none' ? 'block' : 'none';
     depositPanel.style.display = 'none';

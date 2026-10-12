@@ -33,7 +33,7 @@
         <div style="font-size:11px; color:#a3521f; font-weight:800; text-transform:uppercase;">Room Code</div>
         <div class="code" id="room-code">…</div>
       </div>
-      <button class="btn btn-secondary btn-sm" id="copy-code-btn">📋 Copy</button>
+      <button type="button" class="copy-btn" id="copy-code-btn" aria-label="Copy" title="Copy"><svg class="ic-copy" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><svg class="ic-check" viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7"/></svg></button>
     </div>
 
     <div class="card" id="prize-card" style="margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, var(--green-soft), var(--paper));">
@@ -202,9 +202,7 @@
     document.getElementById('room-code').textContent = room.roomId;
     if (vsBots) document.querySelector('.room-code-box').style.display = 'none';
     if (createPrivate && !vsBots) document.getElementById('start-hint').textContent = stake > 0 ? 'Share this room code — each player locks ₹' + stake + ' when they join, and the game starts as soon as everyone has joined.' : 'Share this room code with your friend — the game starts as soon as everyone has joined.';
-    document.getElementById('copy-code-btn').addEventListener('click', () => {
-      navigator.clipboard?.writeText(room.roomId).catch(() => {});
-    });
+    document.getElementById('copy-code-btn').addEventListener('click', (e) => ludoCopy(e.currentTarget, room.roomId));
     document.getElementById('leave-link').addEventListener('click', () => {
       room.leave(true); // consented — frees the seat immediately instead of
                          // holding it open for the reconnection grace period.

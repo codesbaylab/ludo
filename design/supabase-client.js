@@ -123,3 +123,20 @@ function ludoMoney(n) {
   const whole = Math.abs(v - Math.round(v)) < 0.005;
   return '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
 }
+
+// Markup for an icon-only copy button; wire it up with ludoCopy().
+const LUDO_COPY_BTN_INNER =
+  '<svg class="ic-copy" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>' +
+  '<svg class="ic-check" viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7"/></svg>';
+
+/** Copy text to the clipboard and flash the button's check state. Returns true on success. */
+async function ludoCopy(btn, text) {
+  let ok = true;
+  try { await navigator.clipboard.writeText(text); } catch { ok = false; }
+  if (btn) {
+    btn.classList.toggle('copied', ok);
+    btn.setAttribute('aria-label', ok ? 'Copied' : 'Copy failed');
+    setTimeout(() => { btn.classList.remove('copied'); btn.setAttribute('aria-label', 'Copy'); }, 1500);
+  }
+  return ok;
+}

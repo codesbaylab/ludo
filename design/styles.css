@@ -509,3 +509,19 @@ a:has(> .btn) { display: block; }
 .dlg-field small { font-weight: 700; color: var(--text-faint); }
 .dlg-field .input { width: 100%; }
 .dlg-actions .btn[disabled] { opacity: .5; cursor: not-allowed; }
+
+/* Icon-only copy button (see ludoCopy in supabase-client.js) */
+.copy-btn {
+  flex: 0 0 auto; width: 42px; height: 42px; padding: 0; border-radius: 13px;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+  background: linear-gradient(145deg, #fff, var(--paper-2)); color: var(--text);
+  border: 2px solid var(--border); box-shadow: 0 3px 8px rgba(120, 80, 40, .12);
+  transition: transform .12s ease, background .2s ease, color .2s ease, border-color .2s ease;
+}
+.copy-btn:active { transform: scale(.92); }
+.copy-btn svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.1; stroke-linecap: round; stroke-linejoin: round; }
+.copy-btn .ic-check { display: none; }
+.copy-btn.copied { background: var(--green-soft); color: #178a4c; border-color: var(--green); }
+.copy-btn.copied .ic-copy { display: none; }
+.copy-btn.copied .ic-check { display: block; animation: copy-pop .25s ease; }
+@keyframes copy-pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
