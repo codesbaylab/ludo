@@ -56,7 +56,8 @@ a:has(> .btn) { display: block; }
 .app.wide { max-width: 960px; }
 
 .topbar { display:flex; align-items:center; justify-content:space-between; padding: 20px 20px 4px; }
-.brand { display:flex; align-items:center; gap:10px; font-size:21px; font-weight:800; }
+.brand { display:flex; align-items:center; gap:10px; font-size:21px; font-weight:800; min-width:0; }
+.brand h1 { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .brand .dice {
   width:34px; height:34px; border-radius: 12px;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
@@ -419,6 +420,7 @@ a:has(> .btn) { display: block; }
   background: linear-gradient(135deg, var(--green-soft), #fff);
   border: 2px solid var(--green); border-radius:100px; padding:7px 14px;
   font-weight:800; font-size:13px; color:#178a4c;
+  white-space:nowrap; flex-shrink:0;
 }
 
 /* Desktop/tablet: board gets a fixed comfortable size, controls move to a right-hand column. */
