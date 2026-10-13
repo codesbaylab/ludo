@@ -70,9 +70,10 @@
     const { data: { session } } = await ludoSupabase.auth.getSession();
     if (!session) { location.href = 'login.html'; return; }
 
-    const [stats, matches] = await Promise.all([
+    const [stats, matches, botMatches] = await Promise.all([
       ludoFetchStats(session.user.id),
       ludoFetchMatches(session.user.id, 50),
+      ludoFetchBotMatches(session.user.id, 50),
     ]);
 
     document.getElementById('stat-games').textContent = stats.gamesPlayed;
@@ -90,23 +91,28 @@
     document.getElementById('stat-net').textContent = `${net > 0 ? '+' : net < 0 ? '−' : ''}${ludoMoney(Math.abs(net))}`;
     document.getElementById('net-hero').classList.toggle('neg', net < 0);
 
+    // Real matches and practice-vs-computer games in one list, newest first.
+    // Practice games are labelled and do NOT count toward the stats above.
+    const games = [
+      ...matches.map(m => ({ practice: false, color: m.color, won: m.result === 'win', time: m.matches.finished_at, label: m.matches.stake > 0 ? `₹${m.matches.stake} table` : 'Free table' })),
+      ...botMatches.map(m => ({ practice: true, color: m.color, won: m.result === 'win', time: m.finished_at, label: `🤖 vs Computer · ${m.player_count} players` })),
+    ].sort((a, b) => new Date(b.time) - new Date(a.time));
     const list = document.getElementById('games-list');
     list.innerHTML = '';
-    if (matches.length === 0) {
+    if (games.length === 0) {
       list.innerHTML = '<p class="hint" style="margin:0;">No games played yet.</p>';
     } else {
-      matches.forEach(m => {
-        const won = m.result === 'win';
+      games.forEach(g => {
         const row = document.createElement('div');
         row.className = 'player-chip';
-        const tableLabel = m.matches.stake > 0 ? `₹${m.matches.stake} table` : 'Free table';
+        const cap = g.color[0].toUpperCase() + g.color.slice(1);
         row.innerHTML = `
-          <div class="avatar" style="width:34px; height:34px; font-size:13px; background:var(--${m.color});">${m.color[0].toUpperCase()}</div>
+          <div class="avatar" style="width:34px; height:34px; font-size:13px; background:var(--${g.color});">${cap[0]}</div>
           <div>
-            <div class="name">${won ? 'Won' : 'Lost'} as ${m.color[0].toUpperCase()}${m.color.slice(1)}</div>
-            <div class="status">${tableLabel} · ${ludoTimeAgo(m.matches.finished_at)}</div>
+            <div class="name">${g.won ? 'Won' : 'Lost'} as ${cap}</div>
+            <div class="status">${g.label} · ${ludoTimeAgo(g.time)}</div>
           </div>
-          <span class="badge ${won ? 'badge-ready' : 'badge-waiting'}">${won ? 'Win' : 'Loss'}</span>
+          <span class="badge ${g.won ? 'badge-ready' : 'badge-waiting'}">${g.won ? 'Win' : 'Loss'}</span>
         `;
         list.appendChild(row);
       });

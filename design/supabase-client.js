@@ -223,3 +223,15 @@ function ludoTxRowHtml(e) {
     </div>
     <span class="badge ${e.delta >= 0 ? 'badge-ready' : 'badge-waiting'}">${e.delta >= 0 ? '+' : '−'}${ludoMoney(Math.abs(e.delta))}</span>`;
 }
+
+// Practice games vs the computer (own rows only; written by the game server).
+async function ludoFetchBotMatches(userId, limit) {
+  const { data, error } = await window.ludoSupabase
+    .from('bot_matches')
+    .select('color, result, player_count, finished_at')
+    .eq('user_id', userId)
+    .order('finished_at', { ascending: false })
+    .limit(limit || 50);
+  if (error) { console.error('[ludo] failed to fetch practice games:', error); return []; }
+  return data;
+}

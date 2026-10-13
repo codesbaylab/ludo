@@ -587,7 +587,23 @@ export class LudoRoom extends Room<LudoState> {
   }
 
   private async persistResult(winnerIdx: number, endReason: string) {
-    if (this.botSeats.size > 0) return; // practice vs computer: no history, no wallet
+    if (this.botSeats.size > 0) {
+      // Practice vs computer: no wallet, no real-match history, no stats. Just a private
+      // practice-history row for the human (bot_matches) so it shows up in their History.
+      const uid = this.sessionUserIds[this.state.players[0]!.sessionId];
+      const supa = getSupabase();
+      if (uid && supa) {
+        const { error } = await supa.from('bot_matches').insert({
+          user_id: uid,
+          color: this.state.players[0]!.color,
+          result: winnerIdx === 0 ? 'win' : 'lose',
+          player_count: this.state.players.length,
+          duration_s: this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : null,
+        });
+        if (error) console.error('[ludo] failed to insert bot_matches row:', error);
+      }
+      return;
+    }
     const supabase = getSupabase();
     if (!supabase) return;
 
