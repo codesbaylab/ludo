@@ -1,0 +1,34 @@
+name: Deploy to Cloudflare Pages
+
+# NOT live yet. Runs only when started by hand (Actions -> Run workflow) until the domain is on Cloudflare.
+# To switch over: add the secrets below, test with a manual run, then change `on:` to push on main and
+# delete pages.yml (GitHub Pages) + keep-server-warm.yml.
+#   CLOUDFLARE_API_TOKEN   (Pages: Edit permission)
+#   CLOUDFLARE_ACCOUNT_ID
+# and the repository variable CF_PAGES_PROJECT (the Pages project name).
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Same cache-busting as pages.yml: stamp asset links with the commit, and publish it as version.txt.
+      - name: Stamp asset URLs with the commit
+        run: |
+          V="${GITHUB_SHA::8}"
+          sed -i -E "s#(href|src)=\"(styles\.css|game\.js|supabase-client\.js|ui-dialog\.js|app-update\.js|rummy-rules\.js|admin-mock\.css|admin-mock\.js|admin\.css|admin-core\.js|config\.js)\"#\1=\"\2?v=$V\"#g" design/*.html
+          echo "$V" > design/version.txt
+      - name: Deploy
+        run: npx --yes wrangler@3 pages deploy design --project-name="${{ vars.CF_PAGES_PROJECT }}" --branch=main
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

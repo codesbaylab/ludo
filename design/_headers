@@ -1,0 +1,13 @@
+# Used by Cloudflare Pages (ignored on GitHub Pages). Security headers for every page.
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Strict-Transport-Security: max-age=31536000
+
+# HTML/JS/CSS must revalidate so a deploy shows up straight away (asset links are also ?v=<commit> stamped).
+/*.html
+  Cache-Control: public, max-age=0, must-revalidate
+/version.txt
+  Cache-Control: no-store

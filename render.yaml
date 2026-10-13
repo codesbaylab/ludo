@@ -11,3 +11,6 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      # Production only: comma-separated site origins allowed to call the HTTP API (see server/src/index.ts).
+      - key: ALLOWED_ORIGINS
+        sync: false

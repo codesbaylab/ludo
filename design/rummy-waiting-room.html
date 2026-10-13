@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
 <script src="supabase-client.js"></script>
 <script src="https://unpkg.com/colyseus.js@0.15.20/dist/colyseus.js"></script>
 <link rel="manifest" href="manifest.json">
@@ -87,7 +88,7 @@
   let poolLimit = [51, 101, 201].includes(Number(qp.get('pool'))) ? Number(qp.get('pool')) : 101;
   let entryFee = [50, 100, 200].includes(Number(qp.get('entry'))) ? Number(qp.get('entry')) : 100;
   // Same default/override pattern as design/game.js and waiting-room.html.
-  const SERVER_URL = qp.get('server') || 'wss://ludo-x96u.onrender.com';
+  const SERVER_URL = qp.get('server') || window.LUDO_CONFIG.SERVER_URL;
 
   function renderSettings() {
   const cur = FREE ? '🪙 ' : '₹'; // free tables use play coins, never rupees

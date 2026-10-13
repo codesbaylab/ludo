@@ -179,7 +179,7 @@
     }));
     return n;
   }
-  const GAME_SERVER_HTTP = (new URLSearchParams(location.search).get('server') || 'wss://ludo-x96u.onrender.com').replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
+  const GAME_SERVER_HTTP = (new URLSearchParams(location.search).get('server') || window.LUDO_CONFIG.SERVER_URL).replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
   async function serverStatus() {
     const { data: { session } } = await sb.auth.getSession();
     // Render's free tier can take a minute to wake — don't let the page hang on it.

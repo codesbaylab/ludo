@@ -12,12 +12,18 @@ import { getWatcherStatus } from './crypto/depositWatcher';
 import { startDepositWatcher } from './crypto/depositWatcher';
 
 const app = express();
-// Only the two crypto-deposit routes below need this — the game itself is
-// pure WebSocket (Colyseus), not HTTP. Wide open on origin since the actual
-// access control is the bearer token, not the calling origin (same as any
-// public REST API fronted by JWT auth); GitHub Pages, local dev, and any
-// future domain all need to reach this without maintaining an allowlist.
-app.use(cors());
+// Only the crypto routes below need CORS — the game itself is pure WebSocket (Colyseus), not HTTP.
+// Access control is the bearer token, not the calling origin, but a public launch should still
+// only answer browsers from our own site: set ALLOWED_ORIGINS (comma-separated, e.g.
+// "https://tablekings.in,https://www.tablekings.in") in production. Unset = open (local dev / pre-launch).
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map((o) => o.trim()).filter(Boolean);
+app.use(
+  cors(
+    allowedOrigins.length
+      ? { origin: (origin, cb) => cb(null, !origin || allowedOrigins.includes(origin)) }
+      : undefined
+  )
+);
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 // Verifies the caller's Supabase session from an Authorization: Bearer

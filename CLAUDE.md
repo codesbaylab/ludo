@@ -103,6 +103,17 @@ by a Supabase project for auth/wallet-ledger/match-history.
   (one line on a phone). Rupee amounts shown to players go through `ludoMoney(n)` in `supabase-client.js` (Indian grouping,
   decimals only when there are paise); used for the wallet chips, Wallet balance/locked and stake-confirm "after stake".
   Transaction rows and the USDT rate still use plain `toFixed`.
+- **Deployment config / hosting move**: every deployment-specific address lives in `design/config.js` (`window.LUDO_CONFIG.SERVER_URL`,
+  currently the Render URL) — loaded before `supabase-client.js`/`game.js`/`admin-core.js` on every page that talks to the
+  server (`?server=` still overrides). Changing the game-server domain = edit that one line. **GitHub Pages is only a stopgap**
+  (its terms disallow commercial/real-money sites): `.github/workflows/cloudflare-pages.yml` is ready but manual-only
+  (needs secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, variable `CF_PAGES_PROJECT`); switch `on:` to push-to-main and
+  delete `pages.yml` + `keep-server-warm.yml` at cutover. `design/_headers` (Cloudflare only) sets security + no-cache headers.
+  Both deploys stamp `?v=<commit>` on assets AND write `design/version.txt`; `app-update.js` now compares the stamped version
+  with `version.txt` (works without a Last-Modified header) and falls back to the old Last-Modified check locally. Server CORS is
+  restricted by the `ALLOWED_ORIGINS` env var (comma-separated origins) — **set it on Render at launch**; unset = open.
+  Launch-day checklist (not yet done): domain + DNS on Cloudflare, Supabase Auth Site URL/redirect allowlist, custom SMTP,
+  paid always-on game server (single process), paid Solana RPC, Supabase Pro, ALLOWED_ORIGINS, legal pages/age gate.
 - **Leave warnings**: Rummy cash/free board Exit asks "Leave this table?" (cash wording mentions losing the
   stake), the practice board asks "Leave this game?"; both via `ludoConfirm`.
 - **Installed-app staleness**: an iOS home-screen app resumes the last page frozen in memory and a cold start can

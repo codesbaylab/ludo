@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
 <script src="supabase-client.js"></script>
 <script src="https://unpkg.com/colyseus.js@0.15.20/dist/colyseus.js"></script>
 <link rel="manifest" href="manifest.json">
@@ -242,7 +243,7 @@
   const qp = new URLSearchParams(location.search);
   const MODE = qp.get('mode') === 'pool' ? 'pool' : 'points';
   const PLAYER_COUNT = [2, 4].includes(Number(qp.get('players'))) ? Number(qp.get('players')) : 4;
-  const SERVER_URL = qp.get('server') || 'wss://ludo-x96u.onrender.com';
+  const SERVER_URL = qp.get('server') || window.LUDO_CONFIG.SERVER_URL;
   // Free table (?free=1): real players, play coins, nothing touches the wallet.
   const FREE = qp.get('free') === '1';
   const CUR = FREE ? '🪙 ' : '₹';

@@ -696,7 +696,7 @@
 
   // Defaults to the live Render deployment; ?server= still overrides for local dev
   // (e.g. ?server=ws://localhost:2567) or pointing at a different deployment.
-  const SERVER_URL = new URLSearchParams(location.search).get('server') || 'wss://ludo-x96u.onrender.com';
+  const SERVER_URL = new URLSearchParams(location.search).get('server') || window.LUDO_CONFIG.SERVER_URL;
   const stakeParam = new URLSearchParams(location.search).get('stake');
   const joinStake = stakeParam === null ? 50 : Math.max(0, Number(stakeParam) || 0);
   const playersParam = Number(new URLSearchParams(location.search).get('players'));
