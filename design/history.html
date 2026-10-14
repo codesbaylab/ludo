@@ -95,7 +95,7 @@
     // Practice games are labelled and do NOT count toward the stats above.
     const games = [
       ...matches.map(m => ({ practice: false, color: m.color, won: m.result === 'win', time: m.matches.finished_at, label: m.matches.stake > 0 ? `₹${m.matches.stake} table` : 'Free table' })),
-      ...botMatches.map(m => ({ practice: true, color: m.color, won: m.result === 'win', time: m.finished_at, label: `🤖 vs Computer · ${m.player_count} players` })),
+      ...botMatches.map(m => ({ practice: true, color: m.color, won: m.result === 'win', quit: m.result === 'quit', time: m.finished_at, label: `🤖 vs Computer · ${m.player_count} players` })),
     ].sort((a, b) => new Date(b.time) - new Date(a.time));
     const list = document.getElementById('games-list');
     list.innerHTML = '';
@@ -109,10 +109,10 @@
         row.innerHTML = `
           <div class="avatar" style="width:34px; height:34px; font-size:13px; background:var(--${g.color});">${cap[0]}</div>
           <div>
-            <div class="name">${g.won ? 'Won' : 'Lost'} as ${cap}</div>
+            <div class="name">${g.quit ? 'Left' : g.won ? 'Won' : 'Lost'} as ${cap}</div>
             <div class="status">${g.label} · ${ludoTimeAgo(g.time)}</div>
           </div>
-          <span class="badge ${g.won ? 'badge-ready' : 'badge-waiting'}">${g.won ? 'Win' : 'Loss'}</span>
+          <span class="badge ${g.won ? 'badge-ready' : 'badge-waiting'}">${g.quit ? 'Left' : g.won ? 'Win' : 'Loss'}</span>
         `;
         list.appendChild(row);
       });

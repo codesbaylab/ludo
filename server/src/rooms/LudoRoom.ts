@@ -230,7 +230,7 @@ export class LudoRoom extends Room<LudoState> {
       // reconnect either way.
       const reason = `${player.name} left the game.`;
       this.state.statusMessage = reason;
-      if (this.botSeats.size > 0) { this.clearTimers(); return; } // room disposes itself once empty
+      if (this.botSeats.size > 0) { this.clearTimers(); this.recordBotGame('quit').catch(() => {}); return; } // room disposes itself once empty
       this.checkForfeitWin(reason, 'forfeit');
       return;
     }
@@ -242,7 +242,7 @@ export class LudoRoom extends Room<LudoState> {
       // Grace period expired without a reconnect — they're gone for good.
       const reason = `${player.name} disconnected and never reconnected.`;
       this.state.statusMessage = reason;
-      if (this.botSeats.size > 0) { this.clearTimers(); return; }
+      if (this.botSeats.size > 0) { this.clearTimers(); this.recordBotGame('quit').catch(() => {}); return; }
       this.checkForfeitWin(reason, 'timeout');
       return;
     }
@@ -586,24 +586,35 @@ export class LudoRoom extends Room<LudoState> {
     recordMatchRolls(this.roomId, rows).catch(() => {});
   }
 
+  private botRecorded = false;
+
+  /** Practice vs computer: no wallet, no real-match history, no stats. Just a private row for the human (bot_matches)
+   *  so it shows in their History — including games they walk away from ('quit') and every seat's rolls, so a
+   *  "the computer got all the 6s" complaint can be checked against real data. */
+  private async recordBotGame(result: 'win' | 'lose' | 'quit') {
+    if (this.botRecorded) return;
+    const total = this.rollLog.reduce((n, l) => n + (l?.length ?? 0), 0);
+    if (result === 'quit' && total < 8) return; // left right away, nothing worth keeping
+    this.botRecorded = true;
+    const human = this.state.players[0]!;
+    const uid = this.sessionUserIds[human.sessionId];
+    const supa = getSupabase();
+    if (!uid || !supa) return;
+    const rolls: Record<string, number[]> = {};
+    this.state.players.forEach((p, i) => { rolls[`${i}:${p.color}`] = this.rollLog[i] ?? []; });
+    const { error } = await supa.from('bot_matches').insert({
+      user_id: uid,
+      color: human.color,
+      result,
+      player_count: this.state.players.length,
+      duration_s: this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : null,
+      rolls,
+    });
+    if (error) console.error('[ludo] failed to insert bot_matches row:', error);
+  }
+
   private async persistResult(winnerIdx: number, endReason: string) {
-    if (this.botSeats.size > 0) {
-      // Practice vs computer: no wallet, no real-match history, no stats. Just a private
-      // practice-history row for the human (bot_matches) so it shows up in their History.
-      const uid = this.sessionUserIds[this.state.players[0]!.sessionId];
-      const supa = getSupabase();
-      if (uid && supa) {
-        const { error } = await supa.from('bot_matches').insert({
-          user_id: uid,
-          color: this.state.players[0]!.color,
-          result: winnerIdx === 0 ? 'win' : 'lose',
-          player_count: this.state.players.length,
-          duration_s: this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : null,
-        });
-        if (error) console.error('[ludo] failed to insert bot_matches row:', error);
-      }
-      return;
-    }
+    if (this.botSeats.size > 0) return this.recordBotGame(winnerIdx === 0 ? 'win' : 'lose');
     const supabase = getSupabase();
     if (!supabase) return;
 

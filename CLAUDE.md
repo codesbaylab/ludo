@@ -81,7 +81,7 @@ by a Supabase project for auth/wallet-ledger/match-history.
   `client.create('ludo', {private:true, bots:true})`. `LudoRoom` (create option `bots`) forces stake 0 + private, seats the
   human at seat 0 and fills the rest with connected bot seats (`botSeats`, names in `server/src/bot.ts`). Bots roll/pick on a
   server timer (1.5s / 1.2s, `botDelayMs` overrides for tests) using `chooseBotToken` (capture > home > leave yard > safe/out
-  of danger > furthest). Bot games skip the wallet, `matches`/`match_players`, stats and dice stats; the human's result is written to `bot_matches` (own-rows RLS, service-role writes) and shown in History's All Games list labelled "🤖 vs Computer" (not counted in the stat tiles), and just end when the human leaves
+  of danger > furthest). Bot games skip the wallet, `matches`/`match_players`, stats and dice stats; the human's result is written to `bot_matches` (own-rows RLS, service-role writes; result win/lose/**quit** — a game left after >= 8 rolls is recorded as quit — plus a `rolls` jsonb with every seat's ordered dice rolls, so "the computer got all the 6s" can be checked from data) and shown in History's All Games list labelled "🤖 vs Computer" (Left/Win/Loss, not counted in the stat tiles). Dice are identical for human and bots (`resolveRoll` -> `crypto.randomInt(1,7)` for every seat), and just end when the human leaves
   (no forfeit). Handoff/reconnect reuse the private-room `&code=` path. Verified with `npm run test:sim:bots` (full game vs 3
   bots) + `test:sim`; NOT yet clicked through in a real browser (needs a Supabase login). Server must be redeployed on Render for it.
 - **Branding**: the app is **Table Kings** (was "Ludo Online") — gold crown + spade on racing green (`#0f2b24`). Name lives in
