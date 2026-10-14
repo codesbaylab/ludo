@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Rummy buttons mockup</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#073d29;font-family:system-ui,sans-serif;touch-action:pan-x pan-y}
+  #stage{position:fixed;inset:0}
+  #frame{position:absolute;left:0;top:0;width:844px;height:390px;transform-origin:0 0;
+    background:radial-gradient(ellipse at 50% 35%,#1c9463 0,#0f6b47 55%,#073d29 100%);color:#fff;overflow:hidden}
+  .pos{position:absolute}
+  .card{position:absolute;width:62px;height:86px;background:#fff;border-radius:8px;color:#222;font-weight:800;font-size:13px;box-shadow:0 2px 5px rgba(0,0,0,.3);padding:3px 5px;box-sizing:border-box}
+  .card.r{color:#d32f2f}.back{background:#d6446c;border:2px solid #fff}
+  .chip{position:absolute;height:14px;border-radius:8px;font-size:8px;font-weight:800;text-align:center;line-height:14px}
+  .ok{background:#d9f5e3;color:#178a4c}.bad{background:#fde0e3;color:#c33}
+  .btns{position:absolute;display:flex;gap:8px;z-index:5}
+  .b{border-radius:16px;padding:6px 16px;font-size:12px;font-weight:800;background:#fff7ec;color:#333;border:2px solid #f0d9bf}
+  .b.d{background:#6aa68a;color:#2d4b3d;border-color:#6aa68a}.b.g{background:linear-gradient(135deg,#ffd23c,#ff8a3d);color:#3a2c05;border:none}
+  .lbl{position:absolute;font-size:8px;font-weight:800;opacity:.85;text-align:center;width:70px}
+  #tabs{position:fixed;z-index:10;display:flex;gap:6px}
+  #tabs button{font:700 13px system-ui;padding:8px 14px;border-radius:14px;border:0;background:#ffffff33;color:#fff}
+  #tabs button.on{background:#ffd23c;color:#333}
+  .note{position:absolute;left:10px;top:34px;font-size:10px;opacity:.8}
+</style></head><body>
+<div id="tabs"><button data-v="A" class="on">A · above hand</button><button data-v="B">B · table centre</button></div>
+<div id="stage"><div id="frame">
+  <div class="pos" style="left:10px;top:8px;font-size:12px;font-weight:800">← Exit</div>
+  <div class="pos" style="right:12px;top:6px;font-size:12px;font-weight:800;text-align:right">Points Rummy<br><span style="font-size:8px;font-weight:600">1 / point · 2 players</span></div>
+  <div class="pos" style="left:400px;top:14px;text-align:center;font-size:9px;font-weight:800">Ravi<br>▮▮ 13 cards</div>
+  <!-- deck / wild / discard -->
+  <div class="card back" id="deck" style="left:330px;top:92px"></div>
+  <div class="lbl" id="dl" style="left:326px;top:182px">CLOSED DECK · WILD 6</div>
+  <div class="card" id="dis" style="left:450px;top:92px">9<br>♥</div>
+  <div class="lbl" id="sl" style="left:446px;top:182px">DISCARD</div>
+  <!-- hand -->
+  <div class="chip ok" style="left:60px;top:228px;width:150px">Pure sequence ✓</div>
+  <div class="chip ok" style="left:240px;top:228px;width:150px">Set ✓</div>
+  <div class="chip bad" style="left:420px;top:228px;width:150px">Invalid · 22</div>
+  <div class="chip bad" style="left:600px;top:228px;width:150px">Invalid · 7</div>
+  <div id="hand"></div>
+  <div class="pos" id="hint" style="left:12px;top:208px;font-size:10px;opacity:.9">22 points of deadwood left — keep improving your hand.</div>
+  <div class="btns" id="btns"><div class="b">⇅ Sort</div><div class="b d">Discard</div><div class="b g">Declare</div></div>
+</div></div>
+<script>
+  const hand=document.getElementById('hand');let x=60;
+  for(let i=0;i<14;i++){const c=document.createElement('div');c.className='card'+(i%3==1?' r':'');c.style.cssText=`left:${x}px;top:246px`;c.innerHTML=['3','4','5','9','9','9','A','4','10','7','K','Q','2','8'][i]+'<br>'+(i%3==1?'♥':'♣');hand.appendChild(c);x+=(i==2||i==5||i==9?52:46);}
+  const btns=document.getElementById('btns');
+  function setV(v){const m=v=='B';deck.style.left=m?'250px':'330px';dl.style.left=m?'246px':'326px';dis.style.left=m?'532px':'450px';sl.style.left=m?'528px':'446px';document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.v==v));
+    // A: row centred just above the hand (replaces the hint line's spot); B: centred between deck and discard
+    if(v=='A'){btns.style.left='262px';btns.style.top='194px';document.getElementById('hint').style.display='none';}
+    else{btns.style.left='264px';btns.style.top='148px';document.getElementById('hint').style.display='';}
+    if(v=='B'){btns.style.top='198px';btns.style.display='none';
+      // B: vertical stack in the middle of the table, between deck and discard
+      btns.style.display='flex';btns.style.flexDirection='column';btns.style.left='369px';btns.style.top='92px';btns.style.gap='6px';btns.style.alignItems='stretch';}
+    else{btns.style.flexDirection='row';btns.style.alignItems='';btns.style.gap='8px';}
+  }
+  document.querySelectorAll('#tabs button').forEach(b=>b.onclick=()=>setV(b.dataset.v));
+  function fit(){const f=document.getElementById('frame'),t=document.getElementById('tabs');const w=innerWidth,h=innerHeight;
+    if(w>=h){const s=Math.min(w/844,h/390);f.style.transform=`translate(${(w-844*s)/2}px,${(h-390*s)/2}px) scale(${s})`;t.style.left='8px';t.style.bottom='6px';t.style.top='auto';}
+    else{const s=Math.min(h/844,w/390);f.style.transform=`translate(${(w+390*s)/2}px,${(h-844*s)/2}px) rotate(90deg) scale(${s})`;t.style.left='8px';t.style.bottom='8px';t.style.top='auto';}}
+  addEventListener('resize',fit);fit();setV('A');
+</script></body></html>
