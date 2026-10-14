@@ -353,7 +353,7 @@
 
     /* The felt is no longer its own rounded card either — same shared
        background as the rest of the screen, just a layout region. */
-    .felt { background: transparent; box-shadow: none; border-radius: 0; padding: 14px 0 2px; flex: 0 0 auto; }
+    .felt { background: transparent; box-shadow: none; border-radius: 0; padding: 34px 0 2px; flex: 0 0 auto; }
     .opponent-row { margin-bottom: 4px; gap: 4px; }
     .opponent { padding: 2px 6px; gap: 2px; }
     /* Opponents ride in the header strip (between Exit and the title) instead of their own row: the short screen edge is
@@ -441,7 +441,7 @@
 
     /* Bigger cards — the whole point of landscape mode. */
     .rummy-page {
-      --cw: calc(clamp(40px, min(calc((var(--land-h) - 280px) / 1.39), calc((var(--land-w) - 200px) / 6.46)), 96px) * var(--fit, 1));
+      --cw: calc(clamp(40px, min(calc((var(--land-h) - 296px) / 1.39), calc((var(--land-w) - 200px) / 6.46)), 96px) * var(--fit, 1));
       --cc: 60px;
       --step: clamp(calc(var(--cw) * .42), calc((var(--land-w) - 260px - var(--cw)) / 13), calc(var(--cw) * .78));
     }
