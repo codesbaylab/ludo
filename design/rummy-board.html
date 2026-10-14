@@ -366,10 +366,10 @@
        every card on the table reads at the same size, not just the hand. */
     .center-row { padding: 2px 0; gap: 16px; }
     .pile-label { font-size: 8px; }
-    .closed-deck { width: 54px; height: 75px; }
-    .closed-deck .card-back { width: 54px; height: 75px; }
+    .closed-deck { width: var(--cc); height: calc(var(--cc) * 1.39); }
+    .closed-deck .card-back { width: var(--cc); height: calc(var(--cc) * 1.39); }
     .deck-count { font-size: 9px; padding: 1px 5px; }
-    .discard-pile .pcard, .discard-pile.empty { width: 54px; height: 75px; }
+    .discard-pile .pcard, .discard-pile.empty { width: var(--cc); height: calc(var(--cc) * 1.39); }
     .status-strip { position: absolute; bottom: 4px; right: 10px; margin-top: 0; font-size: 9px; padding: 3px 8px; }
 
     /* No card background here either now — same shared full-bleed green as
@@ -431,7 +431,8 @@
     .action-bar .btn { flex: none; width: auto; padding: 4px 12px; font-size: 11px; }
 
     /* Bigger cards — the whole point of landscape mode. */
-    .hand-row .pcard { --cw: clamp(40px, min(calc((100vw - 64px) / 12.4), calc((100vh - 305px) / 1.39)), 62px); width: var(--cw); height: calc(var(--cw) * 1.39); }
+    .rummy-page { --cw: clamp(40px, min(calc((var(--land-w) - 64px) / 12.4), calc((var(--land-h) - 305px) / 1.39)), 78px); --cc: max(54px, calc(var(--cw) * .85)); }
+    .hand-row .pcard { width: var(--cw); height: calc(var(--cw) * 1.39); }
     .pcard { width: 54px; height: 75px; border-radius: 8px; }
     .pcard .corner { font-size: 13px; }
     .pcard .pip { font-size: 26px; }
@@ -616,12 +617,17 @@
   // again on every resize, since a mobile browser fires resize whenever
   // its chrome shows/hides, not just on an actual device rotation.
   function updateLandVars() {
-    const w = window.innerWidth, h = window.innerHeight;
+    const vv = window.visualViewport;
+    const w = Math.round((vv && vv.width) || window.innerWidth), h = Math.round((vv && vv.height) || window.innerHeight);
     document.documentElement.style.setProperty('--land-w', Math.max(w, h) + 'px');
     document.documentElement.style.setProperty('--land-h', Math.min(w, h) + 'px');
   }
+  // iOS reports stale/transitional sizes right after a rotation, so re-read a few times.
+  function updateLandVarsSoon() { updateLandVars(); [80, 250, 600].forEach(t => setTimeout(updateLandVars, t)); }
   updateLandVars();
-  window.addEventListener('resize', updateLandVars);
+  window.addEventListener('resize', updateLandVarsSoon);
+  window.addEventListener('orientationchange', updateLandVarsSoon);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', updateLandVars);
   const MODE = params.get('mode') === 'pool' ? 'pool' : 'points';
   const playerCount = [2, 4].includes(Number(params.get('players'))) ? Number(params.get('players')) : 4;
   const pointsValue = [1, 2, 5].includes(Number(params.get('value'))) ? Number(params.get('value')) : 1;

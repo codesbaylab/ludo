@@ -149,3 +149,7 @@
   window.ludoAlert = (opts) => ludoDialog(typeof opts === 'string' ? { tone: 'info', title: 'Notice', message: opts } : { tone: 'info', ...opts });
   window.ludoError = (message) => ludoDialog({ tone: 'danger', title: 'Something went wrong', message: String(message || 'Unknown error'), confirmText: 'Got it' });
 })();
+
+// Lock zoom: iOS ignores the viewport meta's user-scalable=no, so block pinch/double-tap zoom here too.
+['gesturestart', 'gesturechange', 'gestureend'].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
+document.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
