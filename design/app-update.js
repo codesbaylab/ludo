@@ -43,3 +43,6 @@
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') check(); });
   window.addEventListener('pageshow', function (e) { if (e.persisted) check(); });
 })();
+
+// Menu pages are portrait-only. The manifest already asks for it; this covers browsers that allow a runtime lock (iOS Safari allows neither).
+try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('portrait').catch(function () {}); } catch (e) {}
