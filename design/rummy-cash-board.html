@@ -106,7 +106,18 @@
   .hand-line .pcard.clickable { cursor:pointer; }
   .hand-line .pcard:first-child { margin-left:0; }
   .hand-line .group-gap { width:10px; flex-shrink:0; }
-  .pcard.lifted { transform: translateY(-14px); box-shadow: 0 8px 14px rgba(0,0,0,.3); z-index:2; }
+  /* Hand groups: each run of grouped cards gets a status chip above it (same design as the practice table). */
+  .hand-line { gap: 6px; }
+  .hgroup { display:flex; flex-direction:column; align-items:stretch; gap:3px; }
+  .gcards { display:flex; align-items:flex-end; }
+  .gchip { position:relative; z-index:3; font-size:9px; font-weight:800; padding:1px 5px; border-radius:100px; text-align:center; white-space:nowrap; border:1px solid; }
+  .gchip.pure { background:#d8f5e3; color:#137a43; border-color:#46c47a; }
+  .gchip.seq { background:#dcebff; color:#1f64c4; border-color:#5aa0f5; }
+  .gchip.set { background:#ece1ff; color:#6a3fc4; border-color:#a47cf0; }
+  .gchip.bad { background:#ffe1e1; color:#c0392b; border-color:#ff8b8b; }
+  .gchip.part { background:#eee; color:#666; border-color:#bbb; }
+  .hand-hint.need-pure { color:#d9690f; }
+  .pcard.lifted { transform: translateY(-9px); box-shadow: 0 8px 14px rgba(0,0,0,.3); z-index:2; }
   .pcard.deadwood { box-shadow: 0 0 0 2px var(--red), 0 2px 5px rgba(0,0,0,.25); }
   .pcard.meld-pure { box-shadow: 0 0 0 2px #178a4c, 0 2px 5px rgba(0,0,0,.25); }
   .pcard.meld-seq { box-shadow: 0 0 0 2px #2e7ce0, 0 2px 5px rgba(0,0,0,.25); }
@@ -198,19 +209,7 @@
 
     <div class="hand-section" id="hand-section">
       <div id="hand-section-content">
-        <div class="hand-head">
-          <div class="htitle">Your Hand</div>
-          <div class="hcount"><span id="hand-count">–</span> cards · tap to select</div>
-        </div>
         <div class="hand-hint" id="hand-hint">—</div>
-        <div class="legend">
-          <span><i class="lg-pure"></i>Pure sequence</span>
-          <span><i class="lg-seq"></i>Sequence</span>
-          <span><i class="lg-set"></i>Set</span>
-          <span><i class="lg-dead"></i>Deadwood</span>
-          <span><i class="lg-wild"></i>Wild card</span>
-        </div>
-
         <div class="hand-row" id="hand-row"></div>
 
         <div class="action-bar">
@@ -300,7 +299,9 @@
       const rankRank = c => (c.rank === 'JOKER' ? 99 : RummyRules.RANKS.indexOf(c.rank));
       return suitRank(ca) - suitRank(cb) || rankRank(ca) - rankRank(cb);
     });
-    deadwood.forEach(i => order.push({ idx: i, kind: 'dead', groupIdx: meldsSorted.length }));
+    // One chip per suit of leftover cards (jokers last), so each "Invalid" chip stays small.
+    const deadGroup = c => meldsSorted.length + (c.rank === 'JOKER' ? 9 : RummyRules.SUITS.indexOf(c.suit));
+    deadwood.forEach(i => order.push({ idx: i, kind: 'dead', groupIdx: deadGroup(myHand[i]) }));
 
     myHand = order.map(o => myHand[o.idx]);
     handGroupTags = order.map(o => ({ kind: o.kind, groupIdx: o.groupIdx }));
@@ -313,8 +314,8 @@
       el.textContent = 'Draw a card to begin your turn.';
       el.className = 'hand-hint';
     } else if (!grouping.pureAchieved) {
-      el.textContent = 'No pure sequence yet — you need at least one unbroken run with no wild cards.';
-      el.className = 'hand-hint';
+      el.textContent = 'Need a pure sequence — an unbroken run with no wild cards.';
+      el.className = 'hand-hint need-pure';
     } else if (grouping.deadwood === 0) {
       el.textContent = '✓ Ready to declare!';
       el.className = 'hand-hint ready';
@@ -332,39 +333,72 @@
     const wildRank = snapshot.wildRank;
     const grouping = arrangeHand(wildRank);
     renderHint(grouping);
-    document.getElementById('hand-count').textContent = String(myHand.length);
 
     const container = document.getElementById('hand-row');
     container.innerHTML = '';
     const interactive = isMyTurn(snapshot) && snapshot.phase === 'discard';
-    const splitAt = Math.ceil(myHand.length / 2);
+    // Two rows so the whole hand shows without scrolling. Split at the group boundary nearest the middle,
+    // so a group is never cut in half by the row break (falls back to the plain middle when there is none).
+    const mid = Math.ceil(myHand.length / 2);
+    let splitAt = mid, bestDist = Infinity;
+    for (let i = 1; i < myHand.length; i++) {
+      if ((handGroupTags[i] || {}).groupIdx !== (handGroupTags[i - 1] || {}).groupIdx && Math.abs(i - mid) < bestDist) { bestDist = Math.abs(i - mid); splitAt = i; }
+    }
+    if (bestDist > 3) splitAt = mid; // boundary too far off: keep the rows balanced instead
     const lines = [myHand.slice(0, splitAt), myHand.slice(splitAt)];
+
+    // Status chip for one run of adjacent same-group cards.
+    const chipFor = (idxs) => {
+      const tag = handGroupTags[idxs[0]] || { kind: 'dead', groupIdx: -1 };
+      const groupSize = handGroupTags.filter(t => t && t.groupIdx === tag.groupIdx).length;
+      if (tag.kind === 'dead') {
+        const pts = idxs.reduce((sum, i) => sum + RummyRules.pointValue(myHand[i], wildRank), 0);
+        return { cls: 'bad', text: idxs.length === 1 ? `✗ ${pts}` : `Invalid · ${pts}` }; // short form so one-card groups stay narrow
+      }
+      if (idxs.length < groupSize) return { cls: 'part', text: 'Group split' };
+      if (tag.kind === 'pure') return { cls: 'pure', text: 'Pure sequence ✓' };
+      if (tag.kind === 'seq') return { cls: 'seq', text: 'Sequence ✓' };
+      return { cls: 'set', text: 'Set ✓' };
+    };
 
     lines.forEach((lineCards, lineIdx) => {
       const lineOffset = lineIdx === 0 ? 0 : splitAt;
       const line = document.createElement('div');
       line.className = 'hand-line';
+      const runs = [];
       lineCards.forEach((c, j) => {
         const i = lineOffset + j;
-        const tag = handGroupTags[i] || { kind: 'dead', groupIdx: -1 };
-        if (j > 0 && tag.groupIdx !== (handGroupTags[i - 1] || {}).groupIdx) {
-          const gap = document.createElement('div');
-          gap.className = 'group-gap';
-          line.appendChild(gap);
-        }
-        const meldClass = tag.kind === 'pure' ? 'meld-pure' : tag.kind === 'seq' ? 'meld-seq' : tag.kind === 'set' ? 'meld-set' : 'deadwood';
-        const classes = [selectedCardId === c.id ? 'lifted' : '', meldClass, interactive ? 'clickable' : ''].join(' ');
-        const wrap = document.createElement('div');
-        wrap.innerHTML = cardHtml(c, classes, wildRank);
-        const el = wrap.firstElementChild;
-        if (interactive) {
-          el.addEventListener('click', () => {
-            selectedCardId = selectedCardId === c.id ? null : c.id;
-            renderHand(lastSnapshot);
-            updateActionButtons(lastSnapshot);
-          });
-        }
-        line.appendChild(el);
+        const gi = (handGroupTags[i] || {}).groupIdx;
+        const last = runs[runs.length - 1];
+        if (last && last.gi === gi) last.idxs.push(i); else runs.push({ gi, idxs: [i] });
+      });
+      runs.forEach(run => {
+        const group = document.createElement('div');
+        group.className = 'hgroup';
+        const chip = chipFor(run.idxs);
+        const chipEl = document.createElement('div');
+        chipEl.className = 'gchip ' + chip.cls;
+        chipEl.textContent = chip.text;
+        group.appendChild(chipEl);
+        const cardsEl = document.createElement('div');
+        cardsEl.className = 'gcards';
+        run.idxs.forEach(i => {
+          const c = myHand[i];
+          const classes = [selectedCardId === c.id ? 'lifted' : '', interactive ? 'clickable' : ''].join(' ');
+          const wrap = document.createElement('div');
+          wrap.innerHTML = cardHtml(c, classes, wildRank);
+          const el = wrap.firstElementChild;
+          if (interactive) {
+            el.addEventListener('click', () => {
+              selectedCardId = selectedCardId === c.id ? null : c.id;
+              renderHand(lastSnapshot);
+              updateActionButtons(lastSnapshot);
+            });
+          }
+          cardsEl.appendChild(el);
+        });
+        group.appendChild(cardsEl);
+        line.appendChild(group);
       });
       container.appendChild(line);
     });

@@ -140,7 +140,7 @@
   .hand-line { gap: 8px; }
   .hgroup { display:flex; flex-direction:column; align-items:stretch; gap:3px; }
   .gcards { display:flex; align-items:flex-end; }
-  .gchip { font-size:10px; font-weight:800; padding:2px 7px; border-radius:100px; text-align:center; white-space:nowrap; border:1px solid; }
+  .gchip { position:relative; z-index:3; font-size:10px; font-weight:800; padding:2px 7px; border-radius:100px; text-align:center; white-space:nowrap; border:1px solid; }
   .gchip.pure { background:#d8f5e3; color:#137a43; border-color:#46c47a; }
   .gchip.seq { background:#dcebff; color:#1f64c4; border-color:#5aa0f5; }
   .gchip.set { background:#ece1ff; color:#6a3fc4; border-color:#a47cf0; }
@@ -201,7 +201,7 @@
   .hand-line .pcard.clickable { cursor:pointer; }
   .hand-line .pcard:first-child { margin-left:0; }
   .hand-line .group-gap { width:10px; flex-shrink:0; }
-  .pcard.lifted { transform: translateY(-14px); box-shadow: 0 8px 14px rgba(0,0,0,.3); z-index:2; }
+  .pcard.lifted { transform: translateY(-9px); box-shadow: 0 8px 14px rgba(0,0,0,.3); z-index:2; }
 
   /* Manual hand reordering: every card in your own hand is pointer-draggable
      (touch-action:none so a drag gesture starting on a card isn't stolen by
@@ -435,7 +435,7 @@
     .pcard .corner { font-size: 12px; }
     .pcard .pip { font-size: 23px; }
     .hand-line .pcard { margin-left: -17px; }
-    .pcard.lifted { transform: translateY(-16px); }
+    .pcard.lifted { transform: translateY(-9px); }
 
   }
 

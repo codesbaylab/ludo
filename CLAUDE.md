@@ -124,8 +124,7 @@ by a Supabase project for auth/wallet-ledger/match-history.
   (`.deck-wrap`/`.wild-behind`, label "Closed deck · wild X") instead of its own box; the "Your Hand" header is gone; Arrange is
   now "⇅ Sort". Layout stays zero-overflow at 740x360 / 844x390 / 932x430 (action buttons got tighter padding to pay for the chip row).
   Deliberately NOT built: the finish slot (only one of the reference apps has it; Declare button stays) and a timer ring (the practice
-  table has no turn timer). **`rummy-cash-board.html` was not touched** (portrait network board; still has the legend/rings — port the chips
-  there only after testing it against a live server).
+  table has no turn timer). **`rummy-cash-board.html` got the same chips** (portrait, two rows: the row break is placed at the group boundary nearest the middle so a group is never cut in half; one-card invalid groups use the short "✗ N" form so a row stays within 390px; legend/rings/"Your Hand" header removed; it never had a game log). Tested only against a faked Colyseus room (14 cards, chips, select->discard enabled, no overflow at 390/360) — **not yet against a live server**. Lifted cards now rise 9px so they never cover the chip above them.
 - **Leave warnings**: Rummy cash/free board Exit asks "Leave this table?" (cash wording mentions losing the
   stake), the practice board asks "Leave this game?"; both via `ludoConfirm`.
 - **Installed-app staleness**: an iOS home-screen app resumes the last page frozen in memory and a cold start can
