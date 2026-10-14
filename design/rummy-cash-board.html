@@ -663,8 +663,76 @@
     modal.classList.add('open');
   }
 
+  // --- Sound: synthesized with Web Audio (no files), same set as the practice table. Never throws. ---
+  let audioCtx = null;
+  function getAudioCtx() {
+    if (audioCtx) return audioCtx;
+    try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { audioCtx = null; }
+    return audioCtx;
+  }
+  function playTone(freq, durationMs, { type = 'sine', peak = 0.15, delay = 0 } = {}) {
+    try {
+      const ctx = getAudioCtx(); if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const osc = ctx.createOscillator(), gain = ctx.createGain();
+      osc.type = type; osc.frequency.value = freq;
+      const start = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(0, start);
+      gain.gain.linearRampToValueAtTime(peak, start + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + durationMs / 1000);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(start); osc.stop(start + durationMs / 1000 + 0.02);
+    } catch (e) {}
+  }
+  function playNoiseBurst(durationMs, { peak = 0.08, delay = 0 } = {}) {
+    try {
+      const ctx = getAudioCtx(); if (!ctx) return;
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      const size = Math.max(1, Math.floor(ctx.sampleRate * (durationMs / 1000)));
+      const buffer = ctx.createBuffer(1, size, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < size; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / size);
+      const noise = ctx.createBufferSource(), gain = ctx.createGain();
+      noise.buffer = buffer;
+      const start = ctx.currentTime + delay;
+      gain.gain.setValueAtTime(peak, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + durationMs / 1000);
+      noise.connect(gain); gain.connect(ctx.destination); noise.start(start);
+    } catch (e) {}
+  }
+  function sfxShuffle() { playNoiseBurst(140, { peak: 0.09 }); playNoiseBurst(140, { peak: 0.08, delay: 0.12 }); playNoiseBurst(120, { peak: 0.07, delay: 0.26 }); }
+  function sfxCardMove() { playNoiseBurst(70, { peak: 0.08 }); }
+  function sfxYourTurn() { playTone(880, 110, { type: 'sine', peak: 0.09 }); playTone(1108.7, 140, { type: 'sine', peak: 0.09, delay: 0.09 }); }
+  function sfxWin() {
+    playTone(523.25, 160, { type: 'triangle', peak: 0.12 });
+    playTone(659.25, 160, { type: 'triangle', peak: 0.12, delay: 0.1 });
+    playTone(783.99, 260, { type: 'triangle', peak: 0.14, delay: 0.2 });
+  }
+  function sfxEliminated() { playTone(220, 220, { type: 'sawtooth', peak: 0.08 }); playTone(164.81, 320, { type: 'sawtooth', peak: 0.08, delay: 0.15 }); }
+  // Browsers keep audio suspended until a real gesture; resume on the first tap.
+  document.addEventListener('pointerdown', () => { const c = getAudioCtx(); if (c && c.state === 'suspended') c.resume().catch(() => {}); }, { once: true });
+
+  // Sounds are driven by snapshot changes so opponents' moves are heard too (and mine, once the server confirms).
+  function playSnapshotSounds(prev, snap) {
+    if (!prev) return;
+    try {
+      const prevTop = prev.discardTop && prev.discardTop.id, top = snap.discardTop && snap.discardTop.id;
+      if (prevTop !== top || prev.closedDeckCount !== snap.closedDeckCount) sfxCardMove();
+      const mine = snap.players.findIndex(p => p.sessionId === room.sessionId);
+      if (mine !== -1 && snap.currentPlayerIdx === mine && prev.currentPlayerIdx !== mine && !snap.matchOver) sfxYourTurn();
+      const wasOver = prev.phase === 'hand-over' || prev.matchOver, isOver = snap.phase === 'hand-over' || snap.matchOver;
+      if (isOver && !wasOver) {
+        const won = MODE === 'pool'
+          ? snap.players.findIndex(p => !p.eliminated) === mine
+          : snap.lastHandInvalidDeclareBy === -1 && snap.lastHandWinnerIdx === mine;
+        if (won) sfxWin(); else sfxEliminated();
+      }
+    } catch (e) {}
+  }
+
   function renderAll(snapshot) {
     try {
+      if (lastSnapshot && lastSnapshot !== snapshot && !snapshot.__replay) playSnapshotSounds(lastSnapshot, snapshot);
       lastSnapshot = snapshot;
       mySeatIdx = snapshot.players.findIndex(p => p.sessionId === room.sessionId);
       renderStatusStrip(snapshot);
@@ -723,6 +791,7 @@
     hideConnectingOverlay();
 
     room.onMessage('hand', (msg) => {
+      if (!myHand.length && (msg.cards || []).length >= 13) sfxShuffle(); // first deal
       myHand = msg.cards || [];
       selectedCardId = null;
       if (lastSnapshot) renderAll(lastSnapshot);
