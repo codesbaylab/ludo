@@ -402,7 +402,7 @@
     #hand-section-content {
       display: grid; grid-template-columns: 1fr auto; column-gap: 10px; align-items: center;
       align-content: start;
-      grid-template-areas: "hint actions" "cards actions";
+      grid-template-areas: "hint actions" "cards cards";
       flex: 1 1 auto; min-height: 0; padding-bottom: 2px;
     }
     /* white-space:nowrap + ellipsis, not a natural wrap: this hint's text
@@ -427,14 +427,15 @@
     .gchip { font-size: 8px; padding: 1px 5px; }
     .hand-line { gap: 7px; }
     .hand-row { grid-area: cards; padding: 2px 2px 0; }
-    .action-bar { grid-area: actions; flex-direction: column; width: 92px; gap: 5px; margin-top: 0; }
-    .action-bar .btn { padding: 6px 6px; font-size: 11px; }
+    .action-bar { grid-area: actions; flex-direction: row; width: auto; gap: 6px; margin-top: 0; }
+    .action-bar .btn { flex: none; width: auto; padding: 4px 12px; font-size: 11px; }
 
     /* Bigger cards — the whole point of landscape mode. */
+    .hand-row .pcard { --cw: clamp(40px, min(calc((100vw - 64px) / 12.4), calc((100vh - 305px) / 1.39)), 62px); width: var(--cw); height: calc(var(--cw) * 1.39); }
     .pcard { width: 54px; height: 75px; border-radius: 8px; }
-    .pcard .corner { font-size: 12px; }
-    .pcard .pip { font-size: 23px; }
-    .hand-line .pcard { margin-left: -17px; }
+    .pcard .corner { font-size: 13px; }
+    .pcard .pip { font-size: 26px; }
+    .hand-line .pcard { margin-left: calc(var(--cw, 62px) * -0.226); }
     .pcard.lifted { transform: translateY(-9px); }
 
   }
