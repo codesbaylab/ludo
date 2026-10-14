@@ -114,6 +114,18 @@ by a Supabase project for auth/wallet-ledger/match-history.
   restricted by the `ALLOWED_ORIGINS` env var (comma-separated origins) — **set it on Render at launch**; unset = open.
   Launch-day checklist (not yet done): domain + DNS on Cloudflare, Supabase Auth Site URL/redirect allowlist, custom SMTP,
   paid always-on game server (single process), paid Solana RPC, Supabase Pro, ALLOWED_ORIGINS, legal pages/age gate.
+- **Rummy practice table redesign (supersedes parts of the long `rummy-board.html` notes below)**: modelled on the other Indian
+  apps' tables (`design/rummy-table-mockup.html` is the approved static idea). **The Game Log was removed** (nobody else has one and
+  it could leak what opponents hold). Per-card meld colour rings + the legend are gone; instead each run of grouped cards in the
+  hand has a status chip above it (`renderHand` -> `.hgroup` > `.gchip` + `.gcards`): "Pure sequence ✓" / "Sequence ✓" / "Set ✓",
+  and "Invalid · N" (N = the points of those cards; leftover cards are split one chip per suit via `groupIdx` in `arrangeHand`/
+  `retagHandInPlace`). After a manual drag a meld that is no longer adjacent shows "Group split". The hint line turns orange
+  ("Need a pure sequence…") until a pure sequence exists. The wild card now sits tucked behind the closed deck
+  (`.deck-wrap`/`.wild-behind`, label "Closed deck · wild X") instead of its own box; the "Your Hand" header is gone; Arrange is
+  now "⇅ Sort". Layout stays zero-overflow at 740x360 / 844x390 / 932x430 (action buttons got tighter padding to pay for the chip row).
+  Deliberately NOT built: the finish slot (only one of the reference apps has it; Declare button stays) and a timer ring (the practice
+  table has no turn timer). **`rummy-cash-board.html` was not touched** (portrait network board; still has the legend/rings — port the chips
+  there only after testing it against a live server).
 - **Leave warnings**: Rummy cash/free board Exit asks "Leave this table?" (cash wording mentions losing the
   stake), the practice board asks "Leave this game?"; both via `ludoConfirm`.
 - **Installed-app staleness**: an iOS home-screen app resumes the last page frozen in memory and a cold start can

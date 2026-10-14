@@ -130,16 +130,23 @@
     100% { transform: scale(1) rotate(0deg); }
   }
 
-  .joker-chip {
-    display:flex; align-items:center; gap:6px; background:rgba(255,255,255,.12);
-    border:1px solid rgba(255,255,255,.3); border-radius: 12px; padding: 6px 10px;
-  }
-  .joker-chip .jlabel { color:#fff; font-size:10px; font-weight:800; }
-  /* Sized via CSS (not an inline style on the element) specifically so the
-     landscape media query below can override it — an inline style attribute
-     beats any stylesheet rule regardless of media query. */
-  .joker-chip .pcard { width:32px; height:44px; }
-  .joker-chip .pcard .pip { font-size:15px; }
+
+  /* The wild joker sits tucked behind the closed deck (like the big apps), not in its own box. */
+  .deck-wrap { position:relative; padding-left:22px; padding-top:6px; }
+  .deck-wrap .wild-behind { position:absolute; left:0; top:10px; transform:rotate(-10deg); z-index:0; box-shadow:0 2px 6px rgba(0,0,0,.4); }
+  .deck-wrap .closed-deck { position:relative; z-index:1; }
+
+  /* Hand groups: each run of grouped cards gets a status chip above it. */
+  .hand-line { gap: 8px; }
+  .hgroup { display:flex; flex-direction:column; align-items:stretch; gap:3px; }
+  .gcards { display:flex; align-items:flex-end; }
+  .gchip { font-size:10px; font-weight:800; padding:2px 7px; border-radius:100px; text-align:center; white-space:nowrap; border:1px solid; }
+  .gchip.pure { background:#d8f5e3; color:#137a43; border-color:#46c47a; }
+  .gchip.seq { background:#dcebff; color:#1f64c4; border-color:#5aa0f5; }
+  .gchip.set { background:#ece1ff; color:#6a3fc4; border-color:#a47cf0; }
+  .gchip.bad { background:#ffe1e1; color:#c0392b; border-color:#ff8b8b; }
+  .gchip.part { background:#eee; color:#666; border-color:#bbb; }
+  .hand-hint.need-pure { color:#ff8a3d; }
 
   /* Playing cards */
   .pcard {
@@ -362,9 +369,6 @@
     .closed-deck { width: 54px; height: 75px; }
     .closed-deck .card-back { width: 54px; height: 75px; }
     .deck-count { font-size: 9px; padding: 1px 5px; }
-    .joker-chip { padding: 4px 8px; gap: 4px; }
-    .joker-chip .pcard { width: 54px; height: 75px; }
-    .joker-chip .pcard .pip { font-size: 23px; }
     .discard-pile .pcard, .discard-pile.empty { width: 54px; height: 75px; }
     .status-strip { position: absolute; bottom: 4px; right: 10px; margin-top: 0; font-size: 9px; padding: 3px 8px; }
 
@@ -398,12 +402,9 @@
     #hand-section-content {
       display: grid; grid-template-columns: 1fr auto; column-gap: 10px; align-items: center;
       align-content: start;
-      grid-template-areas: "head actions" "hint actions" "legend actions" "cards actions";
+      grid-template-areas: "hint actions" "cards actions";
       flex: 1 1 auto; min-height: 0; padding-bottom: 2px;
     }
-    .hand-head { grid-area: head; margin-bottom: 0; }
-    .hand-head .htitle { color: #fff; }
-    .hand-head .hcount { color: rgba(255,255,255,.7); }
     /* white-space:nowrap + ellipsis, not a natural wrap: this hint's text
        length varies a lot (a short "Ready to declare!" vs. the much
        longer "you need at least one unbroken run..." explainer), and on
@@ -422,11 +423,12 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .hand-hint.ready { color: #7effa8; }
-    .legend { grid-area: legend; gap: 6px; margin: 0 0 4px; font-size: 8px; color: rgba(255,255,255,.8); }
-    .legend i { width: 7px; height: 7px; }
+    .hand-hint.need-pure { color: #ffb36b; }
+    .gchip { font-size: 8px; padding: 1px 5px; }
+    .hand-line { gap: 7px; }
     .hand-row { grid-area: cards; padding: 2px 2px 0; }
     .action-bar { grid-area: actions; flex-direction: column; width: 92px; gap: 5px; margin-top: 0; }
-    .action-bar .btn { padding: 9px 6px; font-size: 11px; }
+    .action-bar .btn { padding: 6px 6px; font-size: 11px; }
 
     /* Bigger cards — the whole point of landscape mode. */
     .pcard { width: 54px; height: 75px; border-radius: 8px; }
@@ -435,56 +437,6 @@
     .hand-line .pcard { margin-left: -17px; }
     .pcard.lifted { transform: translateY(-16px); }
 
-    /* The Game Log is a compact dark pill, not the full-width cream card
-       portrait uses — but a NORMAL, in-flow flex child of .rummy-page,
-       sitting after .hand-section, same as portrait. Two earlier versions
-       instead pulled it out of flow with position:fixed to save vertical
-       space (first anchored bottom-left, then bottom-right after that
-       overlapped the hand) and both had the same underlying problem: a
-       floating pill has no reliable "always clear" corner to sit in,
-       since exactly which corner is actually free shifts with hand
-       length, hint-text length, and viewport size. In flow, it can't
-       overlap anything by construction — it just claims its own real
-       space below the hand, and .hand-section (flex:1 1 auto) shrinks to
-       leave room for it the same way it already accommodates the header/
-       felt/standings above it. align-self:flex-start keeps it a compact
-       pill rather than stretching to the column's full width (flex
-       columns default to stretching their children). */
-    .log-panel {
-      align-self: flex-start; margin-top: 2px; flex: 0 0 auto;
-      max-width: min(320px, calc(var(--land-w) - 20px));
-      background: rgba(8,28,20,.78); border: 1px solid rgba(255,255,255,.22);
-      box-shadow: 0 8px 20px rgba(0,0,0,.4); border-radius: 999px;
-      transition: border-radius .2s ease;
-    }
-    .log-panel.open { border-radius: 14px; }
-    /* width:auto/inline-flex, not the base rule's width:100% — .log-panel
-       is a shrink-to-fit pill (align-self:flex-start, see above), and a
-       100%-width child inside a shrink-to-fit parent resolves against an
-       ambiguous/zero basis and collapsed the button's actual clickable
-       area to nothing (an early version of this hit exactly that). */
-    .log-toggle { width: auto; display: inline-flex; padding: 5px 12px; font-size: 11px; color: #fff; }
-    .log-toggle .chev { display: inline !important; color: rgba(255,255,255,.7); }
-    /* A REAL bug this caught: styles.css's own @media (min-width:761px)
-       block — meant for the Ludo board's desktop 3-column layout, where
-       the log sits permanently open in a side column — sets
-       `.log-toggle { pointer-events: none }` and `.log-body {
-       max-height:130px !important }` globally, not scoped to that board's
-       own page. Any real phone in landscape is comfortably over 761px
-       wide, so that rule was ALSO matching here: the toggle button was
-       rendered but literally unclickable (pointer-events:none), and the
-       log sat permanently expanded, both silently undoing this whole
-       collapsed-pill design. Caught by a real Playwright click failing
-       with "the ancestor intercepts pointer events" — the button had a
-       normal rect and geometry, just no hit-testing at all — not by
-       reasoning about which media queries could apply. Both `!important`
-       rules need `!important` right back to win, since equal specificity
-       + equal importance falls back to source order, and this page's own
-       <style> block loads after styles.css. */
-    .log-toggle { pointer-events: auto !important; }
-    .log-panel:not(.open) .log-body { max-height: 0 !important; padding: 0 12px !important; }
-    .log-panel.open .log-body { max-height: 140px !important; padding: 0 12px 10px !important; }
-    .log-body div { color: rgba(255,255,255,.85); border-top-color: rgba(255,255,255,.18); }
   }
 
   /* --- Landscape-only, but auto-rotated rather than asked for -----------
@@ -600,23 +552,21 @@
 
       <div class="center-row">
         <div class="pile">
-          <div class="pile-label">Closed Deck</div>
-          <div class="closed-deck" id="closed-deck">
-            <div class="card-back"></div>
-            <div class="card-back"></div>
-            <div class="card-back"></div>
-            <div class="deck-count" id="deck-count">29</div>
+          <div class="deck-wrap">
+            <div class="pcard red wild-behind" id="wild-indicator-card"><span class="corner">9<br>♦</span><span class="pip">♦</span></div>
+            <div class="closed-deck" id="closed-deck">
+              <div class="card-back"></div>
+              <div class="card-back"></div>
+              <div class="card-back"></div>
+              <div class="deck-count" id="deck-count">29</div>
+            </div>
           </div>
-        </div>
-
-        <div class="joker-chip">
-          <div class="pcard red" id="wild-indicator-card"><span class="corner">9<br>♦</span><span class="pip">♦</span></div>
-          <div class="jlabel">Wild<br>Joker</div>
+          <div class="pile-label" id="deck-label">Closed deck · wild 9</div>
         </div>
 
         <div class="pile">
-          <div class="pile-label">Discard</div>
           <div class="discard-pile" id="discard-pile"></div>
+          <div class="pile-label">Discard</div>
         </div>
       </div>
 
@@ -625,22 +575,11 @@
 
     <div class="hand-section" id="hand-section">
       <div id="hand-section-content">
-        <div class="hand-head">
-          <div class="htitle">Your Hand</div>
-          <div class="hcount"><span id="hand-count">13</span> cards · tap to select</div>
-        </div>
         <div class="hand-hint" id="hand-hint">—</div>
-        <div class="legend">
-          <span><i class="lg-pure"></i>Pure sequence</span>
-          <span><i class="lg-seq"></i>Sequence</span>
-          <span><i class="lg-set"></i>Set</span>
-          <span><i class="lg-dead"></i>Deadwood</span>
-          <span><i class="lg-wild"></i>Wild card</span>
-        </div>
         <div class="hand-row" id="hand-row"></div>
 
         <div class="action-bar">
-          <button class="btn btn-secondary" id="btn-sort">↕ Arrange</button>
+          <button class="btn btn-secondary" id="btn-sort">⇅ Sort</button>
           <button class="btn btn-secondary" id="btn-discard" disabled>Discard</button>
           <button class="btn btn-declare" id="btn-declare" disabled>Declare</button>
         </div>
@@ -650,15 +589,6 @@
       </div>
     </div>
 
-    <div class="log-panel" id="log-panel" style="margin-top:12px;">
-      <button class="log-toggle" id="log-toggle">
-        <span>📜 Game Log</span>
-        <span class="chev">▾</span>
-      </button>
-      <div class="log-body" id="log-body">
-        <div>Dealing a new round…</div>
-      </div>
-    </div>
   </div>
 </div>
 
@@ -722,7 +652,6 @@
   let currentPlayerIdx = 0;
   let phase = 'your-turn-draw'; // 'your-turn-draw' | 'your-turn-discard' | 'bot-turn' | 'round-over'
   let selectedCardId = null;
-  let gameLog = [];
   let turnToken = 0; // bumped on every new hand to cancel any in-flight bot loop
   let uiBusy = false; // true while a draw/discard flight animation is in progress — blocks a
                        // rapid double-click from firing the same action twice mid-animation,
@@ -905,12 +834,6 @@
     return `<div class="pcard ${color} ${wildClass} ${extraClass || ''}"><span class="corner">${card.rank}<br>${card.suit}</span><span class="pip">${card.suit}</span></div>`;
   }
 
-  function logEvent(text) {
-    gameLog.unshift(text);
-    const body = document.getElementById('log-body');
-    body.innerHTML = gameLog.slice(0, 30).map(t => `<div>${t}</div>`).join('');
-  }
-
   // --- Hand arrangement: reorders `state.hands[0]` into its best-found
   // groups (pure sequences first, then other sequences, then sets, then
   // deadwood) so the player can literally see which cards belong together
@@ -950,7 +873,9 @@
       const rankRank = c => (c.rank === 'JOKER' ? 99 : RummyRules.RANKS.indexOf(c.rank));
       return suitRank(ca) - suitRank(cb) || rankRank(ca) - rankRank(cb);
     });
-    deadwood.forEach(i => order.push({ idx: i, kind: 'dead', groupIdx: meldsSorted.length }));
+    // One chip per suit of leftover cards (jokers last), so each "Invalid · N" chip stays small and readable.
+    const deadGroup = c => meldsSorted.length + (c.rank === 'JOKER' ? 9 : RummyRules.SUITS.indexOf(c.suit));
+    deadwood.forEach(i => order.push({ idx: i, kind: 'dead', groupIdx: deadGroup(hand[i]) }));
 
     state.hands[0] = order.map(o => hand[o.idx]);
     handGroupTags = order.map(o => ({ kind: o.kind, groupIdx: o.groupIdx }));
@@ -965,7 +890,7 @@
   function retagHandInPlace() {
     const hand = state.hands[0];
     const { g, meldsSorted } = computeMeldsSorted(hand);
-    const tagByIdx = hand.map(() => ({ kind: 'dead', groupIdx: meldsSorted.length }));
+    const tagByIdx = hand.map(c => ({ kind: 'dead', groupIdx: meldsSorted.length + (c.rank === 'JOKER' ? 9 : RummyRules.SUITS.indexOf(c.suit)) }));
     meldsSorted.forEach((m, gi) => {
       const kind = m.kind === 'sequence' ? (m.pure ? 'pure' : 'seq') : 'set';
       m.indices.forEach(i => { tagByIdx[i] = { kind, groupIdx: gi }; });
@@ -977,8 +902,8 @@
   function renderHint(grouping) {
     const el = document.getElementById('hand-hint');
     if (!grouping.pureAchieved) {
-      el.textContent = 'No pure sequence yet — you need at least one unbroken run with no wild cards to have any valid hand.';
-      el.className = 'hand-hint';
+      el.textContent = 'Need a pure sequence — an unbroken run with no wild cards — before any hand is valid.';
+      el.className = 'hand-hint need-pure';
     } else if (grouping.deadwood === 0) {
       el.textContent = '✓ Ready to declare!';
       el.className = 'hand-hint ready';
@@ -1012,40 +937,67 @@
     const interactive = phase === 'your-turn-discard';
     const draggable = phase !== 'round-over';
 
+    // Status chip for one run of adjacent same-group cards.
+    const chipFor = (idxs) => {
+      const tag = handGroupTags[idxs[0]] || { kind: 'dead', groupIdx: -1 };
+      const groupSize = handGroupTags.filter(t => t && t.groupIdx === tag.groupIdx).length;
+      if (tag.kind === 'dead') {
+        const pts = idxs.reduce((sum, i) => sum + RummyRules.pointValue(hand[i], state.wildRank), 0);
+        return { cls: 'bad', text: `Invalid · ${pts}` };
+      }
+      if (idxs.length < groupSize) return { cls: 'part', text: 'Group split' }; // a manual drag pulled this meld apart
+      if (tag.kind === 'pure') return { cls: 'pure', text: 'Pure sequence ✓' };
+      if (tag.kind === 'seq') return { cls: 'seq', text: 'Sequence ✓' };
+      return { cls: 'set', text: 'Set ✓' };
+    };
+
     lines.forEach((lineCards, lineIdx) => {
       const lineOffset = lineIdx === 0 ? 0 : splitAt;
       const line = document.createElement('div');
       line.className = 'hand-line';
+      // Split this line into runs of adjacent cards that belong to the same group.
+      const runs = [];
       lineCards.forEach((c, j) => {
         const i = lineOffset + j;
-        const tag = handGroupTags[i] || { kind: 'dead', groupIdx: -1 };
-        if (j > 0 && tag.groupIdx !== (handGroupTags[i - 1] || {}).groupIdx) {
-          const gap = document.createElement('div');
-          gap.className = 'group-gap';
-          line.appendChild(gap);
-        }
-        const meldClass = tag.kind === 'pure' ? 'meld-pure' : tag.kind === 'seq' ? 'meld-seq' : tag.kind === 'set' ? 'meld-set' : 'deadwood';
-        const classes = [selectedCardId === c.id ? 'lifted' : '', meldClass, interactive ? 'clickable' : '', c.id === lastDrawnCardId ? 'just-drawn' : ''].join(' ');
-        const wrap = document.createElement('div');
-        wrap.innerHTML = cardHtml(c, classes);
-        const el = wrap.firstElementChild;
-        if (draggable) {
-          el.addEventListener('pointerdown', (e) => onHandCardPointerDown(e, c.id, i));
-        }
-        if (interactive) {
-          el.addEventListener('click', () => {
-            if (suppressNextClick) { suppressNextClick = false; return; }
-            selectedCardId = selectedCardId === c.id ? null : c.id;
-            renderHand();
-            document.getElementById('btn-discard').disabled = !selectedCardId;
-          });
-        }
-        line.appendChild(el);
+        const gi = (handGroupTags[i] || {}).groupIdx;
+        const last = runs[runs.length - 1];
+        if (last && last.gi === gi) last.idxs.push(i); else runs.push({ gi, idxs: [i] });
+      });
+      runs.forEach(run => {
+        const group = document.createElement('div');
+        group.className = 'hgroup';
+        const chip = chipFor(run.idxs);
+        const chipEl = document.createElement('div');
+        chipEl.className = 'gchip ' + chip.cls;
+        chipEl.textContent = chip.text;
+        group.appendChild(chipEl);
+        const cardsEl = document.createElement('div');
+        cardsEl.className = 'gcards';
+        run.idxs.forEach(i => {
+          const c = hand[i];
+          const classes = [selectedCardId === c.id ? 'lifted' : '', interactive ? 'clickable' : '', c.id === lastDrawnCardId ? 'just-drawn' : ''].join(' ');
+          const wrap = document.createElement('div');
+          wrap.innerHTML = cardHtml(c, classes);
+          const el = wrap.firstElementChild;
+          if (draggable) {
+            el.addEventListener('pointerdown', (e) => onHandCardPointerDown(e, c.id, i));
+          }
+          if (interactive) {
+            el.addEventListener('click', () => {
+              if (suppressNextClick) { suppressNextClick = false; return; }
+              selectedCardId = selectedCardId === c.id ? null : c.id;
+              renderHand();
+              document.getElementById('btn-discard').disabled = !selectedCardId;
+            });
+          }
+          cardsEl.appendChild(el);
+        });
+        group.appendChild(cardsEl);
+        line.appendChild(group);
       });
       container.appendChild(line);
     });
 
-    document.getElementById('hand-count').textContent = hand.length;
   }
 
   // --- Manual hand reordering: pointer-based so it works with touch, not
@@ -1209,10 +1161,11 @@
   function renderWildIndicator() {
     const card = state.wildIndicator;
     const el = document.getElementById('wild-indicator-card');
-    el.className = 'pcard' + (card.rank === 'JOKER' ? ' joker' : ' ' + RummyRules.SUIT_COLOR[card.suit]);
+    el.className = 'pcard wild-behind' + (card.rank === 'JOKER' ? ' joker' : ' ' + RummyRules.SUIT_COLOR[card.suit]);
     el.innerHTML = card.rank === 'JOKER'
       ? '<span class="pip">🃏</span>'
       : `<span class="corner">${card.rank}<br>${card.suit}</span><span class="pip">${card.suit}</span>`;
+    document.getElementById('deck-label').textContent = `Closed deck · wild ${state.wildRank}`;
   }
 
   // --- Hand lifecycle --------------------------------------------------
@@ -1236,8 +1189,6 @@
     phase = currentPlayerIdx === 0 ? 'your-turn-draw' : 'bot-turn';
     selectedCardId = null;
     lastDrawnCardId = null;
-    gameLog = [];
-    logEvent(`New hand dealt. Wild joker rank is ${state.wildRank} (any suit) — plus the printed joker cards.`);
     renderWildIndicator();
     renderPoolStandings();
 
@@ -1300,7 +1251,6 @@
       headline = winnerIdx === 0 ? '🏆 You declare — you win this hand!' : `🏆 ${players[winnerIdx].name} declares and wins this hand.`;
       sfxWin();
     }
-    logEvent(headline);
     phase = 'round-over';
     document.getElementById('status-strip').textContent = headline;
     renderOpponents();
@@ -1440,12 +1390,10 @@
       const card = state.discardPile.pop();
       state.hands[0].push(card);
       lastDrawnCardId = card.id;
-      logEvent(`You drew ${cardLabel(card)} from the discard pile.`);
     } else {
       const card = state.closedDeck.pop();
       state.hands[0].push(card);
       lastDrawnCardId = card.id;
-      logEvent('You drew from the closed deck.');
     }
     phase = 'your-turn-discard';
     selectedCardId = null;
@@ -1476,7 +1424,6 @@
 
     const [card] = state.hands[0].splice(idx, 1);
     state.discardPile.push(card);
-    logEvent(`You discarded ${cardLabel(card)}.`);
     selectedCardId = null;
     lastDrawnCardId = null;
     phase = 'bot-turn';
@@ -1524,12 +1471,10 @@
       await flyCard(document.getElementById('discard-pile'), slotEl, cardHtml(discardTop), FLIGHT_MS);
       const card = state.discardPile.pop();
       hand.push(card);
-      logEvent(`${players[idx].name} drew from the discard pile.`);
     } else {
       await flyCard(document.getElementById('closed-deck'), slotEl, cardBackHtml(), FLIGHT_MS);
       const card = state.closedDeck.pop();
       hand.push(card);
-      logEvent(`${players[idx].name} drew from the closed deck.`);
     }
     renderOpponents();
     renderDeckAndDiscard();
@@ -1547,7 +1492,6 @@
     await flyCard(slotEl, document.getElementById('discard-pile'), cardBackHtml(), FLIGHT_MS);
     const [discarded] = hand.splice(discardIdx, 1);
     state.discardPile.push(discarded);
-    logEvent(`${players[idx].name} discarded ${cardLabel(discarded)}.`);
     renderOpponents();
     renderDeckAndDiscard();
   }
@@ -1570,9 +1514,6 @@
     }
   }
 
-  document.getElementById('log-toggle').addEventListener('click', () => {
-    document.getElementById('log-panel').classList.toggle('open');
-  });
 
   // Rotating the phone mid-game (or resizing a desktop window across the
   // max-width/max-height thresholds) needs to actually re-lay-out the hand
