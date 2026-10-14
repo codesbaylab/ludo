@@ -214,7 +214,8 @@
         <div class="am-side-foot"><span class="av" style="background:#ff8a3d">${esc((me.display_name || 'A')[0].toUpperCase())}</span><div class="who">${esc(me.display_name)}<small>${esc(ROLE_LABEL[AD.role] || AD.role)}</small></div>
           <a class="icon-btn" id="ad-logout" href="#" title="Log out" aria-label="Log out"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></a></div>
       </aside><main class="am-main"><div class="am-top"><div><h1 id="ad-title">${esc(title)}</h1><p id="ad-sub">${esc(sub)}</p></div><div class="am-tools">${rangeHtml}<span id="tools-slot"></span></div></div><div id="mount"></div></main></div>`;
-    while (wrap.firstChild) document.body.insertBefore(wrap.firstChild, document.body.firstChild);
+    const firstNode = document.body.firstChild; // insert in order (bar, scrim, shell) ahead of the page's own content
+    while (wrap.firstChild) document.body.insertBefore(wrap.firstChild, firstNode);
     document.getElementById('mount').appendChild(content); content.style.display = '';
     if (tools) document.getElementById('tools-slot').appendChild(tools);
     document.getElementById('ad-logout').addEventListener('click', async (e) => {
