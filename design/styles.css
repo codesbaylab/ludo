@@ -555,3 +555,14 @@ a:has(> .btn) { display: block; }
 .filter-chips::-webkit-scrollbar { display:none; }
 .chip { flex:0 0 auto; white-space:nowrap; font:inherit; font-weight:800; font-size:13px; padding:8px 14px; border-radius:100px; cursor:pointer; background:var(--paper); color:var(--text-dim); border:2px solid var(--border); transition:background .15s, color .15s, border-color .15s; }
 .chip.active { background:linear-gradient(135deg, var(--accent), var(--accent-2)); color:#fff; border-color:transparent; box-shadow:0 4px 10px rgba(255,92,138,.28); }
+
+/* Deposit page: coin tiles + network pill */
+.coin-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.coin-tile { display:flex; align-items:center; gap:10px; background:#fff; border:1.5px solid var(--border); border-radius:16px; padding:10px 12px; }
+.coin-ic { width:36px; height:36px; flex-shrink:0; }
+.coin-txt { display:flex; flex-direction:column; line-height:1.15; min-width:0; }
+.coin-txt b { font-size:15px; font-weight:800; }
+.coin-txt span { font-size:12px; color:var(--text-dim); font-weight:700; }
+.net-pill { display:flex; align-items:center; justify-content:center; gap:8px; margin-top:10px; padding:8px 12px; border-radius:100px; background:#f4effd; font-size:13px; font-weight:700; color:#4b2d8a; }
+.net-pill svg { width:22px; height:22px; flex-shrink:0; }
+.net-pill b { font-weight:800; }
