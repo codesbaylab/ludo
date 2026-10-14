@@ -70,13 +70,10 @@ async function loadKnownAddresses(supabase: SupabaseClient): Promise<KnownAddres
   return (data ?? []).map((row) => ({ userId: row.user_id as string, address: row.address as string }));
 }
 
-async function loadUsdtInrRate(supabase: SupabaseClient): Promise<number> {
-  const { data, error } = await supabase.from('crypto_settings').select('usdt_inr_rate').eq('id', true).single();
-  if (error || !data) {
-    console.error('[crypto-watcher] failed to load USDT/INR rate, defaulting to 90:', error);
-    return 90;
-  }
-  return Number(data.usdt_inr_rate);
+// The wallet is in dollars and USDT/USDC are credited 1:1. The old admin-settable USDT->INR rate is deliberately ignored
+// (a stale or mistyped rate would mint money); the value is still recorded on each deposit row as rate_used.
+async function loadUsdtInrRate(_supabase: SupabaseClient): Promise<number> {
+  return 1;
 }
 
 export async function processAddress(supabase: SupabaseClient, known: KnownAddress, rate: number): Promise<void> {
@@ -109,7 +106,7 @@ export async function processAddress(supabase: SupabaseClient, known: KnownAddre
     const result = Array.isArray(data) ? data[0] : data;
     if (result?.credited) {
       console.log(
-        `[crypto-watcher] credited ${transfer.amountUsdt} ${transfer.asset} (~₹${(transfer.amountUsdt * rate).toFixed(2)}) ` +
+        `[crypto-watcher] credited ${transfer.amountUsdt} ${transfer.asset} (~$${(transfer.amountUsdt * rate).toFixed(2)}) ` +
         `to user ${known.userId} (tx ${transfer.signature})`
       );
     }

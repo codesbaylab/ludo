@@ -25,7 +25,7 @@
   <div class="topbar">
     <a href="rummy-lobby.html" class="nav-item" id="leave-link" style="flex-direction:row; gap:6px; color:var(--text-dim);">← Leave</a>
     <h1 style="font-size:17px;">Rummy Waiting Room</h1>
-    <span class="badge badge-cash" id="table-badge">₹1/pt Table</span>
+    <span class="badge badge-cash" id="table-badge">$0.02/pt Table</span>
   </div>
 
   <div style="padding: 10px 20px;">
@@ -40,11 +40,11 @@
     <div class="card" id="stake-card" style="margin-bottom:18px; display:flex; justify-content:space-between; align-items:center; background:linear-gradient(135deg, var(--green-soft), var(--paper));">
       <div id="stake-left">
         <div style="font-size:12px; color:var(--text-dim); font-weight:700;">Points Value</div>
-        <div id="stake-left-value" style="font-size:19px; font-weight:800;">₹1 / point</div>
+        <div id="stake-left-value" style="font-size:19px; font-weight:800;">$0.02 / point</div>
       </div>
       <div style="text-align:right;" id="stake-right">
         <div style="font-size:12px; color:var(--text-dim); font-weight:700;">Max Loss (80 pts)</div>
-        <div id="stake-right-value" style="font-size:19px; font-weight:800; color:#178a4c;">₹80</div>
+        <div id="stake-right-value" style="font-size:19px; font-weight:800; color:#178a4c;">$1.60</div>
       </div>
     </div>
 
@@ -84,28 +84,29 @@
   let mode = qp.get('mode') === 'pool' ? 'pool' : 'points';
   const playersParam = Number(qp.get('players'));
   let playerCount = [2, 4].includes(playersParam) ? playersParam : 4;
-  let pointValue = [1, 2, 5].includes(Number(qp.get('value'))) ? Number(qp.get('value')) : 1;
+  // Free tables use play coins (1/2/5 per point, 50/100/200 entry); cash tables use dollars ($0.02/0.05/0.10 per point, $1/2/5 entry).
+  let pointValue = (FREE ? [1, 2, 5] : [0.02, 0.05, 0.1]).includes(Number(qp.get('value'))) ? Number(qp.get('value')) : (FREE ? 1 : 0.02);
   let poolLimit = [51, 101, 201].includes(Number(qp.get('pool'))) ? Number(qp.get('pool')) : 101;
-  let entryFee = [50, 100, 200].includes(Number(qp.get('entry'))) ? Number(qp.get('entry')) : 100;
+  let entryFee = (FREE ? [50, 100, 200] : [1, 2, 5]).includes(Number(qp.get('entry'))) ? Number(qp.get('entry')) : (FREE ? 100 : 2);
   // Same default/override pattern as design/game.js and waiting-room.html.
   const SERVER_URL = qp.get('server') || window.LUDO_CONFIG.SERVER_URL;
 
   function renderSettings() {
-  const cur = FREE ? '🪙 ' : '₹'; // free tables use play coins, never rupees
+  const money = (n) => FREE ? `🪙 ${n}` : ludoMoney(n); // free tables use play coins, never dollars
   document.getElementById('room-type-text').textContent = (isPrivate ? 'Private · ' : '') + (FREE ? 'Free · Real players only' : 'Cash · Real players only');
   document.getElementById('max-players-value').textContent = String(playerCount);
 
   if (mode === 'pool') {
-    document.getElementById('table-badge').textContent = `${poolLimit} Pool · ${cur}${entryFee}`;
+    document.getElementById('table-badge').textContent = `${poolLimit} Pool · ${money(entryFee)}`;
     document.getElementById('mode-value').textContent = 'Pool Rummy';
     document.getElementById('stake-left').innerHTML = '<div style="font-size:12px; color:var(--text-dim); font-weight:700;">Pool Size / Entry</div><div id="stake-left-value" style="font-size:19px; font-weight:800;"></div>';
-    document.getElementById('stake-left-value').textContent = `${poolLimit} pool · ${cur}${entryFee} entry`;
+    document.getElementById('stake-left-value').textContent = `${poolLimit} pool · ${money(entryFee)} entry`;
     document.getElementById('stake-right').innerHTML = '<div style="font-size:12px; color:var(--text-dim); font-weight:700;">Winner Takes</div><div id="stake-right-value" style="font-size:19px; font-weight:800; color:#178a4c;"></div>';
-    document.getElementById('stake-right-value').textContent = `${cur}${entryFee * playerCount}`;
+    document.getElementById('stake-right-value').textContent = money(Math.round(entryFee * playerCount * 100) / 100);
   } else {
-    document.getElementById('table-badge').textContent = `${cur}${pointValue}/pt Table`;
-    document.getElementById('stake-left-value').textContent = `${cur}${pointValue} / point`;
-    document.getElementById('stake-right-value').textContent = `${cur}${pointValue * 80}`;
+    document.getElementById('table-badge').textContent = `${money(pointValue)}/pt Table`;
+    document.getElementById('stake-left-value').textContent = `${money(pointValue)} / point`;
+    document.getElementById('stake-right-value').textContent = money(Math.round(pointValue * 80 * 100) / 100);
   }
   }
   renderSettings();

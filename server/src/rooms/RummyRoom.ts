@@ -1,4 +1,5 @@
 import { Room, Client, ServerError } from 'colyseus';
+import { r2, floor2 } from '../money';
 import { ArraySchema } from '@colyseus/schema';
 import { RummyState, RummyPlayerState, CardState } from './schema/RummyState';
 import * as Engine from '../rummy/engine';
@@ -533,7 +534,7 @@ export class RummyRoom extends Room<RummyState> {
   /** Worst-case loss for this table: Pool = entry fee; Points = 80 points x value. */
   private holdAmount(): number {
     if (this.isFree) return 0; // free tables never reserve or move money
-    return this.state.mode === 'pool' ? this.state.entryFee : this.state.pointValue * Engine.MAX_PENALTY;
+    return this.state.mode === 'pool' ? this.state.entryFee : r2(this.state.pointValue * Engine.MAX_PENALTY);
   }
 
   private async releaseHold(sessionId: string) {
@@ -573,22 +574,22 @@ export class RummyRoom extends Room<RummyState> {
     const pointValue = this.state.pointValue;
     let payouts: number[];
     // An invalid declare used to move no money at all, which let a player who was about to lose
-    // end the hand for free (and contradicted the "-₹80" the result popup shows). Now the declarer
+    // end the hand for free (and contradicted the "-80 pts" loss the result popup shows). Now the declarer
     // pays the flat 80-point penalty, split equally among the other players, after the usual fee.
     const declarer = winnerIdx === null ? this.state.lastHandInvalidDeclareBy : -1;
     let invalidFee = 0;
     if (winnerIdx === null) {
-      const owed = Engine.MAX_PENALTY * pointValue;
+      const owed = r2(Engine.MAX_PENALTY * pointValue);
       const others = players.length - 1;
-      const share = Math.floor(owed / others);
-      const feeEach = Math.round(share * (this.feeRate ?? PLATFORM_FEE_RATE));
-      payouts = players.map((_, i) => (i === declarer ? -owed : share - feeEach));
-      invalidFee = owed - payouts.reduce((s, v, i) => (i === declarer ? s : s + v), 0);
+      const share = floor2(owed / others);
+      const feeEach = r2(share * (this.feeRate ?? PLATFORM_FEE_RATE));
+      payouts = players.map((_, i) => (i === declarer ? -owed : r2(share - feeEach)));
+      invalidFee = r2(owed - payouts.reduce((s, v, i) => (i === declarer ? s : s + v), 0));
     } else {
-      const totalOwed = points.reduce((s, pts, i) => (i === winnerIdx ? s : s + pts * pointValue), 0);
-      const fee = Math.round(totalOwed * (this.feeRate ?? PLATFORM_FEE_RATE));
-      const winnerPayout = totalOwed - fee;
-      payouts = points.map((pts, i) => (i === winnerIdx ? winnerPayout : -(pts * pointValue)));
+      const totalOwed = r2(points.reduce((s, pts, i) => (i === winnerIdx ? s : s + r2(pts * pointValue)), 0));
+      const fee = r2(totalOwed * (this.feeRate ?? PLATFORM_FEE_RATE));
+      const winnerPayout = r2(totalOwed - fee);
+      payouts = points.map((pts, i) => (i === winnerIdx ? winnerPayout : -r2(pts * pointValue)));
     }
 
     const { data: match, error: matchErr } = await supabase
@@ -602,7 +603,7 @@ export class RummyRoom extends Room<RummyState> {
         finished_at: new Date().toISOString(),
         end_reason: this.endReason,
         duration_s: this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : null,
-        fee_amount: winnerIdx === null ? invalidFee : Math.round(payouts.filter((_, k) => k !== winnerIdx).reduce((s, v) => s + -v, 0) * (this.feeRate ?? PLATFORM_FEE_RATE)),
+        fee_amount: winnerIdx === null ? invalidFee : r2(payouts.filter((_, k) => k !== winnerIdx).reduce((s, v) => s + -v, 0) * (this.feeRate ?? PLATFORM_FEE_RATE)),
       })
       .select('id')
       .single();
@@ -641,14 +642,14 @@ export class RummyRoom extends Room<RummyState> {
     }
 
     const entryFee = this.state.entryFee;
-    const pot = entryFee * players.length;
-    const fee = Math.round(pot * (this.feeRate ?? PLATFORM_FEE_RATE));
-    const payout = pot - fee;
+    const pot = r2(entryFee * players.length);
+    const fee = r2(pot * (this.feeRate ?? PLATFORM_FEE_RATE));
+    const payout = r2(pot - fee);
     // No upfront debit ever happened (see the module-level note on
     // settlement timing) — the whole match settles in one deferred delta
     // per player here, same as LudoRoom.persistResult: survivor nets
     // payout-minus-their-own-entry, everyone else nets -entryFee.
-    const payouts = players.map((_, i) => (i === survivorIdx ? payout - entryFee : -entryFee));
+    const payouts = players.map((_, i) => (i === survivorIdx ? r2(payout - entryFee) : -entryFee));
 
     const { data: match, error: matchErr } = await supabase
       .from('rummy_matches')

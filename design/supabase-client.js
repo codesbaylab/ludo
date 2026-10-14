@@ -117,11 +117,11 @@
   };
 })();
 
-// Rupee amount for display: Indian digit grouping (51,04,000), decimals only when the amount has paise.
+// Dollar amount for display ($1,234.50): decimals only when the amount has cents. Wallet unit = 1 USDT = $1.
 function ludoMoney(n) {
   const v = Number(n) || 0;
   const whole = Math.abs(v - Math.round(v)) < 0.005;
-  return '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
+  return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
 }
 
 // Markup for an icon-only copy button; wire it up with ludoCopy().
@@ -141,12 +141,13 @@ async function ludoCopy(btn, text) {
   return ok;
 }
 
-// Compact rupee amount for tight spots (stat tiles): ₹51.04L, ₹1.2Cr; small amounts use ludoMoney.
+// Compact dollar amount for tight spots (stat tiles): $1.2K, $5.1M; small amounts use ludoMoney.
 function ludoMoneyShort(n) {
   const v = Math.abs(Number(n) || 0);
   const trim = (x) => String(Math.round(x * 100) / 100);
-  if (v >= 1e7) return '₹' + trim(v / 1e7) + 'Cr';
-  if (v >= 1e5) return '₹' + trim(v / 1e5) + 'L';
+  if (v >= 1e9) return '$' + trim(v / 1e9) + 'B';
+  if (v >= 1e6) return '$' + trim(v / 1e6) + 'M';
+  if (v >= 1e4) return '$' + trim(v / 1e3) + 'K';
   return ludoMoney(v);
 }
 
@@ -158,7 +159,7 @@ function ludoEscapeHtml(str) {
  * Everything that moved this user's money, newest first, merged from four sources:
  * cash match results, USDT/USDC deposits, withdrawal requests and player transfers.
  * Each entry: { type: 'match'|'deposit'|'withdrawal'|'sent'|'received', time, icon, iconBg, title, detail, delta }.
- * (delta is ₹, signed.) Shared by wallet.html and history.html.
+ * (delta is in dollars, signed.) Shared by wallet.html and history.html.
  */
 async function ludoFetchTransactions(userId, limit) {
   const n = limit || 50;
@@ -179,7 +180,7 @@ async function ludoFetchTransactions(userId, limit) {
     entries.push({
       type: 'match', time: m.matches.finished_at, icon: won ? '🏆' : '🎲',
       iconBg: won ? 'linear-gradient(135deg, var(--accent), var(--accent-2))' : 'linear-gradient(135deg, var(--red), #c93a3a)',
-      title: won ? 'Match Winnings' : 'Table Stake', detail: `₹${stake} table`,
+      title: won ? 'Match Winnings' : 'Table Stake', detail: `${ludoMoney(stake)} table`,
       delta: won ? payout - stake : -stake,
     });
   });

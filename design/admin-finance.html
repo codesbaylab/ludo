@@ -51,7 +51,7 @@
     <div data-tab-group="f" data-tab="pl" style="display:none"><div class="am-grid g2" style="margin-bottom:0"><div id="c-pl"></div><dl class="kv" id="pl-kv"></dl></div></div>
     <div data-tab-group="f" data-tab="rate" style="display:none">
       <div class="am-grid g21" style="margin-bottom:0"><div id="c-rate"></div>
-        <div><div class="field-row"><span>Current rate<small>₹ per 1 USDT, applied to new deposits only</small></span><input id="rate-input" type="number" step="0.01" /></div><button class="am-btn primary" id="rate-save" style="margin-top:10px">Update rate</button></div></div>
+        <div><div class="field-row"><span>Current rate<small>informational only: deposits are credited 1:1 (1 USDT = $1)</small></span><input id="rate-input" type="number" step="0.01" /></div><button class="am-btn primary" id="rate-save" style="margin-top:10px">Update rate</button></div></div>
     </div>
   </div>
 
@@ -64,7 +64,7 @@
 <script>
 AD.boot({
   init: async function () {
-    const C = AD.COLORS; let days = 30, fin = null, rate = 90; const canPay = AD.can(['finance']);
+    const C = AD.COLORS; let days = 30, fin = null, rate = 1; const canPay = AD.can(['finance']);
     const sb = AD.sb;
     async function names(ids) {
       ids = Array.from(new Set(ids.filter(Boolean))); if (!ids.length) return {};
@@ -72,7 +72,7 @@ AD.boot({
     }
     async function load() {
       fin = await AD.rpc('admin_finance', { p_days: days });
-      const { data: cs } = await sb.from('crypto_settings').select('usdt_inr_rate').eq('id', true).single(); rate = Number(cs ? cs.usdt_inr_rate : 90);
+      const { data: cs } = await sb.from('crypto_settings').select('usdt_inr_rate').eq('id', true).single(); rate = Number(cs ? cs.usdt_inr_rate : 1);
       renderTop(); await Promise.all([loadWithdrawals(), loadApprovals(), loadDeposits(), loadTransfers()]);
     }
     function renderTop() {
@@ -83,18 +83,18 @@ AD.boot({
         AD.kpiCard('Wallet liabilities', AD.inr(k.liabilities), null, AD.num(k.wallets) + ' wallets'),
         AD.kpiCard('Held in live games', AD.inr(k.held), null, 'reserved stakes'), AD.kpiCard('Platform revenue', AD.inr(k.revenue), null, 'fees + Pro'),
         AD.kpiCard('Referral commission', AD.inr(k.commission), null, 'cost of growth'), AD.kpiCard('Net margin', k.margin + '%', null, 'revenue ÷ deposits')].join('');
-      AD.bars(document.getElementById('c-flow'), { labels: s.labels, h: 240, fmt: AD.inr, yfmt: function (v) { return '₹' + AD.short(v); }, series: [{ name: 'Deposits', color: C.green, values: s.deposits }, { name: 'Withdrawals', color: C.red, values: s.withdrawals }] });
+      AD.bars(document.getElementById('c-flow'), { labels: s.labels, h: 240, fmt: AD.inr, yfmt: function (v) { return '$' + AD.short(v); }, series: [{ name: 'Deposits', color: C.green, values: s.deposits }, { name: 'Withdrawals', color: C.red, values: s.withdrawals }] });
       renderBooks(fin.books);
       document.getElementById('wd-badge').style.display = k.pending_count ? '' : 'none'; document.getElementById('wd-badge').textContent = k.pending_count;
       const colors = [C.purple, C.orange, C.blue];
       AD.donut(document.getElementById('c-liab'), fin.liabilities.map(function (l, i) { return { label: l.label, value: Number(l.value), color: colors[i], fmt: AD.inr(l.value) }; }), AD.short(k.liabilities), 'owed to players');
       const sl = fin.sla; AD.bars(document.getElementById('c-sla'), { w: 460, h: 215, legend: false, labels: ['< 1h', '1–6h', '6–12h', '12–24h', '> 24h'], series: [{ name: 'Withdrawals', color: C.green, values: [sl.lt1h, sl.h1_6, sl.h6_12, sl.h12_24, sl.gt24h] }] });
-      AD.bars(document.getElementById('c-xf'), { w: 460, h: 230, labels: s.labels, fmt: AD.inr, yfmt: function (v) { return '₹' + AD.short(v); }, series: [{ name: 'Transfer volume', color: C.blue, values: s.transfers }] });
-      AD.bars(document.getElementById('c-pl'), { w: 460, h: 240, labels: ['Ludo fees', 'Rummy fees', 'Pro fees', 'Referral commission'], legend: false, fmt: AD.inr, yfmt: function (v) { return '₹' + AD.short(v); }, series: [{ name: 'Amount', color: C.orange, values: [k.ludo_fees, k.rummy_fees, k.pro_fees, k.commission] }] });
+      AD.bars(document.getElementById('c-xf'), { w: 460, h: 230, labels: s.labels, fmt: AD.inr, yfmt: function (v) { return '$' + AD.short(v); }, series: [{ name: 'Transfer volume', color: C.blue, values: s.transfers }] });
+      AD.bars(document.getElementById('c-pl'), { w: 460, h: 240, labels: ['Ludo fees', 'Rummy fees', 'Pro fees', 'Referral commission'], legend: false, fmt: AD.inr, yfmt: function (v) { return '$' + AD.short(v); }, series: [{ name: 'Amount', color: C.orange, values: [k.ludo_fees, k.rummy_fees, k.pro_fees, k.commission] }] });
       document.getElementById('pl-kv').innerHTML = [['Ludo match fees', AD.inr(k.ludo_fees)], ['Rummy match fees', AD.inr(k.rummy_fees)], ['Pro memberships', AD.inr(k.pro_fees)], ['<b>Gross revenue</b>', '<b>' + AD.inr(k.revenue) + '</b>'], ['− Referral commission', '−' + AD.inr(k.commission)], ['<b>Net revenue</b>', '<b class="pos">' + AD.inr(k.revenue - k.commission) + '</b>'], ['Player-to-player transfers (volume)', AD.inr(k.transfer_volume)]].map(function (r) { return '<dt>' + r[0] + '</dt><dd>' + r[1] + '</dd>'; }).join('');
       const hist = fin.rate_history; document.getElementById('rate-input').value = rate;
-      AD.line(document.getElementById('c-rate'), { h: 230, labels: hist.length ? hist.map(function (h) { return AD.dt(h.at); }) : [], legend: false, yfmt: function (v) { return '₹' + v.toFixed(0); }, fmt: function (v) { return '₹' + v; }, series: [{ name: 'Rate set', color: C.teal, values: hist.map(function (h) { return h.rate; }) }] });
-      if (!hist.length) document.getElementById('c-rate').innerHTML = '<div class="empty-note">Current rate ₹' + rate + ' · no changes recorded yet.</div>';
+      AD.line(document.getElementById('c-rate'), { h: 230, labels: hist.length ? hist.map(function (h) { return AD.dt(h.at); }) : [], legend: false, yfmt: function (v) { return '$' + v.toFixed(0); }, fmt: function (v) { return '$' + v; }, series: [{ name: 'Rate set', color: C.teal, values: hist.map(function (h) { return h.rate; }) }] });
+      if (!hist.length) document.getElementById('c-rate').innerHTML = '<div class="empty-note">Current rate $' + rate + ' · no changes recorded yet.</div>';
     }
     function renderBooks(b) {
       document.getElementById('books-sub').textContent = 'Checked ' + AD.ago(b.checked_at);
@@ -149,20 +149,20 @@ AD.boot({
     async function loadDeposits() {
       const { data } = await sb.from('crypto_deposits').select('*').order('detected_at', { ascending: false }).limit(100); const rows = data || []; const nm = await names(rows.map(function (r) { return r.user_id; }));
       AD.table(document.getElementById('t-dep'), [{ l: 'Detected', k: function (r) { return '<span class="dim">' + AD.dt(r.detected_at) + '</span>'; } }, { l: 'Player', k: function (r, i) { const p = nm[r.user_id] || {}; return AD.who(p.display_name || 'Player', i, '<span class="mono">' + AD.esc(p.player_id || '') + '</span>'); } },
-        { l: 'USDT', a: 'r', k: function (r) { return Number(r.amount_usdt).toFixed(2); } }, { l: 'Rate', a: 'r', k: function (r) { return '₹' + r.rate_used; } }, { l: 'Credited', a: 'r', k: function (r) { return '<b>' + AD.inr(r.inr_credited) + '</b>'; } },
+        { l: 'USDT', a: 'r', k: function (r) { return Number(r.amount_usdt).toFixed(2); } }, { l: 'Rate', a: 'r', k: function (r) { return '$' + r.rate_used; } }, { l: 'Credited', a: 'r', k: function (r) { return '<b>' + AD.inr(r.inr_credited) + '</b>'; } },
         { l: 'Confirmations', a: 'r', k: 'confirmations' }, { l: 'Tx', k: function (r) { return '<span class="mono">' + AD.esc(r.tx_hash.slice(0, 10)) + '…</span>'; } }], rows, { wide: true, empty: 'No USDT deposits yet.' });
     }
     async function loadTransfers() {
       const { data } = await sb.from('transfers').select('*').order('created_at', { ascending: false }).limit(60); const rows = data || []; const nm = await names(rows.map(function (r) { return r.sender_id; }).concat(rows.map(function (r) { return r.recipient_id; })));
       AD.table(document.getElementById('t-xf'), [{ l: 'From → To', k: function (r) { return '<a href="admin-user.html?id=' + r.sender_id + '">' + AD.esc((nm[r.sender_id] || {}).display_name || '') + '</a> → <a href="admin-user.html?id=' + r.recipient_id + '">' + AD.esc((nm[r.recipient_id] || {}).display_name || '') + '</a>'; } },
-        { l: '₹', a: 'r', k: function (r) { return AD.inr(r.amount); } }, { l: 'When', k: function (r) { return '<span class="dim">' + AD.ago(r.created_at) + '</span>'; } }], rows, { empty: 'No transfers yet.' });
+        { l: '$', a: 'r', k: function (r) { return AD.inr(r.amount); } }, { l: 'When', k: function (r) { return '<span class="dim">' + AD.ago(r.created_at) + '</span>'; } }], rows, { empty: 'No transfers yet.' });
     }
     document.getElementById('wd-status').addEventListener('change', function () { AD.run(loadWithdrawals); });
     document.getElementById('books-run').addEventListener('click', function () { AD.run(async function () { renderBooks(await AD.rpc('admin_books_check')); }); });
     document.getElementById('rate-save').addEventListener('click', function () { AD.run(async function () {
       if (!canPay) { await ludoAlert({ tone: 'warn', title: 'Not allowed', message: 'Only finance or super admins can change the rate.' }); return; }
       const v = Number(document.getElementById('rate-input').value); if (!(v > 0)) { await ludoAlert({ tone: 'warn', title: 'Enter a rate', message: 'The rate must be above zero.' }); return; }
-      await AD.rpc('admin_set_usdt_rate', { p_rate: v }); await ludoAlert({ tone: 'success', title: 'Saved', message: 'New deposits will use ₹' + v + ' per USDT.', confirmText: 'Done' }); await load();
+      await AD.rpc('admin_set_usdt_rate', { p_rate: v }); await ludoAlert({ tone: 'success', title: 'Saved', message: 'Saved (informational — deposits are always credited 1:1).', confirmText: 'Done' }); await load();
     }); });
     AD.range(function (n) { days = n; AD.run(load); });
     await load();

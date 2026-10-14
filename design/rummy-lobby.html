@@ -55,7 +55,7 @@
       <h1 style="font-size:20px;">Rummy</h1>
     </div>
     <div style="display:flex; align-items:center; gap:10px;">
-      <a href="wallet.html" class="wallet-chip" id="wallet-chip">💰 ₹250.00</a>
+      <a href="wallet.html" class="wallet-chip" id="wallet-chip">💰 $0</a>
       <button type="button" class="icon-btn" id="user-avatar" aria-label="Log out" title="Log out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>
     </div>
   </div>
@@ -89,17 +89,17 @@
       <div class="action-grid" id="points-grid">
         <a class="tile tile-quick points-tile" href="#" data-value="1">
           <div class="tile-icon">🪙</div>
-          <div class="tile-title">₹1 / point</div>
+          <div class="tile-title">$0.02 / point</div>
           <div class="tile-sub">Casual · low risk</div>
         </a>
         <a class="tile tile-create points-tile" href="#" data-value="2">
           <div class="tile-icon">💠</div>
-          <div class="tile-title">₹2 / point</div>
+          <div class="tile-title">$0.05 / point</div>
           <div class="tile-sub">Standard stakes</div>
         </a>
         <a class="tile tile-cash points-tile" href="#" data-value="5">
           <div class="tile-icon">💎</div>
-          <div class="tile-title">₹5 / point</div>
+          <div class="tile-title">$0.10 / point</div>
           <div class="tile-sub">High stakes</div>
         </a>
         <a class="tile tile-join points-tile" href="#join-box">
@@ -135,9 +135,9 @@
       <div class="section-title">Entry Fee</div>
       <div class="card">
         <div class="size-picker" id="entry-picker">
-          <button type="button" class="btn btn-secondary btn-sm entry-btn" data-entry="50">₹50</button>
-          <button type="button" class="btn btn-primary btn-sm entry-btn" data-entry="100">₹100</button>
-          <button type="button" class="btn btn-secondary btn-sm entry-btn" data-entry="200">₹200</button>
+          <button type="button" class="btn btn-secondary btn-sm entry-btn" data-entry="50">$1</button>
+          <button type="button" class="btn btn-primary btn-sm entry-btn" data-entry="100">$2</button>
+          <button type="button" class="btn btn-secondary btn-sm entry-btn" data-entry="200">$5</button>
         </div>
       </div>
     </div>
@@ -160,7 +160,7 @@
     <div class="card" style="margin-top:12px;" id="points-summary">
       <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
         <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Points Value</span>
-        <span id="sum-value" style="font-size:14px; font-weight:800;">₹1 / point</span>
+        <span id="sum-value" style="font-size:14px; font-weight:800;">$0.02 / point</span>
       </div>
       <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
         <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Table Size</span>
@@ -168,7 +168,7 @@
       </div>
       <div style="display:flex; justify-content:space-between; padding:14px 0 6px;">
         <span style="font-size:14px; font-weight:800;">🏆 Max Loss (80 pts cap)</span>
-        <span id="sum-maxloss" style="font-size:18px; font-weight:800; color:#178a4c;">₹80</span>
+        <span id="sum-maxloss" style="font-size:18px; font-weight:800; color:#178a4c;">$1.60</span>
       </div>
     </div>
 
@@ -183,11 +183,11 @@
       </div>
       <div style="display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border);">
         <span style="font-size:13px; color:var(--text-dim); font-weight:700;">Entry Fee (each)</span>
-        <span id="sum-entry" style="font-size:14px; font-weight:800;">₹100</span>
+        <span id="sum-entry" style="font-size:14px; font-weight:800;">$2</span>
       </div>
       <div style="display:flex; justify-content:space-between; padding:14px 0 6px;">
         <span style="font-size:14px; font-weight:800;">🏆 Winner Takes the Pot</span>
-        <span id="sum-pot" style="font-size:18px; font-weight:800; color:#178a4c;">₹400</span>
+        <span id="sum-pot" style="font-size:18px; font-weight:800; color:#178a4c;">$8</span>
       </div>
     </div>
 
@@ -268,7 +268,10 @@
 </div>
 <script>
   const state = { mode: 'points', value: 1, players: 4, pool: 101, entry: 100, tableType: 'practice' };
-  const VALUE_LABEL = { 1: '₹1 / point', 2: '₹2 / point', 5: '₹5 / point' };
+  // Tile keys (1/2/5 and 50/100/200) are play-coin amounts for practice/free tables; cash tables map them to real dollars.
+  const CASH_VALUE = { 1: 0.02, 2: 0.05, 5: 0.1 };   // $ per point
+  const CASH_ENTRY = { 50: 1, 100: 2, 200: 5 };      // $ pool entry
+  const r2 = (x) => Math.round(x * 100) / 100;
   const POINTS_CAP = 80;
 
   // Cash tables are Pro-only (the room's join check enforces it too). Blocked
@@ -289,7 +292,7 @@
     if (go) location.href = 'wallet.html#pro';
   }
 
-  // Real balance/name once signed in — the demo ₹250.00 chip only stays for
+  // Real balance/name once signed in — the demo $0 chip only stays for
   // a signed-out visitor previewing the practice picker. Cash Tables here
   // touch a real wallet now, unlike the rest of this page.
   (async () => {
@@ -317,14 +320,14 @@
       const m = r.rummy_matches;
       const won = r.result === 'win';
       const tableLabel = m.mode === 'pool'
-        ? `${m.pool_limit} Pool · ₹${m.entry_fee} entry`
-        : `₹${m.point_value}/point table`;
+        ? `${m.pool_limit} Pool · ${ludoMoney(m.entry_fee)} entry`
+        : `${ludoMoney(m.point_value)}/point table`;
       const row = document.createElement('div');
       row.className = 'player-chip';
       row.innerHTML = `
         <div class="avatar" style="width:34px; height:34px; font-size:13px; background:${won ? 'var(--green)' : 'var(--red)'};">${won ? 'W' : 'L'}</div>
         <div>
-          <div class="name">${won ? 'Won' : 'Lost'} · ${r.points} points${r.payout !== 0 ? ` · ${r.payout > 0 ? '+' : ''}₹${r.payout}` : ''}</div>
+          <div class="name">${won ? 'Won' : 'Lost'} · ${r.points} points${r.payout !== 0 ? ` · ${r.payout > 0 ? '+' : ''}${ludoMoney(r.payout)}` : ''}</div>
           <div class="status">${tableLabel} · ${ludoTimeAgo(m.finished_at)}</div>
         </div>
         <span class="badge ${won ? 'badge-ready' : 'badge-waiting'}">${won ? 'Win' : 'Loss'}</span>
@@ -400,37 +403,39 @@
       btn.classList.toggle('btn-secondary', !selected);
     });
 
-    // Practice is play-money: coins (🪙), never ₹, and no wallet chip. Only the
-    // real Cash Table view talks in rupees / shows the real balance.
-    const cur = isCash ? '₹' : '🪙 ';
+    // Practice is play-money: coins (🪙), never dollars, and no wallet chip. Only the
+    // real Cash Table view talks in dollars / shows the real balance.
+    const money = (key, map) => isCash ? ludoMoney(map[key]) : `🪙 ${key}`;
+    const realValue = isCash ? CASH_VALUE[state.value] : state.value;
+    const realEntry = isCash ? CASH_ENTRY[state.entry] : state.entry;
     const SUBS = isCash
       ? { 1: 'Casual · low risk', 2: 'Standard stakes', 5: 'High stakes' }
       : { 1: 'Small swings', 2: 'Medium swings', 5: 'Big swings' };
     document.querySelectorAll('.points-tile[data-value]').forEach((tile) => {
       const v = Number(tile.dataset.value);
-      tile.querySelector('.tile-title').textContent = `${cur}${v} / point`;
+      tile.querySelector('.tile-title').textContent = `${money(v, CASH_VALUE)} / point`;
       tile.querySelector('.tile-sub').textContent = SUBS[v];
     });
-    document.querySelectorAll('.entry-btn').forEach((b) => { b.textContent = `${cur}${b.dataset.entry}`; });
+    document.querySelectorAll('.entry-btn').forEach((b) => { b.textContent = money(b.dataset.entry, CASH_ENTRY); });
     document.getElementById('wallet-chip').style.display = isCash ? '' : 'none';
     // Codes / private tables only exist for real-player tables (cash or free); practice is vs. bots.
     document.getElementById('join-box').style.display = isLive ? '' : 'none';
     document.querySelectorAll('a[href="#join-box"]').forEach((a) => { a.style.display = isLive ? '' : 'none'; });
     document.getElementById('create-private-link').style.display = isLive ? '' : 'none';
-    document.getElementById('sum-value').textContent = `${cur}${state.value} / point`;
+    document.getElementById('sum-value').textContent = `${money(state.value, CASH_VALUE)} / point`;
     document.getElementById('sum-players').textContent = `${state.players} Players`;
-    document.getElementById('sum-maxloss').textContent = `${cur}${state.value * POINTS_CAP}`;
+    document.getElementById('sum-maxloss').textContent = isCash ? ludoMoney(r2(realValue * POINTS_CAP)) : `🪙 ${state.value * POINTS_CAP}`;
 
     document.getElementById('sum-pool').textContent = `${state.pool} Pool`;
     document.getElementById('sum-pool-players').textContent = `${state.players} Players`;
-    document.getElementById('sum-entry').textContent = `${cur}${state.entry}`;
-    document.getElementById('sum-pot').textContent = `${cur}${state.entry * state.players}`;
+    document.getElementById('sum-entry').textContent = money(state.entry, CASH_ENTRY);
+    document.getElementById('sum-pot').textContent = isCash ? ludoMoney(r2(realEntry * state.players)) : `🪙 ${state.entry * state.players}`;
 
     document.getElementById('start-btn').textContent = isCash ? 'Start Table (real players, real money)' : isFree ? 'Start Free Table (real players, no money)' : 'Start Table (vs. computer players)';
     document.getElementById('start-link').href = isLive
       ? (isPool
-          ? `rummy-waiting-room.html?mode=pool&players=${state.players}&pool=${state.pool}&entry=${state.entry}`
-          : `rummy-waiting-room.html?mode=points&players=${state.players}&value=${state.value}`) + (isFree ? '&free=1' : '')
+          ? `rummy-waiting-room.html?mode=pool&players=${state.players}&pool=${state.pool}&entry=${realEntry}`
+          : `rummy-waiting-room.html?mode=points&players=${state.players}&value=${realValue}`) + (isFree ? '&free=1' : '')
       : isPool
         ? `rummy-board.html?mode=pool&players=${state.players}&pool=${state.pool}&entry=${state.entry}`
         : `rummy-board.html?mode=points&players=${state.players}&value=${state.value}`;

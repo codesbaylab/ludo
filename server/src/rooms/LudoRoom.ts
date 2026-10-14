@@ -1,4 +1,5 @@
 import { Room, Client, ServerError } from 'colyseus';
+import { r2 } from '../money';
 import { randomInt } from 'crypto';
 import { LudoState, PlayerState, TokenState } from './schema/LudoState';
 import {
@@ -47,9 +48,9 @@ const COLORS_BY_PLAYER_COUNT: Record<number, Color[]> = {
   4: TURN_ORDER,
 };
 
-// Allowed stake range for a (custom) cash table, in whole rupees.
-export const MIN_STAKE = 10;
-export const MAX_STAKE = 5000;
+// Allowed stake range for a (custom) cash table, in dollars (cent precision).
+export const MIN_STAKE = 0.25;
+export const MAX_STAKE = 50;
 
 export class LudoRoom extends Room<LudoState> {
   maxClients = 4;
@@ -114,9 +115,9 @@ export class LudoRoom extends Room<LudoState> {
     }
 
     const state = new LudoState();
-    // Custom cash rooms: whole rupees only, within a sane range. (Pro is enforced for
+    // Custom cash rooms: dollars with cents, within a sane range. (Pro is enforced for
     // the creator in onJoin like any cash table; guests joining by code are checked there too.)
-    const rawStake = Math.floor(Number(options.stake ?? 0));
+    const rawStake = r2(Number(options.stake ?? 0));
     state.stake = !Number.isFinite(rawStake) || rawStake <= 0 ? 0 : Math.min(MAX_STAKE, Math.max(MIN_STAKE, rawStake));
     COLORS_BY_PLAYER_COUNT[playerCount]!.forEach((color) => {
       const player = new PlayerState();
@@ -635,7 +636,7 @@ export class LudoRoom extends Room<LudoState> {
         end_reason: endReason,
         player_count: players.length,
         duration_s: this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : null,
-        fee_amount: this.state.stake > 0 ? Math.round(this.state.stake * players.length * (this.feeRate ?? 0.1)) : 0,
+        fee_amount: this.state.stake > 0 ? r2(this.state.stake * players.length * (this.feeRate ?? 0.1)) : 0,
       })
       .select('id')
       .single();
@@ -654,16 +655,16 @@ export class LudoRoom extends Room<LudoState> {
     if (playersErr) console.error('[ludo] failed to insert match_players rows:', playersErr);
 
     if (this.state.stake > 0) {
-      const pot = this.state.stake * players.length;
-      const fee = Math.round(pot * (this.feeRate ?? 0.1));
-      const payout = pot - fee;
+      const pot = r2(this.state.stake * players.length);
+      const fee = r2(pot * (this.feeRate ?? 0.1));
+      const payout = r2(pot - fee);
       // increment_wallet_balance does `balance = balance + delta` in one
       // UPDATE statement (see migration add_atomic_increment_wallet_balance_rpc),
       // so concurrent matches finishing for the same user can no longer race
       // like a plain read-then-write would.
       for (let i = 0; i < players.length; i++) {
         const uid = userIds[i]!;
-        const delta = i === winnerIdx ? payout - this.state.stake : -this.state.stake;
+        const delta = i === winnerIdx ? r2(payout - this.state.stake) : -this.state.stake;
         // Applies the result and releases this seat's hold in one statement.
         const sid = players[i]!.sessionId;
         const reserved = this.holds[sid]?.amount ?? 0;

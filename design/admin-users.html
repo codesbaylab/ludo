@@ -46,7 +46,7 @@ AD.boot({
   range: false,
   init: async function () {
     const st = { q: '', plan: 'any', status: 'any', segment: 'all', sort: 'last_active', offset: 0, limit: 25, rows: [], total: 0, counts: {}, sel: {} };
-    const SEGS = [['all', 'All'], ['new7', 'New (7d)'], ['pro', 'Pro'], ['free', 'Free'], ['whales', 'Whales ≥ ₹50k'], ['depositors', 'Depositors'], ['dormant', 'Dormant 30d+'], ['at_risk', 'At risk'], ['flagged', 'Flagged'], ['banned', 'Banned'], ['referred', 'Referred'], ['staff', 'Staff']];
+    const SEGS = [['all', 'All'], ['new7', 'New (7d)'], ['pro', 'Pro'], ['free', 'Free'], ['whales', 'Whales ≥ $50k'], ['depositors', 'Depositors'], ['dormant', 'Dormant 30d+'], ['at_risk', 'At risk'], ['flagged', 'Flagged'], ['banned', 'Banned'], ['referred', 'Referred'], ['staff', 'Staff']];
     const canSupport = AD.can(['support']);
 
     async function fetchPage(offset, limit) {

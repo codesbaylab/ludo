@@ -349,7 +349,7 @@
   const SERVER_URL = qp.get('server') || window.LUDO_CONFIG.SERVER_URL;
   // Free table (?free=1): real players, play coins, nothing touches the wallet.
   const FREE = qp.get('free') === '1';
-  const CUR = FREE ? '🪙 ' : '₹';
+  const money = (n) => FREE ? `🪙 ${n}` : ludoMoney(n); // free tables use play coins, never dollars
 
   document.getElementById('table-sub').textContent = MODE === 'pool'
     ? `Pool Rummy · ${PLAYER_COUNT} players`
@@ -641,8 +641,8 @@
       if (MODE === 'points') {
         const rows = snapshot.players.map((p, i) => {
           const isWinnerRow = invalidBy === -1 && i === winnerIdx;
-          const amount = points[i] * snapshot.pointValue;
-          const amtText = isWinnerRow ? 'won' : amount > 0 ? `-${CUR}${amount}` : `${CUR}0`;
+          const amount = Math.round(points[i] * snapshot.pointValue * 100) / 100;
+          const amtText = isWinnerRow ? 'won' : amount > 0 ? `-${money(amount)}` : money(0);
           const amtClass = isWinnerRow || amount === 0 ? 'amt-pos' : 'amt-neg';
           return `<div class="score-row"><span>${i === mySeatIdx ? 'You' : p.name}</span><span class="${amtClass}">${points[i]} pts · ${amtText}</span></div>`;
         }).join('');
@@ -657,7 +657,7 @@
         const survivorIdx = snapshot.players.findIndex(p => !p.eliminated);
         const rows = snapshot.players.map((p, i) => {
           const isSurvivor = i === survivorIdx;
-          return `<div class="score-row"><span>${i === mySeatIdx ? 'You' : p.name} — ${p.cumulative} pts</span><span class="${isSurvivor ? 'amt-pos' : 'amt-neg'}">${isSurvivor ? 'won the pot' : `-${CUR}${snapshot.entryFee}`}</span></div>`;
+          return `<div class="score-row"><span>${i === mySeatIdx ? 'You' : p.name} — ${p.cumulative} pts</span><span class="${isSurvivor ? 'amt-pos' : 'amt-neg'}">${isSurvivor ? 'won the pot' : `-${money(snapshot.entryFee)}`}</span></div>`;
         }).join('');
         const title = survivorIdx === mySeatIdx ? '🏆 You win the pool!' : `🏆 ${snapshot.players[survivorIdx].name} wins the pool!`;
         document.getElementById('declare-card-content').innerHTML = `
@@ -900,8 +900,8 @@
     if (!joined) {
       document.getElementById('connecting-status').textContent = 'Joining a table…';
       const poolLimit = [51, 101, 201].includes(Number(qp.get('pool'))) ? Number(qp.get('pool')) : 101;
-      const entryFee = [50, 100, 200].includes(Number(qp.get('entry'))) ? Number(qp.get('entry')) : 100;
-      const pointValue = [1, 2, 5].includes(Number(qp.get('value'))) ? Number(qp.get('value')) : 1;
+      const entryFee = (FREE ? [50, 100, 200] : [1, 2, 5]).includes(Number(qp.get('entry'))) ? Number(qp.get('entry')) : (FREE ? 100 : 2);
+      const pointValue = (FREE ? [1, 2, 5] : [0.02, 0.05, 0.1]).includes(Number(qp.get('value'))) ? Number(qp.get('value')) : (FREE ? 1 : 0.02);
       for (let attempt = 1; attempt <= 30 && !joined; attempt++) {
         try {
           const fallbackOptions = {

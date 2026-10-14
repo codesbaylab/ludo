@@ -83,10 +83,10 @@ AD.boot({
         AD.kpiCard('Wallet liabilities', AD.inr(k.liabilities.total), null, AD.inr(k.liabilities.held) + ' locked in live games', '')];
       document.getElementById('kpis').innerHTML = cards.join('');
       document.getElementById('rev-total').textContent = AD.inr(k.revenue.cur) + ' total';
-      AD.bars(document.getElementById('c-revenue'), { labels: d.labels, stacked: true, fmt: AD.inr, yfmt: function (v) { return '₹' + AD.short(v); }, series: [
+      AD.bars(document.getElementById('c-revenue'), { labels: d.labels, stacked: true, fmt: AD.inr, yfmt: function (v) { return '$' + AD.short(v); }, series: [
         { name: 'Ludo fees', color: C.orange, values: s.ludo_fee }, { name: 'Rummy fees', color: C.pink, values: s.rummy_fee }, { name: 'Pro memberships', color: C.purple, values: s.pro_fee }] });
       AD.line(document.getElementById('c-active'), { w: 400, h: 245, labels: d.labels, series: [{ name: 'Daily', color: C.blue, values: s.dau }, { name: 'Weekly', color: C.teal, values: s.wau, area: false, dash: true }] });
-      AD.bars(document.getElementById('c-cash'), { w: 420, h: 230, labels: d.labels.slice(-14), fmt: AD.inr, yfmt: function (v) { return '₹' + AD.short(v); }, series: [{ name: 'Deposits', color: C.green, values: last(s.deposits) }, { name: 'Withdrawals', color: C.red, values: last(s.withdrawals) }] });
+      AD.bars(document.getElementById('c-cash'), { w: 420, h: 230, labels: d.labels.slice(-14), fmt: AD.inr, yfmt: function (v) { return '$' + AD.short(v); }, series: [{ name: 'Deposits', color: C.green, values: last(s.deposits) }, { name: 'Withdrawals', color: C.red, values: last(s.withdrawals) }] });
       const m = d.mix; const tot = m.ludo_cash + m.ludo_free + m.rummy_points + m.rummy_pool;
       AD.donut(document.getElementById('c-mix'), [{ label: 'Ludo · cash', value: m.ludo_cash, color: C.orange }, { label: 'Ludo · free', value: m.ludo_free, color: '#ffc58f' }, { label: 'Rummy · points', value: m.rummy_points, color: C.pink }, { label: 'Rummy · pool', value: m.rummy_pool, color: C.purple }], AD.short(tot), 'matches');
       const f = d.funnel;
@@ -105,7 +105,7 @@ AD.boot({
         chip.textContent = 'server online'; chip.className = 'chip green';
         document.getElementById('live-players').textContent = AD.num(st.players); document.getElementById('live-tables').textContent = AD.num(st.tables); document.getElementById('live-inplay').textContent = AD.inr(st.in_play_inr);
         document.getElementById('live').innerHTML = st.rooms.length ? st.rooms.slice(0, 6).map(function (r) {
-          const label = r.game === 'ludo' ? ('Ludo ' + (r.stake > 0 ? '₹' + r.stake : 'free')) : ('Rummy ' + (r.mode || '') + (r.free ? ' free' : ''));
+          const label = r.game === 'ludo' ? ('Ludo ' + (r.stake > 0 ? '$' + r.stake : 'free')) : ('Rummy ' + (r.mode || '') + (r.free ? ' free' : ''));
           return '<div class="list-row"><span class="chip ' + (r.game === 'ludo' ? 'green' : 'orange') + '">●</span><div class="grow">' + AD.esc(label) + ' · ' + r.clients + '/' + r.maxClients + 'p<small>' + (r.private ? 'private ' : '') + 'room ' + AD.esc(r.id) + '</small></div></div>';
         }).join('') : '<div class="empty-note">No tables open right now.</div>';
       } catch (e) {

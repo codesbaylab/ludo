@@ -19,9 +19,9 @@
 
   // ---------- formatting ----------
   const esc = (v) => String(v === null || v === undefined ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const num = (n) => Math.round(Number(n || 0)).toLocaleString('en-IN');
-  const inr = (n) => { n = Number(n || 0); const neg = n < 0; return (neg ? '−' : '') + '₹' + Math.abs(Math.round(n * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 }); };
-  const short = (n) => { n = Number(n || 0); return n >= 1e7 ? (n / 1e7).toFixed(1) + 'Cr' : n >= 1e5 ? (n / 1e5).toFixed(1) + 'L' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + 'k' : String(Math.round(n)); };
+  const num = (n) => Math.round(Number(n || 0)).toLocaleString('en-US');
+  const inr = (n) => { n = Number(n || 0); const neg = n < 0; return (neg ? '−' : '') + '$' + Math.abs(Math.round(n * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }); };
+  const short = (n) => { n = Number(n || 0); return n >= 1e9 ? (n / 1e9).toFixed(1) + 'B' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n >= 1e4 ? 0 : 1) + 'k' : String(Math.round(n)); };
   const sum = (a) => (a || []).reduce((x, y) => x + Number(y || 0), 0);
   const dt = (ts) => ts ? new Date(ts).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';
   const dtFull = (ts) => ts ? new Date(ts).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : '—';

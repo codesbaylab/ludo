@@ -19,17 +19,17 @@ async function main() {
     const s = (r.state as any).stake; const id = r.roomId;
     return { r, s, id };
   };
-  const cases: [any, number][] = [[{ stake: 50 }, 50], [{ stake: 3 }, 10], [{ stake: 99999 }, 5000], [{ stake: 12.7 }, 12], [{ stake: -5 }, 0], [{ stake: 'x' }, 0], [{ stake: 200, bots: true }, 0]];
+  const cases: [any, number][] = [[{ stake: 5 }, 5], [{ stake: 0.1 }, 0.25], [{ stake: 99999 }, 50], [{ stake: 12.7 }, 12.7], [{ stake: 1.234 }, 1.23], [{ stake: -5 }, 0], [{ stake: 'x' }, 0], [{ stake: 20, bots: true }, 0]];
   for (const [o, want] of cases) {
     const { r, s } = await stakeOf(o);
     if (s !== want) throw new Error(`stake ${JSON.stringify(o)} -> ${s}, wanted ${want}`);
     await r.leave();
   }
-  // guest joins a ₹50 private room by code and sees the host's stake
-  const host = await client.create('ludo', { name: 'Host', private: true, playerCount: 2, stake: 50 });
+  // guest joins a $5 private room by code and sees the host's stake
+  const host = await client.create('ludo', { name: 'Host', private: true, playerCount: 2, stake: 5 });
   const guest = await client.joinById(host.roomId, { name: 'Guest' });
   await new Promise((res) => setTimeout(res, 150));
-  if ((guest.state as any).stake !== 50 || !(guest.state as any).started) throw new Error('guest did not adopt stake / start');
+  if ((guest.state as any).stake !== 5 || !(guest.state as any).started) throw new Error('guest did not adopt stake / start');
   console.log('PASS cash room stake rules');
   process.exit(0);
 }

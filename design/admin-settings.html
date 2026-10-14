@@ -36,7 +36,7 @@
     </div>
     <div class="am-grid g2">
       <div class="am-card"><div class="head"><div><h3>Pro membership &amp; transfers</h3><div class="sub">One-time Pro fee and player-to-player limits</div></div></div><div id="pro-rows"></div></div>
-      <div class="am-card"><div class="head"><div><h3>USDT → ₹ rate</h3><div class="sub">Used to credit every new deposit</div></div></div><div id="rate-rows"></div></div>
+      <div class="am-card"><div class="head"><div><h3>USDT → $ rate</h3><div class="sub">Informational only — deposits are credited 1:1</div></div></div><div id="rate-rows"></div></div>
     </div>
     <div class="am-card"><div class="head"><div><h3>🎁 Referral levels</h3><div class="sub">Each level is paid as a share of the Pro fee when someone in your network goes Pro</div></div><button class="am-btn sm primary" id="lvl-edit">Edit levels</button></div><div id="lvls"></div></div>
   </div>
@@ -84,12 +84,12 @@ AD.boot({
       const on = function (id, fn) { const e = document.getElementById(id); if (e) e.addEventListener('click', function () { AD.run(fn); }); };
       const ask = async function (title, label, value, step, msg) { const f = await ludoForm({ tone: 'accent', icon: '⚙️', title: title, message: msg || 'Recorded in the audit log.', fields: [{ name: 'v', label: label, type: 'number', step: step || 'any', value: value, required: true }], confirmText: 'Save' }); return f ? Number(f.v) : null; };
       on('b-fee', async function () { const v = await ask('Platform fee (%)', 'Percent of each cash pot (0–50)', S.platform_fee_pct, '0.5', 'Applies to matches that START after the game server refreshes its settings (~15 s). Matches already in play keep their rate.'); if (v !== null) await patch({ platform_fee_pct: v }); });
-      on('b-wa', async function () { const v = await ask('Withdrawal approval threshold', '₹ amount (0 = off)', S.withdrawal_approval_min, '1'); if (v !== null) await patch({ withdrawal_approval_min: v }); });
-      on('b-aa', async function () { const v = await ask('Adjustment approval threshold', '₹ amount (0 = off)', S.adjustment_approval_min, '1'); if (v !== null) await patch({ adjustment_approval_min: v }); });
-      on('b-pro', async function () { const v = await ask('Pro membership fee', '₹ one-time fee', S.pro_fee, '1', 'Only affects future purchases.'); if (v !== null) { await AD.rpc('admin_set_pro_fee', { p_fee: v }); await loadSettings(); } });
-      on('b-rate', async function () { const v = await ask('USDT → ₹ rate', '₹ per 1 USDT', rate.usdt_inr_rate, '0.01', 'Only affects deposits detected from now on.'); if (v !== null) { await AD.rpc('admin_set_usdt_rate', { p_rate: v }); await loadSettings(); } });
+      on('b-wa', async function () { const v = await ask('Withdrawal approval threshold', '$ amount (0 = off)', S.withdrawal_approval_min, '1'); if (v !== null) await patch({ withdrawal_approval_min: v }); });
+      on('b-aa', async function () { const v = await ask('Adjustment approval threshold', '$ amount (0 = off)', S.adjustment_approval_min, '1'); if (v !== null) await patch({ adjustment_approval_min: v }); });
+      on('b-pro', async function () { const v = await ask('Pro membership fee', '$ one-time fee', S.pro_fee, '1', 'Only affects future purchases.'); if (v !== null) { await AD.rpc('admin_set_pro_fee', { p_fee: v }); await loadSettings(); } });
+      on('b-rate', async function () { const v = await ask('USDT → $ rate', '$ per 1 USDT', rate.usdt_inr_rate, '0.01', 'Informational only — deposits are always credited 1:1.'); if (v !== null) { await AD.rpc('admin_set_usdt_rate', { p_rate: v }); await loadSettings(); } });
       on('b-tl', async function () {
-        const f = await ludoForm({ tone: 'accent', icon: '🔁', title: 'Transfer limits', message: 'Applies to player-to-player transfers.', fields: [{ name: 'mn', label: 'Minimum per transfer (₹)', type: 'number', step: '1', value: S.transfer_min, required: true }, { name: 'mx', label: 'Maximum per transfer (₹)', type: 'number', step: '1', value: S.transfer_max, required: true }, { name: 'dy', label: 'Maximum per day, per player (₹)', type: 'number', step: '1', value: S.transfer_daily_max, required: true }], confirmText: 'Save' });
+        const f = await ludoForm({ tone: 'accent', icon: '🔁', title: 'Transfer limits', message: 'Applies to player-to-player transfers.', fields: [{ name: 'mn', label: 'Minimum per transfer ($)', type: 'number', step: '1', value: S.transfer_min, required: true }, { name: 'mx', label: 'Maximum per transfer ($)', type: 'number', step: '1', value: S.transfer_max, required: true }, { name: 'dy', label: 'Maximum per day, per player ($)', type: 'number', step: '1', value: S.transfer_daily_max, required: true }], confirmText: 'Save' });
         if (f) { await AD.rpc('admin_set_transfer_limits', { p_min: Number(f.mn), p_max: Number(f.mx), p_daily: Number(f.dy) }); await loadSettings(); }
       });
       const le = document.getElementById('lvl-edit'); le.style.display = isSuper ? '' : 'none';
@@ -129,7 +129,7 @@ AD.boot({
       document.getElementById('sys-k').innerHTML = [
         AD.kpiCard('Game server', srv ? '<span class="pos">Online</span>' : '<span class="neg">Unreachable</span>', null, srv ? 'up ' + upt(srv.uptime_s) + ' · ' + srv.version : 'free tier may be asleep — ' + (srvErr || '')),
         AD.kpiCard('Players connected', srv ? AD.num(srv.players) : '—', null, srv ? AD.num(srv.tables) + ' tables' : ''),
-        AD.kpiCard('₹ in play now', srv ? AD.inr(srv.in_play_inr) : '—', null, 'stakes on live tables'),
+        AD.kpiCard('$ in play now', srv ? AD.inr(srv.in_play_inr) : '—', null, 'stakes on live tables'),
         AD.kpiCard('Server memory', srv ? srv.memory_mb + ' MB' : '—', null, srv ? srv.node : '')].join('');
       document.getElementById('books-chip').innerHTML = AD.chip(books.ok ? 'ALL CHECKS PASS' : 'MISMATCH — INVESTIGATE', books.ok ? 'green' : 'red');
       document.getElementById('books').innerHTML = books.checks.map(function (c) { return row((c.ok ? '✅ ' : '❌ ') + AD.esc(c.name), AD.esc(c.detail), ''); }).join('') + '<p class="hint" style="margin:8px 0 0">Wallet total ' + AD.inr(books.wallet_total) + ' · held ' + AD.inr(books.held_total) + ' · pending withdrawals ' + AD.inr(books.pending_withdrawals) + '</p>';
@@ -140,7 +140,7 @@ AD.boot({
         row('⛓️ Deposit watcher (Solana)', !srv ? 'unknown' : !w.configured ? 'SOLANA_MASTER_SEED is not set on the server' : AD.num(w.addresses) + ' addresses · last poll ' + (w.lastTickAt ? AD.ago(w.lastTickAt) : 'not yet') + (w.lastError ? ' · ' + AD.esc(w.lastError) : ''), AD.chip(!srv ? '—' : !w.configured ? 'Not configured' : (w.lastError ? 'Error' : 'Running'), !srv ? '' : !w.configured ? 'yellow' : (w.lastError ? 'red' : 'green'))) +
         row('📈 Reporting rollups', 'Latest day built: ' + AD.esc(sys.stats_last_day || 'never'), AD.chip(sys.stats_last_day ? 'Fresh' : 'Empty', sys.stats_last_day ? 'green' : 'yellow'));
       const rooms = (srv && srv.rooms) || [];
-      AD.table(document.getElementById('rooms'), [{ l: 'Game', k: function (r) { return r.game === 'ludo' ? '🎲 Ludo' : '🃏 Rummy'; } }, { l: 'Table', k: function (r) { return r.private ? 'Private' : r.free ? 'Free' : r.stake ? '₹' + r.stake : (r.mode || 'Cash'); } }, { l: 'Seats', a: 'r', k: function (r) { return r.clients + '/' + r.maxClients; } }, { l: 'State', k: function (r) { return r.locked ? AD.chip('Playing', 'green') : AD.chip('Waiting', 'yellow'); } }], rooms, { empty: srv ? 'No live tables right now.' : 'Game server unreachable.' });
+      AD.table(document.getElementById('rooms'), [{ l: 'Game', k: function (r) { return r.game === 'ludo' ? '🎲 Ludo' : '🃏 Rummy'; } }, { l: 'Table', k: function (r) { return r.private ? 'Private' : r.free ? 'Free' : r.stake ? '$' + r.stake : (r.mode || 'Cash'); } }, { l: 'Seats', a: 'r', k: function (r) { return r.clients + '/' + r.maxClients; } }, { l: 'State', k: function (r) { return r.locked ? AD.chip('Playing', 'green') : AD.chip('Waiting', 'yellow'); } }], rooms, { empty: srv ? 'No live tables right now.' : 'Game server unreachable.' });
       const rw = sys.rows; document.getElementById('db').innerHTML = Object.keys(rw).map(function (k) { return row(k.replace(/_/g, ' '), '', '<b>' + AD.num(rw[k]) + '</b>'); }).join('') + row('Player events last', '', '<span class="dim">' + AD.ago(sys.events_last) + '</span>') + row('Last ledger entry', '', '<span class="dim">' + AD.ago(sys.last_ledger) + '</span>');
     }
     document.getElementById('sys-reload').addEventListener('click', function () { AD.run(loadSystem); });

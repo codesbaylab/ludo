@@ -94,7 +94,7 @@
     // Real matches and practice-vs-computer games in one list, newest first.
     // Practice games are labelled and do NOT count toward the stats above.
     const games = [
-      ...matches.map(m => ({ practice: false, color: m.color, won: m.result === 'win', time: m.matches.finished_at, label: m.matches.stake > 0 ? `₹${m.matches.stake} table` : 'Free table' })),
+      ...matches.map(m => ({ practice: false, color: m.color, won: m.result === 'win', time: m.matches.finished_at, label: m.matches.stake > 0 ? `${ludoMoney(m.matches.stake)} table` : 'Free table' })),
       ...botMatches.map(m => ({ practice: true, color: m.color, won: m.result === 'win', quit: m.result === 'quit', time: m.finished_at, label: `🤖 vs Computer · ${m.player_count} players` })),
     ].sort((a, b) => new Date(b.time) - new Date(a.time));
     const list = document.getElementById('games-list');

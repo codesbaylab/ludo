@@ -34,7 +34,7 @@
     <div class="card" style="background:linear-gradient(150deg, #2ecc71, #178a4c); color:#fff; text-align:center; padding:28px 20px;">
       <div style="font-size:12px; font-weight:700; opacity:.85; text-transform:uppercase; letter-spacing:.5px;">Available Balance</div>
       <div style="font-size:38px; font-weight:800; margin:8px 0 4px;" id="wallet-balance">…</div>
-      <div style="font-size:12px; opacity:.85; font-weight:600;" id="wallet-locked">🔒 ₹0 locked in active games</div>
+      <div style="font-size:12px; opacity:.85; font-weight:600;" id="wallet-locked">🔒 $0 locked in active games</div>
     </div>
 
     <!-- Your Player ID: what others use to send you money -->
@@ -65,8 +65,8 @@
         <p class="hint" id="send-lookup" style="margin:6px 0 0; min-height:18px;"></p>
       </div>
       <div class="field">
-        <label>Amount (₹)</label>
-        <input class="input" type="number" id="send-amount" placeholder="e.g. 500" min="1" step="1" />
+        <label>Amount ($)</label>
+        <input class="input" type="number" id="send-amount" placeholder="e.g. 5" min="1" step="0.01" />
         <p class="hint" id="send-limits" style="margin:6px 0 0;"></p>
       </div>
       <button class="btn btn-primary" id="btn-do-send" disabled>Send</button>
@@ -100,8 +100,8 @@
         <div style="font-size:12px; font-weight:700; color:#a36a00;">⚠️ Send only to a Solana address (USDT on the Solana network). Requests are reviewed and paid out manually, usually within 24 hours — the amount is deducted from your balance immediately and refunded if the request is rejected.</div>
       </div>
       <div class="field">
-        <label>Amount (₹)</label>
-        <input class="input" type="number" id="withdraw-amount" placeholder="e.g. 100" min="1" step="1" />
+        <label>Amount ($)</label>
+        <input class="input" type="number" id="withdraw-amount" placeholder="e.g. 10" min="1" step="0.01" />
       </div>
       <div class="field">
         <label>Destination Solana address</label>
@@ -186,7 +186,7 @@
       const rate = Number(rateRes.data?.usdt_inr_rate ?? 90);
 
       document.getElementById('deposit-address-input').value = address;
-      document.getElementById('deposit-rate-hint').textContent = `Current rate: 1 USDT / USDC ≈ ₹${rate.toFixed(2)}`;
+      document.getElementById('deposit-rate-hint').textContent = `Credited 1:1 — 1 USDT / USDC = ${ludoMoney(rate)}`;
 
       const qr = qrcode(0, 'M');
       qr.addData(address);
@@ -227,7 +227,7 @@
   function escapeHtml(str) {
     return String(str).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
-  const fmtINR = (n) => '₹' + Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const fmtINR = (n) => ludoMoney(n); // dollars (1 USDT = $1)
 
   async function loadPlayerIdAndLimits() {
     const [{ data: profile }, { data: settings }] = await Promise.all([
@@ -320,19 +320,19 @@
     const enough = balance >= fee;
     proEl.innerHTML = `
       <span class="badge badge-waiting">PRO MEMBERSHIP</span>
-      <div style="font-size:34px; font-weight:800; margin-top:10px;">₹${fee.toFixed(0)}</div>
+      <div style="font-size:34px; font-weight:800; margin-top:10px;">${ludoMoney(fee)}</div>
       <div class="hint" style="margin:2px 0 12px;">One-time · non-refundable</div>
       <div style="text-align:left; font-size:13px; font-weight:700; line-height:1.9;">
         ✓ Play cash tables for real money<br>✓ Win and withdraw USDT<br>✓ Refer friends and earn commission<br>✓ Pro badge on your profile
       </div>
-      <button class="btn btn-primary" id="btn-buy-pro" style="width:100%; margin-top:14px;" ${enough ? '' : 'disabled'}>Buy Pro · ₹${fee.toFixed(0)} from wallet</button>
+      <button class="btn btn-primary" id="btn-buy-pro" style="width:100%; margin-top:14px;" ${enough ? '' : 'disabled'}>Buy Pro · ${ludoMoney(fee)} from wallet</button>
       <p class="hint" id="pro-error" style="display:none; color:var(--red); margin:8px 0 0;"></p>
-      ${enough ? '<p class="hint" style="margin:8px 0 0;">₹' + fee.toFixed(0) + ' will be deducted from your wallet balance.</p>'
+      ${enough ? '<p class="hint" style="margin:8px 0 0;">' + ludoMoney(fee) + ' will be deducted from your wallet balance.</p>'
                : '<p class="hint" style="margin:8px 0 0;">Not enough balance yet — deposit first.</p><button class="btn btn-secondary" id="btn-pro-deposit" style="width:100%; margin-top:8px;">Deposit USDT first</button>'}
     `;
     document.getElementById('btn-pro-deposit')?.addEventListener('click', () => depositBtn.click());
     document.getElementById('btn-buy-pro')?.addEventListener('click', async (e) => {
-      if (!(await ludoConfirm({ tone: 'accent', icon: '👑', title: 'Go Pro?', message: 'Unlock cash tables, withdrawals and referrals.', detail: [['Membership fee', `₹${fee.toFixed(0)}`], ['Balance after', `₹${(balance - fee).toFixed(2)}`], ['Type', 'One-time · non-refundable']], confirmText: 'Buy Pro', cancelText: 'Not now' }))) return;
+      if (!(await ludoConfirm({ tone: 'accent', icon: '👑', title: 'Go Pro?', message: 'Unlock cash tables, withdrawals and referrals.', detail: [['Membership fee', ludoMoney(fee)], ['Balance after', ludoMoney(balance - fee)], ['Type', 'One-time · non-refundable']], confirmText: 'Buy Pro', cancelText: 'Not now' }))) return;
       e.target.disabled = true;
       const { error } = await ludoSupabase.rpc('purchase_pro');
       if (error) {

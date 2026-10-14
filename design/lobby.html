@@ -97,7 +97,7 @@
       <a href="wallet.html#pro"><button class="btn btn-primary">Go Pro</button></a>
     </div>
     <div class="action-grid">
-      <a class="tile tile-cash server-gated" href="stake-confirm.html?stake=10">
+      <a class="tile tile-cash server-gated" href="stake-confirm.html?stake=0.25">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
           <div class="tile-icon">🪙</div>
           <div style="display:flex; gap:3px;">
@@ -107,10 +107,10 @@
             <div class="token token-blue" style="width:10px; height:10px;"></div>
           </div>
         </div>
-        <div class="tile-title">₹10 Table</div>
-        <div class="tile-sub">Win up to ₹36 · 4 players</div>
+        <div class="tile-title">$0.25 Table</div>
+        <div class="tile-sub">Win up to $0.90 · 4 players</div>
       </a>
-      <a class="tile tile-cash server-gated" href="stake-confirm.html?stake=50">
+      <a class="tile tile-cash server-gated" href="stake-confirm.html?stake=1">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
           <div class="tile-icon">💎</div>
           <div style="display:flex; gap:3px;">
@@ -120,10 +120,10 @@
             <div class="token token-blue" style="width:10px; height:10px;"></div>
           </div>
         </div>
-        <div class="tile-title">₹50 Table</div>
-        <div class="tile-sub">Win up to ₹180 · 4 players</div>
+        <div class="tile-title">$1 Table</div>
+        <div class="tile-sub">Win up to $3.60 · 4 players</div>
       </a>
-      <a class="tile tile-cash tile-wide server-gated" href="stake-confirm.html?stake=50&room=create&custom=1">
+      <a class="tile tile-cash tile-wide server-gated" href="stake-confirm.html?stake=1&room=create&custom=1">
         <div>
           <div class="tile-title">➕ Create Cash Room</div>
           <div class="tile-sub">Set your stake · invite friends</div>
@@ -264,7 +264,7 @@
         const won = m.result === 'win';
         const row = document.createElement('div');
         row.className = 'player-chip';
-        const tableLabel = m.matches.stake > 0 ? `₹${m.matches.stake} table` : 'Free match';
+        const tableLabel = m.matches.stake > 0 ? `${ludoMoney(m.matches.stake)} table` : 'Free match';
         row.innerHTML = `
           <div class="avatar" style="width:34px; height:34px; font-size:13px; background:var(--${m.color});">${m.color[0].toUpperCase()}</div>
           <div>

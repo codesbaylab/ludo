@@ -120,7 +120,7 @@
 
   // Referral link + earnings. Pro members only — free users see a locked card
   // pointing at the upgrade (the code itself doesn't exist until you go Pro).
-  const fmtINR = (n) => '₹' + Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  const fmtINR = (n) => ludoMoney(n || 0);
   async function renderReferSection(profile) {
     const el = document.getElementById('refer-section');
     if (!profile?.is_pro || !profile.referral_code) {

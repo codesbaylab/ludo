@@ -449,9 +449,9 @@
     if (!winner) return;
     const stake = snapshot.stake || 0;
     const isFree = stake <= 0;
-    const pot = stake * snapshot.players.length; // table size, not a fixed 4 — same math as LudoRoom.persistResult
-    const fee = Math.round(pot * 0.1);
-    const payout = pot - fee;
+    const pot = Math.round(stake * snapshot.players.length * 100) / 100; // table size, not a fixed 4 — same math as LudoRoom.persistResult
+    const fee = Math.round(pot * 0.1 * 100) / 100;
+    const payout = Math.round((pot - fee) * 100) / 100;
     document.getElementById('winner-icon').style.background = `var(--${winner.color}-soft)`;
     document.getElementById('winner-title').textContent = `${colorDot(winner.color)} ${winner.name} Wins!`;
     // A forfeit win (opponents left) carries the reason in the final status message ("<name> wins — <reason>").
@@ -460,9 +460,9 @@
     document.getElementById('payout-block').style.display = isFree ? 'none' : '';
     document.getElementById('free-note').style.display = isFree ? '' : 'none';
     if (!isFree) {
-      document.getElementById('payout-pot').textContent = `₹${pot}`;
-      document.getElementById('payout-fee').textContent = `-₹${fee}`;
-      document.getElementById('payout-amount').textContent = `₹${payout}`;
+      document.getElementById('payout-pot').textContent = ludoMoney(pot);
+      document.getElementById('payout-fee').textContent = `-${ludoMoney(fee)}`;
+      document.getElementById('payout-amount').textContent = ludoMoney(payout);
     }
     gameOverOverlay.classList.add('open');
   }
@@ -779,7 +779,7 @@
       ludoSupabase.from('profiles').select('display_name').eq('id', session.user.id).single(),
       ludoSupabase.from('wallets').select('balance').eq('user_id', session.user.id).single(),
     ]);
-    if (walletChip && wallet) walletChip.textContent = `💰 ₹${Number(wallet.balance).toFixed(2)}`;
+    if (walletChip && wallet) walletChip.textContent = `💰 ${ludoMoney(wallet.balance)}`;
 
     client = new Colyseus.Client(SERVER_URL);
     let joined;
