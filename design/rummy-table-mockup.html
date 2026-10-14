@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Table Kings — Rummy table idea</title>
+<style>
+  :root {
+    --felt1: #1c6b4a; --felt2: #0d3b2a; --ink: #12171c; --gold: #e2b24a;
+    --green: #2ecc71; --blue: #4da3ff; --purple: #9b6bff; --red: #ff5a5a; --orange: #ff8a3d;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0a1713; color: #fff; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; touch-action: pan-x pan-y; }
+  .wrap { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 10px 0 28px; gap: 14px; }
+
+  /* The table is a fixed 20:9 stage that scales to the screen (container query units) */
+  .stage-box { width: min(100vw, calc(100vh * 20 / 9)); aspect-ratio: 20 / 9; container-type: size; }
+  .stage {
+    width: 100%; height: 100%; position: relative; overflow: hidden; border-radius: 2.2cqw;
+    background: radial-gradient(120% 100% at 50% 40%, var(--felt1), var(--felt2) 70%);
+    box-shadow: inset 0 0 8cqw rgba(0,0,0,.55);
+  }
+
+  /* top bar */
+  .iconbtn { position: absolute; top: 2.2cqh; width: 8cqh; height: 8cqh; border-radius: 50%; display: grid; place-items: center;
+    background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.18); font-size: 4cqh; }
+  .iconbtn.l { left: 2cqw; } .iconbtn.r { right: 2cqw; }
+  .title { position: absolute; top: 2.6cqh; left: 50%; transform: translateX(-50%); padding: .8cqh 2.4cqw; border-radius: 100px;
+    background: rgba(0,0,0,.35); font-size: 3.6cqh; font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
+
+  /* opponent (top centre) */
+  .opp { position: absolute; top: 10cqh; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: .6cqh; }
+  .avatar { width: 10.5cqh; height: 10.5cqh; border-radius: 50%; display: grid; place-items: center; font-size: 6cqh; font-weight: 800;
+    background: linear-gradient(145deg, #3c4a63, #1d2638); border: .5cqh solid rgba(255,255,255,.25); position: relative; }
+  .avatar.me { background: linear-gradient(145deg, #ff8a3d, #ff5c8a); }
+  .badge { font-size: 3cqh; font-weight: 800; padding: .3cqh 1.2cqw; border-radius: 100px; background: rgba(0,0,0,.45); }
+  .dealer { position: absolute; top: -.5cqh; right: -.5cqh; width: 4.4cqh; height: 4.4cqh; border-radius: 50%; background: var(--gold); color: #3b2a00; font-size: 2.8cqh; font-weight: 900; display: grid; place-items: center; }
+  /* turn ring with timer around the active avatar */
+  .ring { position: absolute; inset: -1.4cqh; border-radius: 50%; background: conic-gradient(var(--green) 0 72%, rgba(255,255,255,.15) 72% 100%);
+    -webkit-mask: radial-gradient(circle, transparent 62%, #000 64%); mask: radial-gradient(circle, transparent 62%, #000 64%); filter: drop-shadow(0 0 .8cqh rgba(46,204,113,.8)); }
+
+  /* centre row: closed deck (+ wild joker tucked behind), finish slot, open deck */
+  .centre { position: absolute; top: 31cqh; left: 0; right: 0; height: 26cqh; display: flex; justify-content: center; align-items: flex-start; gap: 7cqw; }
+  .pile { display: flex; flex-direction: column; align-items: center; gap: 1cqh; }
+  .pile .lbl { margin-top: .6cqh; font-size: 2.6cqh; font-weight: 700; color: rgba(255,255,255,.8); }
+  .card { width: 10.6cqh; height: 15.4cqh; background: #fff; color: #111; border-radius: 1cqh; position: relative; box-shadow: 0 .5cqh 1.2cqh rgba(0,0,0,.45); flex: 0 0 auto; }
+  .card .rk { position: absolute; top: .6cqh; left: .8cqh; font-weight: 800; font-size: 4cqh; line-height: 1; text-align: center; }
+  .card .rk small { display: block; font-size: 3cqh; }
+  .card .big { position: absolute; right: .8cqh; bottom: .2cqh; font-size: 7.2cqh; line-height: 1; }
+  .card.red { color: #d32f2f; }
+  .card.back { background: repeating-linear-gradient(45deg, #1b8a5b 0 .8cqh, #167548 .8cqh 1.6cqh); border: .6cqh solid #fff; }
+  .card.joker { background: #fff; color: var(--purple); }
+  .card.joker .rk { font-size: 2.6cqh; }
+  .deckwrap { position: relative; width: 15cqh; height: 17cqh; }
+  .deckwrap .wild { position: absolute; left: -2.6cqh; top: 1.4cqh; transform: rotate(-12deg); }
+  .deckwrap .back { position: absolute; left: 3.4cqh; top: 0; }
+  .finish { width: 17cqh; height: 17cqh; margin-top: 0; border-radius: 1.6cqh; border: .5cqh dashed rgba(226,178,74,.75); background: rgba(0,0,0,.22);
+    display: grid; place-items: center; text-align: center; font-size: 2.8cqh; font-weight: 800; color: var(--gold); letter-spacing: .08em; line-height: 1.25; }
+  .finish small { display: block; font-size: 2.2cqh; color: rgba(255,255,255,.6); letter-spacing: 0; font-weight: 600; }
+
+  /* group chips + hand */
+  .chips { position: absolute; left: 0; right: 0; top: 61cqh; display: flex; justify-content: center; gap: 1.6cqw; }
+  .hand { position: absolute; left: 0; right: 0; top: 58cqh; align-items: flex-end; display: flex; justify-content: center; gap: 1.6cqw; }
+  .grp { display: flex; flex-direction: column; align-items: stretch; gap: .8cqh; }
+  .grp .cards { display: flex; }
+  .grp .cards .card { margin-left: -6.4cqh; }
+  .grp .cards .card:first-child { margin-left: 0; }
+  .chip { font-size: 2.4cqh; font-weight: 800; padding: .5cqh 1cqw; border-radius: 100px; text-align: center; white-space: nowrap; }
+  .chip.pure { background: rgba(46,204,113,.22); color: #6dffa8; border: .3cqh solid rgba(46,204,113,.7); }
+  .chip.seq { background: rgba(77,163,255,.22); color: #9cc9ff; border: .3cqh solid rgba(77,163,255,.7); }
+  .chip.set { background: rgba(155,107,255,.22); color: #cdb6ff; border: .3cqh solid rgba(155,107,255,.7); }
+  .chip.bad { background: rgba(255,90,90,.18); color: #ff9a9a; border: .3cqh solid rgba(255,90,90,.6); }
+  .chip.need { background: linear-gradient(135deg, #ff8a3d, #ff5c8a); color: #fff; border: none; box-shadow: 0 0 1.2cqh rgba(255,138,61,.7); }
+  .card .star { position: absolute; top: -1cqh; right: -.6cqh; font-size: 3cqh; color: var(--gold); text-shadow: 0 0 .6cqh #000; }
+  .card.drawn { outline: .5cqh solid var(--gold); box-shadow: 0 0 1.6cqh rgba(226,178,74,.9); z-index: 2; }
+  .grp .move { display: flex; justify-content: space-between; font-size: 2.6cqh; color: rgba(255,255,255,.55); padding: 0 .6cqh; }
+
+  /* bottom bar */
+  .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 13cqh; display: flex; align-items: center; justify-content: space-between; padding: 0 2.4cqw;
+    background: linear-gradient(0deg, rgba(0,0,0,.55), transparent); }
+  .btn { font-size: 3.4cqh; font-weight: 800; padding: 1.4cqh 2.6cqw; border-radius: 100px; border: none; color: #fff; }
+  .btn.sort { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3); }
+  .btn.discard { background: linear-gradient(135deg, #ff8a3d, #ff5c8a); }
+  .btn.declare { background: linear-gradient(135deg, #3ddc84, #1aa660); }
+  .me { display: flex; align-items: center; gap: 1.4cqw; }
+  .me .avatar { width: 9cqh; height: 9cqh; font-size: 4.4cqh; }
+  .me .meta { font-size: 3cqh; font-weight: 700; line-height: 1.25; }
+  .me .meta b { color: var(--gold); }
+
+  /* notes below the table */
+  .notes { width: min(96vw, 760px); font-size: 14px; line-height: 1.5; color: #cfe3da; }
+  .notes h2 { font-size: 15px; margin: 0 0 6px; color: var(--gold); letter-spacing: .08em; text-transform: uppercase; }
+  .notes ul { margin: 0 0 12px; padding-left: 18px; }
+  .rot { display: none; text-align: center; color: #cfe3da; font-size: 13px; }
+  @media (orientation: portrait) { .rot { display: block; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="rot">Tip: rotate your phone to landscape for the real size.</div>
+
+  <div class="stage-box"><div class="stage">
+    <div class="iconbtn l">←</div>
+    <div class="title">Points Rummy · ₹1 / point</div>
+    <div class="iconbtn r">⚙</div>
+
+    <div class="opp">
+      <div class="avatar">R<div class="ring" style="background: conic-gradient(rgba(255,255,255,.15) 0 100%);"></div><div class="dealer">D</div></div>
+      <div class="badge">Ravi · PTS 0</div>
+    </div>
+
+    <div class="centre">
+      <div class="pile">
+        <div class="deckwrap">
+          <div class="card red wild"><div class="rk">7<small>♦</small></div><div class="big">♦</div></div>
+          <div class="card back"></div>
+        </div>
+        <div class="lbl">Closed deck · wild 7</div>
+      </div>
+      <div class="pile">
+        <div class="finish">FINISH<small>drag your last<br>card here</small></div>
+      </div>
+      <div class="pile">
+        <div class="card"><div class="rk">7<small>♣</small></div><div class="big">♣</div></div>
+        <div class="lbl">Open deck</div>
+      </div>
+    </div>
+
+    <div class="hand">
+      <div class="grp"><div class="chip pure">Pure sequence ✓</div><div class="cards">
+        <div class="card"><div class="rk">2<small>♣</small></div><div class="big">♣</div></div>
+        <div class="card"><div class="rk">3<small>♣</small></div><div class="big">♣</div></div>
+        <div class="card"><div class="rk">4<small>♣</small></div><div class="big">♣</div></div>
+        <div class="card"><div class="rk">5<small>♣</small></div><div class="big">♣</div></div>
+      </div></div>
+      <div class="grp"><div class="chip seq">Sequence ✓</div><div class="cards">
+        <div class="card red"><div class="rk">9<small>♥</small></div><div class="big">♥</div></div>
+        <div class="card red"><div class="rk">10<small>♥</small></div><div class="big">♥</div></div>
+        <div class="card"><div class="star">★</div><div class="rk">K<small>♣</small></div><div class="big">♣</div></div>
+      </div></div>
+      <div class="grp"><div class="chip need">Need pure</div><div class="cards">
+        <div class="card red drawn"><div class="rk">9<small>♦</small></div><div class="big">♦</div></div>
+      </div></div>
+      <div class="grp"><div class="chip bad">Invalid · 18</div><div class="cards">
+        <div class="card"><div class="rk">8<small>♣</small></div><div class="big">♣</div></div>
+        <div class="card"><div class="rk">10<small>♣</small></div><div class="big">♣</div></div>
+      </div></div>
+      <div class="grp"><div class="chip bad">Invalid · 5</div><div class="cards">
+        <div class="card red"><div class="rk">5<small>♥</small></div><div class="big">♥</div></div>
+      </div></div>
+      <div class="grp"><div class="chip bad">Invalid · 14</div><div class="cards">
+        <div class="card"><div class="rk">6<small>♠</small></div><div class="big">♠</div></div>
+        <div class="card"><div class="rk">8<small>♠</small></div><div class="big">♠</div></div>
+      </div></div>
+    </div>
+
+    <div class="bar">
+      <button class="btn sort">⇅ Sort</button>
+      <div class="me">
+        <div class="avatar me">Y<div class="ring"></div></div>
+        <div class="meta">You · <b>Your turn</b><br>Deadwood 46</div>
+      </div>
+      <div style="display:flex; gap:1.4cqw;">
+        <button class="btn discard">Discard</button>
+        <button class="btn declare">Declare</button>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="notes">
+    <h2>What this changes</h2>
+    <ul>
+      <li><b>No game log.</b> It can leak what opponents hold, and the big apps don't have one.</li>
+      <li><b>Group chips</b> replace the coloured card borders: each group has a gap, a label and its points.</li>
+      <li><b>“Need pure”</b> shows on the first group until you have a pure sequence.</li>
+      <li><b>Wild joker</b> sits behind the closed deck. The card you just drew stays gold and lifted.</li>
+      <li><b>Turn ring</b> with a timer around the active avatar.</li>
+      <li><b>Finish slot</b> to drag your last card onto, besides the Declare button.</li>
+      <li><b>Sort</b> instead of Arrange. Drag-to-reorder stays, and ‹ › arrows can move a whole group.</li>
+    </ul>
+    <h2>Not final</h2>
+    <p>This is a static picture, not wired to the game. Tell me what to change before I build it into the real table.</p>
+  </div>
+</div>
+</body>
+</html>
