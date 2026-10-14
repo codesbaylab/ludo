@@ -353,9 +353,17 @@
 
     /* The felt is no longer its own rounded card either — same shared
        background as the rest of the screen, just a layout region. */
-    .felt { background: transparent; box-shadow: none; border-radius: 0; padding: 2px 0; flex: 0 0 auto; }
+    .felt { background: transparent; box-shadow: none; border-radius: 0; padding: 14px 0 2px; flex: 0 0 auto; }
     .opponent-row { margin-bottom: 4px; gap: 4px; }
     .opponent { padding: 2px 6px; gap: 2px; }
+    /* Opponents ride in the header strip (between Exit and the title) instead of their own row: the short screen edge is
+       the scarce resource, and this frees ~65px for bigger hand cards. */
+    .rummy-page { position: relative; }
+    .opponent-row { position: absolute; top: 2px; left: 78px; right: 150px; margin: 0; gap: 4px; justify-content: space-evenly; z-index: 1; }
+    .opponent { flex-direction: row; align-items: center; flex: none; padding: 1px 4px; gap: 5px; }
+    .opponent .ocards { margin-top: 0; }
+    .opponent .oname { max-width: 54px; }
+    .oturn-label, .odisc-label { margin-top: 0; }
     .opponent .avatar { width: 24px; height: 24px; font-size: 11px; border-width: 1.5px; }
     .opponent .oname { font-size: 10px; max-width: 60px; }
     .opponent .ocards .card-back { width: 14px; height: 20px; margin-left: -9px; border-width: 1px; }
@@ -433,7 +441,7 @@
 
     /* Bigger cards — the whole point of landscape mode. */
     .rummy-page {
-      --cw: clamp(40px, calc((var(--land-h) - 335px) / 1.39), 92px);
+      --cw: calc(clamp(40px, min(calc((var(--land-h) - 280px) / 1.39), calc((var(--land-w) - 200px) / 6.46)), 96px) * var(--fit, 1));
       --cc: 60px;
       --step: clamp(calc(var(--cw) * .42), calc((var(--land-w) - 260px - var(--cw)) / 13), calc(var(--cw) * .78));
     }
@@ -626,6 +634,7 @@
     const w = Math.round((vv && vv.width) || window.innerWidth), h = Math.round((vv && vv.height) || window.innerHeight);
     document.documentElement.style.setProperty('--land-w', Math.max(w, h) + 'px');
     document.documentElement.style.setProperty('--land-h', Math.min(w, h) + 'px');
+    if (typeof fitHand === 'function' && document.getElementById('hand-row')) fitHand();
   }
   // iOS reports stale/transitional sizes right after a rotation, so re-read a few times.
   function updateLandVarsSoon() { updateLandVars(); [80, 250, 600].forEach(t => setTimeout(updateLandVars, t)); }
@@ -942,7 +951,21 @@
   const rotatedPortraitQuery = window.matchMedia('(orientation: portrait) and (max-width: 900px)');
   function isLandscapeMode() { return landscapeQuery.matches || rotatedPortraitQuery.matches; }
 
-  function renderHand() {
+  // Landscape: shrink the cards (via --fit) until the widest hand row no longer overflows (group chips force extra width).
+  function fitHand() {
+    try {
+      if (!isLandscapeMode()) return;
+      const page = document.querySelector('.rummy-page'), row = document.getElementById('hand-row');
+      let f = 1; page.style.setProperty('--fit', 1);
+      for (let i = 0; i < 16; i++) {
+        const line = row.querySelector('.hand-line');
+        if (!line || line.scrollWidth <= row.clientWidth - 2) break;
+        f *= 0.95; page.style.setProperty('--fit', f);
+      }
+    } catch (e) {}
+  }
+  function renderHand() { renderHandRaw(); fitHand(); }
+  function renderHandRaw() {
     const hand = state.hands[0];
     const container = document.getElementById('hand-row');
     container.innerHTML = '';
