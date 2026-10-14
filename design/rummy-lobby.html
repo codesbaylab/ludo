@@ -35,6 +35,16 @@
   .rummy-hero h2 { font-size:20px; margin-top:6px; }
   .rummy-hero p { font-size:13px; color:var(--text-dim); font-weight:600; margin-top:2px; }
 </style>
+<style>
+  .rules-box { display:flex; flex-direction:column; gap:8px; margin-bottom:24px; }
+  .rule { background:#fff; border:1px solid var(--border); border-radius:14px; padding:0 14px; }
+  .rule summary { cursor:pointer; font-weight:800; font-size:14px; padding:12px 0; list-style:none; display:flex; justify-content:space-between; align-items:center; }
+  .rule summary::-webkit-details-marker { display:none; }
+  .rule summary::after { content:'＋'; color:var(--text-dim); font-weight:800; }
+  .rule[open] summary::after { content:'－'; }
+  .rule ul { margin:0 0 12px; padding-left:18px; font-size:13px; line-height:1.55; color:var(--text); font-weight:600; }
+  .rule li { margin-bottom:5px; }
+</style>
 </head>
 <body>
 <div class="app">
@@ -192,6 +202,67 @@
     <div class="section-title">Recent Cash Table Games</div>
     <div style="display:flex; flex-direction:column; gap:10px;" id="recent-rummy-list">
       <p class="hint" style="margin:0;">Sign in to see your real Cash Table history.</p>
+    </div>
+
+    <div class="section-title">📖 Rummy Rules</div>
+    <div class="rules-box" id="rules-box">
+      <details class="rule" open>
+        <summary>The basics</summary>
+        <ul>
+          <li>2 packs of 52 cards + 4 printed jokers (108 cards). Each player gets <b>13 cards</b>. Tables are 2 or 4 players.</li>
+          <li>On your turn: <b>draw</b> one card (closed deck or top of the discard pile), then <b>discard</b> one card.</li>
+          <li><b>Wild joker:</b> each round one rank is picked at random. Every card of that rank, plus the printed jokers, can stand in for any card.</li>
+        </ul>
+      </details>
+      <details class="rule">
+        <summary>Groups (melds)</summary>
+        <ul>
+          <li><b>Pure sequence</b> — 3+ cards, same suit, consecutive numbers, <u>no joker/wild standing in</u>. Example: 8♦ 9♦ 10♦.</li>
+          <li><b>Sequence</b> — same as above but a joker/wild may replace a card. Example: 5♠ 6♠ 🃏 8♠.</li>
+          <li><b>Set</b> — 3 or 4 cards of the same number in <u>different suits</u> (jokers allowed). Example: 7♠ 7♥ 7♦.</li>
+          <li>Every group needs at least 3 cards. Ace can be low (A-2-3) or high (Q-K-A), but not both (K-A-2 is not allowed).</li>
+        </ul>
+      </details>
+      <details class="rule">
+        <summary>How to declare (win a hand)</summary>
+        <ul>
+          <li>Your other 13 cards must <b>all be in groups</b> (nothing left over), and you discard the last card by declaring.</li>
+          <li>You need <b>at least 2 sequences</b>, and <b>at least 1 of them must be pure</b>. Extra groups can be sets or sequences. A long run can be split into two sequences of 3+ cards.</li>
+          <li>An invalid declare costs the full <b>80-point penalty</b> (the app warns you first).</li>
+        </ul>
+      </details>
+      <details class="rule">
+        <summary>Points (what you lose)</summary>
+        <ul>
+          <li>Card values: <b>A = 1</b>, 2–10 = face value, <b>J, Q, K = 10</b>, jokers/wild = 0.</li>
+          <li>When someone declares, everyone else counts the cards that are <u>not</u> in valid groups.</li>
+          <li>No pure sequence at all = the flat <b>80 points</b>. Nobody ever loses more than 80 in a hand.</li>
+        </ul>
+      </details>
+      <details class="rule">
+        <summary>Points Rummy</summary>
+        <ul>
+          <li>One hand. The winner takes <b>(each loser's points × the point value)</b> from every loser, minus a 10% platform fee.</li>
+          <li>Worst case for you in one hand: 80 × the point value.</li>
+        </ul>
+      </details>
+      <details class="rule">
+        <summary>Pool Rummy (51 / 101 / 201)</summary>
+        <ul>
+          <li>Everyone pays a fixed <b>entry fee</b> into the pot. Hands repeat and your points <b>add up</b>.</li>
+          <li>Reach or pass the pool number (51, 101 or 201) and you're <b>out</b>. The last player left wins the pot (minus 10% fee).</li>
+          <li>Eliminated players can keep watching; the table keeps going.</li>
+        </ul>
+      </details>
+      <details class="rule">
+        <summary>Table types</summary>
+        <ul>
+          <li><b>Practice (vs computer)</b> — free, play coins only, nothing touches your wallet.</li>
+          <li><b>Free · Real players</b> — free, play coins, real opponents. Quick match, private rooms and join-by-code.</li>
+          <li><b>Cash Table</b> (Pro) — real money. Your worst-case loss is held at join; it is released if the table never starts. Leaving mid-game forfeits to the others.</li>
+          <li>Private tables: the host gets a 6-character code to share. An idle player is auto-played after a short timeout.</li>
+        </ul>
+      </details>
     </div>
   </div>
 </div>
