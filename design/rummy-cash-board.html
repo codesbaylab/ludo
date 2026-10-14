@@ -136,8 +136,16 @@
   .legend .lg-dead { background:var(--red); }
   .legend .lg-wild { background:#d4a017; }
 
-  .action-bar { display:flex; gap:8px; margin-top:6px; }
-  .action-bar .btn { flex:1; padding:12px 8px; font-size:13px; }
+  #hand-section-content { display:grid; grid-template-columns: 1fr auto; column-gap:8px; align-items:center; grid-template-areas: "hint actions" "cards cards"; }
+  .hand-hint { grid-area: hint; margin-bottom:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hand-row { grid-area: cards; }
+  .action-bar { grid-area: actions; display:flex; gap:6px; margin-top:0; }
+  .action-bar .btn { flex:none; width:auto; padding:7px 14px; font-size:12px; }
+  .hand-row .pcard { --cw: clamp(44px, calc((100vw - 70px) / 6.4), 56px); width: var(--cw); height: calc(var(--cw) * 1.39); }
+  .hand-row .pcard .corner { font-size: 12px; }
+  .hand-row .pcard .pip { font-size: 23px; }
+  .hand-line .pcard { margin-left: calc(var(--cw, 46px) * -0.28); }
+  .hand-line .pcard:first-child { margin-left:0; }
   .btn-declare { background: linear-gradient(135deg, #ffd23c, #ff8a3d); color:#3a2c05; font-weight:800; border:none; border-radius: var(--radius-md); box-shadow: var(--shadow); }
   .btn-declare:active { transform: scale(.97); }
   .btn:disabled { opacity:.45; }
