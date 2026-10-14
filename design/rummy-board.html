@@ -865,7 +865,14 @@
     const order = [];
     meldsSorted.forEach((m, gi) => {
       const kind = m.kind === 'sequence' ? (m.pure ? 'pure' : 'seq') : 'set';
-      m.indices.slice().sort((a, b) => a - b).forEach(i => order.push({ idx: i, kind, groupIdx: gi }));
+      let ids = m.indices.slice().sort((a, b) => a - b);
+      if (kind === 'pure') {
+        const rv = i => RummyRules.RANKS.indexOf(hand[i].rank) + 1;
+        const hi = ids.some(i => hand[i].rank === 'K') && ids.some(i => hand[i].rank === 'A');
+        const val = i => (hi && hand[i].rank === 'A' ? 14 : rv(i));
+        ids = ids.sort((a, b) => val(a) - val(b));
+      }
+      ids.forEach(i => order.push({ idx: i, kind, groupIdx: gi }));
     });
     const deadwood = g.ungroupedIndices.slice().sort((a, b) => {
       const ca = hand[a], cb = hand[b];
