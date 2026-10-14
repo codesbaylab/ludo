@@ -45,7 +45,8 @@
 
   .opponent-row { display:flex; justify-content:space-around; gap:8px; margin-bottom: 14px; }
   .opponent { display:flex; flex-direction:column; align-items:center; gap:4px; padding: 6px 8px; border-radius: var(--radius-sm); flex: 1; min-width:0; transition: box-shadow .2s ease, opacity .5s ease; }
-  .opponent.active { box-shadow: 0 0 0 2px var(--accent), 0 0 16px rgba(255,138,61,.5); background: rgba(255,255,255,.06); }
+  .opponent.active { box-shadow: none; background: none; }
+  .opponent.active .avatar { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent), 0 0 12px rgba(255,138,61,.7); }
   .opponent.eliminated { opacity:.35; }
   .opponent .avatar { width:38px; height:38px; font-size:15px; border: 2px solid rgba(255,255,255,.5); }
   .opponent .oname { color:#fff; font-size:12px; font-weight:800; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:80px; }
@@ -177,7 +178,7 @@
     .rummy-page {
       max-width: 100%; height: var(--land-h); box-sizing: border-box; padding: 4px 10px calc(4px + env(safe-area-inset-bottom));
       display: flex; flex-direction: column;
-      --cw: clamp(40px, calc((var(--land-h) - 315px) / 1.39), 92px);
+      --cw: clamp(40px, calc((var(--land-h) - 335px) / 1.39), 92px);
       --cc: 52px;
       --step: clamp(calc(var(--cw) * .42), calc((var(--land-w) - 260px - var(--cw)) / 13), calc(var(--cw) * .78));
     }
