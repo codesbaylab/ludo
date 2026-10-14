@@ -165,9 +165,79 @@
   .pool-row.eliminated { opacity:.45; text-decoration:line-through; }
   .pool-row .cap { font-weight:600; color:var(--text-dim); }
   .you-eliminated-banner { text-align:center; padding: 20px 10px; color:var(--text-dim); font-weight:700; font-size:13px; }
+
+  /* Landscape table — same design as the practice table (rummy-board.html). A portrait phone gets the whole
+     page CSS-rotated 90deg clockwise (turn the phone anticlockwise to read it upright). --land-w/--land-h are the
+     long/short screen edges, kept fresh by updateLandVars() in the script. */
+  :root { --land-w: max(100vw, 100vh); --land-h: min(100vw, 100vh); }
+  @media (orientation: landscape) and (max-height: 520px), (orientation: portrait) and (max-width: 900px) {
+    html, body { height: 100%; overflow: hidden; }
+    body { min-height: var(--land-h); background: radial-gradient(ellipse at 50% 35%, #1c9463 0%, #0f6b47 55%, #073d29 100%); box-shadow: inset 0 0 70px 20px rgba(0,0,0,.5); }
+    .app { max-width: none; min-height: var(--land-h); padding-bottom: 0; }
+    .rummy-page {
+      max-width: 100%; height: var(--land-h); box-sizing: border-box; padding: 4px 10px calc(4px + env(safe-area-inset-bottom));
+      display: flex; flex-direction: column;
+      --cw: clamp(40px, calc((var(--land-h) - 315px) / 1.39), 92px);
+      --cc: 52px;
+      --step: clamp(calc(var(--cw) * .42), calc((var(--land-w) - 260px - var(--cw)) / 13), calc(var(--cw) * .78));
+    }
+    .cash-banner { display: none; }
+    .rummy-header { margin-bottom: 2px; flex: 0 0 auto; }
+    .rummy-header .back-link { color: #fff; opacity: .85; }
+    .rummy-title .name { font-size: 13px; color: #fff; }
+    .rummy-title .sub { font-size: 9px; color: rgba(255,255,255,.7); }
+    .rummy-header .wallet-chip { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.35); color: #fff; }
+    .pool-standings { background: transparent; box-shadow: none; border: none; padding: 0; margin-bottom: 3px; flex: 0 0 auto; }
+    .pool-standings-title { font-size: 9px; margin-bottom: 1px; color: rgba(255,255,255,.75); }
+    #pool-standings-body { display: flex; flex-wrap: wrap; gap: 0 14px; }
+    .pool-row { font-size: 10px; padding: 0; color: #fff; }
+    .pool-row .cap { color: rgba(255,255,255,.6); }
+    .felt { background: transparent; box-shadow: none; border-radius: 0; padding: 2px 0; flex: 0 0 auto; }
+    .opponent-row { margin-bottom: 4px; gap: 4px; }
+    .opponent { padding: 2px 6px; gap: 2px; }
+    .opponent .avatar { width: 24px; height: 24px; font-size: 11px; border-width: 1.5px; }
+    .opponent .oname { font-size: 10px; max-width: 60px; }
+    .opponent .ocards .card-back { width: 14px; height: 20px; margin-left: -9px; border-width: 1px; }
+    .ocount { font-size: 8px; margin-top: 0; }
+    .oturn-label, .odisc-label { font-size: 8px; padding: 0 5px; margin-top: 1px; }
+    .center-row { padding: 2px 0; gap: 16px; }
+    .pile-label { font-size: 8px; }
+    .closed-deck { width: var(--cc); height: calc(var(--cc) * 1.39); }
+    .closed-deck .card-back { width: var(--cc); height: calc(var(--cc) * 1.39); }
+    .deck-count { font-size: 9px; padding: 1px 5px; }
+    .discard-pile .pcard, .discard-pile.empty { width: var(--cc); height: calc(var(--cc) * 1.39); }
+    .joker-chip { padding: 4px 10px; }
+    .joker-chip .jrank { font-size: 16px; }
+    .status-strip { position: absolute; bottom: 4px; right: 10px; margin-top: 0; font-size: 9px; padding: 3px 8px; }
+    .turn-countdown { position: absolute; bottom: 6px; left: 10px; margin-top: 0; font-size: 10px; }
+    .hand-section { margin-top: 2px; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; border-radius: 0; padding: 4px 0 0; }
+    .hand-section.active-turn { box-shadow: none; padding: 4px 0 0; margin: 2px 0 0; }
+    .you-eliminated-banner { color: rgba(255,255,255,.85); }
+    #hand-section-content {
+      grid-template-columns: 1fr auto 1fr; column-gap: 10px; align-content: start;
+      grid-template-areas: "hint actions ." "cards cards cards"; flex: 1 1 auto; min-height: 0; padding-bottom: 2px;
+    }
+    .hand-hint { font-size: 10px; margin-bottom: 2px; color: rgba(255,255,255,.85); }
+    .hand-hint.ready { color: #7effa8; }
+    .hand-hint.need-pure { color: #ffb36b; }
+    .gchip { font-size: 8px; padding: 1px 5px; }
+    .hand-row { padding: 2px 2px 0; }
+    .hand-line { gap: 7px; }
+    .hand-row .pcard { width: var(--cw); height: calc(var(--cw) * 1.39); border-radius: 8px; }
+    .hand-row .pcard .corner { font-size: 13px; }
+    .hand-row .pcard .pip { font-size: 26px; }
+    .hand-line .pcard { margin-left: calc(var(--step) - var(--cw)); }
+    .hand-line .pcard:first-child { margin-left: 0; }
+    .discard-pile .pcard .corner { font-size: 12px; }
+  }
+  @media (orientation: portrait) and (max-width: 900px) {
+    #rotate-wrap { position: fixed; inset: 0; overflow: hidden; }
+    .app { width: var(--land-w); height: var(--land-h); position: absolute; top: 0; left: var(--land-h); margin: 0; transform-origin: left top; transform: rotate(90deg); overflow: hidden; }
+  }
 </style>
 </head>
 <body>
+<div id="rotate-wrap">
 <div class="app">
   <div class="rummy-page">
     <div class="rummy-header">
@@ -230,7 +300,6 @@
       </div>
     </div>
   </div>
-</div>
 
 <div class="game-over-overlay open" id="connecting-overlay">
   <div class="game-over-card card" style="text-align:center;">
@@ -243,10 +312,27 @@
 <div class="declare-modal" id="declare-modal">
   <div class="card declare-card" id="declare-card-content"></div>
 </div>
+</div>
+</div>
 
 <script src="ui-dialog.js"></script>
 <script src="rummy-rules.js"></script>
 <script>
+  // Keep --land-w/--land-h (long/short screen edge) fresh; iOS reports stale sizes right after a rotation.
+  function updateLandVars() {
+    const vv = window.visualViewport;
+    const w = Math.round((vv && vv.width) || window.innerWidth), h = Math.round((vv && vv.height) || window.innerHeight);
+    document.documentElement.style.setProperty('--land-w', Math.max(w, h) + 'px');
+    document.documentElement.style.setProperty('--land-h', Math.min(w, h) + 'px');
+  }
+  function updateLandVarsSoon() { updateLandVars(); [80, 250, 600].forEach(t => setTimeout(updateLandVars, t)); }
+  updateLandVars();
+  window.addEventListener('resize', updateLandVarsSoon);
+  window.addEventListener('orientationchange', updateLandVarsSoon);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', updateLandVars);
+  const landscapeQuery = window.matchMedia('(orientation: landscape) and (max-height: 520px)');
+  const rotatedPortraitQuery = window.matchMedia('(orientation: portrait) and (max-width: 900px)');
+  function isLandscapeMode() { return landscapeQuery.matches || rotatedPortraitQuery.matches; }
   const qp = new URLSearchParams(location.search);
   const MODE = qp.get('mode') === 'pool' ? 'pool' : 'points';
   const PLAYER_COUNT = [2, 4].includes(Number(qp.get('players'))) ? Number(qp.get('players')) : 4;
@@ -271,6 +357,9 @@
   let selectedCardId = null;
   let handGroupTags = [];
   let lastSnapshot = null;
+  const onOrientationChange = () => { if (lastSnapshot) { renderHand(lastSnapshot); updateActionButtons(lastSnapshot); } };
+  landscapeQuery.addEventListener('change', onOrientationChange);
+  rotatedPortraitQuery.addEventListener('change', onOrientationChange);
 
   function cardHtml(card, extraClass, wildRank) {
     if (card.rank === 'JOKER') {
@@ -360,7 +449,8 @@
       if ((handGroupTags[i] || {}).groupIdx !== (handGroupTags[i - 1] || {}).groupIdx && Math.abs(i - mid) < bestDist) { bestDist = Math.abs(i - mid); splitAt = i; }
     }
     if (bestDist > 3) splitAt = mid; // boundary too far off: keep the rows balanced instead
-    const lines = [myHand.slice(0, splitAt), myHand.slice(splitAt)];
+    if (isLandscapeMode()) splitAt = myHand.length; // landscape: one row
+    const lines = isLandscapeMode() ? [myHand] : [myHand.slice(0, splitAt), myHand.slice(splitAt)];
 
     // Status chip for one run of adjacent same-group cards.
     const chipFor = (idxs) => {
