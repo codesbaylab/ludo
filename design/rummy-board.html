@@ -431,12 +431,16 @@
     .action-bar .btn { flex: none; width: auto; padding: 4px 12px; font-size: 11px; }
 
     /* Bigger cards — the whole point of landscape mode. */
-    .rummy-page { --cw: clamp(40px, min(calc((var(--land-w) - 64px) / 12.4), calc((var(--land-h) - 305px) / 1.39)), 78px); --cc: max(54px, calc(var(--cw) * .85)); }
+    .rummy-page {
+      --cw: clamp(40px, calc((var(--land-h) - 315px) / 1.39), 92px);
+      --cc: 60px;
+      --step: clamp(calc(var(--cw) * .42), calc((var(--land-w) - 260px - var(--cw)) / 13), calc(var(--cw) * .78));
+    }
     .hand-row .pcard { width: var(--cw); height: calc(var(--cw) * 1.39); }
     .pcard { width: 54px; height: 75px; border-radius: 8px; }
     .pcard .corner { font-size: 13px; }
     .pcard .pip { font-size: 26px; }
-    .hand-line .pcard { margin-left: calc(var(--cw, 62px) * -0.226); }
+    .hand-line .pcard { margin-left: calc(var(--step) - var(--cw)); }
     .pcard.lifted { transform: translateY(-9px); }
 
   }
@@ -499,8 +503,8 @@
     #rotate-wrap { position: fixed; inset: 0; overflow: hidden; }
     .app {
       width: var(--land-w); height: var(--land-h);
-      position: absolute; top: var(--land-w); left: 0; margin: 0;
-      transform-origin: left top; transform: rotate(-90deg);
+      position: absolute; top: 0; left: var(--land-h); margin: 0;
+      transform-origin: left top; transform: rotate(90deg);
       overflow: hidden;
     }
   }
@@ -1067,7 +1071,9 @@
       dragCtx.moved = true;
       dragCtx.el.classList.add('dragging');
     }
-    dragCtx.el.style.transform = `translate(${dx}px, ${dy}px)`;
+    // the table is CSS-rotated 90deg clockwise in forced-landscape portrait, so map screen deltas into its local axes
+    const [lx, ly] = rotatedPortraitQuery.matches ? [dy, -dx] : [dx, dy];
+    dragCtx.el.style.transform = `translate(${lx}px, ${ly}px)`;
 
     // Live-highlight whichever OTHER card's spot you're currently hovering
     // over — updated only when it actually changes, so it doesn't fight the
