@@ -142,7 +142,7 @@
     o = o || {};
     if (!rows.length) { el.innerHTML = `<div class="empty-note">${esc(o.empty || 'Nothing here yet.')}</div>`; return; }
     el.innerHTML = `<div class="tbl-wrap"><table class="tbl${o.wide ? ' wide' : ''}"><thead><tr>${cols.map((c) => `<th class="${c.a || ''}">${c.l}</th>`).join('')}</tr></thead><tbody>` +
-      rows.map((r, ri) => `<tr${o.rowAttr ? ' ' + o.rowAttr(r, ri) : ''}>${cols.map((c) => `<td class="${c.a || ''}">${typeof c.k === 'function' ? c.k(r, ri) : esc(r[c.k])}</td>`).join('')}</tr>`).join('') + `</tbody></table></div>`;
+      rows.map((r, ri) => `<tr${o.rowAttr ? ' ' + o.rowAttr(r, ri) : ''}>${cols.map((c) => `<td class="${c.a || ''}" data-l="${esc(String(c.l || '').replace(/<[^>]*>/g, '').trim())}">${typeof c.k === 'function' ? c.k(r, ri) : esc(r[c.k])}</td>`).join('')}</tr>`).join('') + `</tbody></table></div>`;
   }
   function pager(el, o) { // o: { total, offset, limit, onPage }
     const pages = Math.max(1, Math.ceil(o.total / o.limit)); const cur = Math.floor(o.offset / o.limit) + 1;
@@ -208,7 +208,7 @@
     const nav = NAV.map((n) => `<a href="${n[3]}" class="${n[0] === page ? 'active' : ''}"><span class="ic">${n[1]}</span>${n[2]}<span class="count" data-badge="${n[0]}" style="display:none"></span></a>`).join('');
     const rangeHtml = cfg.range === false ? '' : `<div class="am-pills" data-range><button data-n="7">7D</button><button data-n="30" class="on">30D</button><button data-n="90">90D</button><button data-n="180">6M</button></div>`;
     const wrap = document.createElement('div');
-    wrap.innerHTML = `<div class="am-shell"><aside class="am-side">
+    wrap.innerHTML = `<header class="am-bar"><button type="button" class="am-burger" id="ad-burger" aria-label="Menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><b class="am-bar-title">${esc(title)}</b><span class="av" style="background:#ff8a3d">${esc((me.display_name || 'A')[0].toUpperCase())}</span></header><div class="am-scrim" id="ad-scrim"></div><div class="am-shell"><aside class="am-side" id="ad-side">
         <div class="am-brand"><div class="dice">🛠️</div><div><b>Ludo Admin</b><span>Analytics &amp; control</span></div></div>
         <nav class="am-nav">${nav}</nav>
         <div class="am-side-foot"><span class="av" style="background:#ff8a3d">${esc((me.display_name || 'A')[0].toUpperCase())}</span><div class="who">${esc(me.display_name)}<small>${esc(ROLE_LABEL[AD.role] || AD.role)}</small></div>
@@ -222,6 +222,12 @@
       if (!(await ludoConfirm({ tone: 'info', icon: '👋', title: 'Log out?', message: 'You’ll need to log in again to open the admin area.', confirmText: 'Log out', cancelText: 'Stay' }))) return;
       await sb.auth.signOut(); location.href = 'login.html';
     });
+    // Mobile drawer: burger toggles it; a tap on the scrim, a nav link or Esc closes it.
+    const setNav = (open) => { document.body.classList.toggle('am-nav-open', open); document.getElementById('ad-burger').setAttribute('aria-expanded', String(open)); };
+    document.getElementById('ad-burger').addEventListener('click', () => setNav(!document.body.classList.contains('am-nav-open')));
+    document.getElementById('ad-scrim').addEventListener('click', () => setNav(false));
+    document.querySelectorAll('.am-nav a').forEach((a) => a.addEventListener('click', () => setNav(false)));
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') setNav(false); });
     tabs();
     loadBadges();
     if (cfg.init) await run(() => cfg.init(AD));
