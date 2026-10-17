@@ -25,7 +25,7 @@ jobs:
       - name: Stamp asset URLs with the commit
         run: |
           V="${GITHUB_SHA::8}"
-          sed -i -E "s#(href|src)=\"(styles\.css|game\.js|supabase-client\.js|ui-dialog\.js|app-update\.js|rummy-rules\.js|admin-mock\.css|admin-mock\.js|admin\.css|admin-core\.js|config\.js)\"#\1=\"\2?v=$V\"#g" design/*.html
+          sed -i -E "s#(href|src)=\"(styles\.css|game\.js|chat\.js|supabase-client\.js|ui-dialog\.js|app-update\.js|rummy-rules\.js|admin-mock\.css|admin-mock\.js|admin\.css|admin-core\.js|config\.js)\"#\1=\"\2?v=$V\"#g" design/*.html
           echo "$V" > design/version.txt
       - name: Deploy
         run: npx --yes wrangler@3 pages deploy design --project-name="${{ vars.CF_PAGES_PROJECT }}" --branch=main

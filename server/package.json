@@ -14,6 +14,7 @@
     "test:sim": "tsx src/test/simulateMatch.ts",
     "test:sim:bots": "tsx src/test/simulateBotMatch.ts",
     "test:sim:cash": "tsx src/test/simulateCashRoom.ts",
+    "test:sim:chat": "tsx src/test/simulateChat.ts",
     "test:sim:reconnect": "tsx src/test/simulateWaitingReconnect.ts",
     "test:sim:rummy": "tsx src/test/simulateRummyMatch.ts",
     "test:rummy-engine": "tsx src/test/compareRummyEngine.ts",

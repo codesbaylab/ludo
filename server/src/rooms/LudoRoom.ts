@@ -1,5 +1,6 @@
 import { Room, Client, ServerError } from 'colyseus';
 import { r2 } from '../money';
+import { registerChat } from '../chat';
 import { randomInt } from 'crypto';
 import { LudoState, PlayerState, TokenState } from './schema/LudoState';
 import {
@@ -153,6 +154,7 @@ export class LudoRoom extends Room<LudoState> {
     // terminate() closes the socket server-side at once, which runs the normal
     // unconsented onLeave -> allowReconnection path immediately.
     this.onMessage('handoff', (client) => (client as any).ref?.terminate?.());
+    registerChat(this, (c) => this.state.players.find((p) => p.sessionId === c.sessionId));
     this.onMessage('roll', (client) => this.handleRoll(client));
     this.onMessage('selectToken', (client, message) => this.handleSelectToken(client, message));
   }

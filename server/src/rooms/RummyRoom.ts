@@ -1,5 +1,6 @@
 import { Room, Client, ServerError } from 'colyseus';
 import { r2, floor2 } from '../money';
+import { registerChat } from '../chat';
 import { ArraySchema } from '@colyseus/schema';
 import { RummyState, RummyPlayerState, CardState } from './schema/RummyState';
 import * as Engine from '../rummy/engine';
@@ -129,6 +130,7 @@ export class RummyRoom extends Room<RummyState> {
     // terminate() closes the socket server-side at once, which runs the normal
     // unconsented onLeave -> allowReconnection path immediately.
     this.onMessage('handoff', (client) => (client as any).ref?.terminate?.());
+    registerChat(this, (c) => this.state.players.find((p) => p.sessionId === c.sessionId));
     this.onMessage('draw', (client, message) => this.handleDraw(client, message));
     this.onMessage('discard', (client, message) => this.handleDiscard(client, message));
     this.onMessage('declare', (client, message) => this.handleDeclare(client, message));

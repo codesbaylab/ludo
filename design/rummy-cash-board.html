@@ -325,6 +325,7 @@
 </div>
 
 <script src="ui-dialog.js"></script>
+<script src="chat.js"></script>
 <script src="rummy-rules.js"></script>
 <script>
   // Keep --land-w/--land-h (long/short screen edge) fresh; iOS reports stale sizes right after a rotation.
@@ -814,6 +815,7 @@
   function attachRoomHandlers(joinedRoom) {
     room = joinedRoom;
     ludoSaveSeat('rummySeat', joinedRoom);
+    if (window.ludoChat) ludoChat.attach(joinedRoom, { anchor: 'tl' });
     hideConnectingOverlay();
 
     room.onMessage('hand', (msg) => {

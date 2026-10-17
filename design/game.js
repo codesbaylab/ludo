@@ -735,6 +735,7 @@
   function attachRoomHandlers(r) {
     room = r;
     ludoSaveSeat('ludoSeat', r);
+    if (window.ludoChat) ludoChat.attach(r, { anchor: 'br' });
     room.onStateChange(state => handleStateChange(state.toJSON()));
     room.onLeave(code => {
       if (code === CONSENTED_CLOSE_CODE || reconnecting) return;
