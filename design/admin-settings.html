@@ -38,6 +38,7 @@
       <div class="am-card"><div class="head"><div><h3>Pro membership &amp; transfers</h3><div class="sub">One-time Pro fee and player-to-player limits</div></div></div><div id="pro-rows"></div></div>
       <div class="am-card"><div class="head"><div><h3>USDT → $ rate</h3><div class="sub">Informational only — deposits are credited 1:1</div></div></div><div id="rate-rows"></div></div>
     </div>
+    <div class="am-card"><div class="head"><div><h3>💵 Cash tables</h3><div class="sub">Public Ludo tables shown in the player lobby (stake $0.25 – $50)</div></div><button class="am-btn sm primary" id="ct-add">Add table</button></div><div id="ct-rows"></div></div>
     <div class="am-card"><div class="head"><div><h3>🎁 Referral levels</h3><div class="sub">Each level is paid as a share of the Pro fee when someone in your network goes Pro</div></div><button class="am-btn sm primary" id="lvl-edit">Edit levels</button></div><div id="lvls"></div></div>
   </div>
 
@@ -100,6 +101,34 @@ AD.boot({
       if (arr.some(function (x) { return !isFinite(x) || x < 0; })) throw new Error('Each level must be a number of 0 or more.');
       await AD.rpc('admin_set_referral_levels', { p_levels: arr.map(function (x) { return { percent: x }; }) }); await loadSettings();
     }); });
+
+    // ----- cash tables -----
+    let tables = [];
+    async function loadTables() {
+      const { data } = await AD.sb.from('cash_tables').select('*').order('sort').order('stake'); tables = data || [];
+      document.getElementById('ct-add').style.display = isSuper ? '' : 'none';
+      document.getElementById('ct-rows').innerHTML = tables.length ? tables.map(function (t) {
+        return row(t.icon + ' ' + AD.inr(t.stake) + ' table' + (t.active ? '' : ' <span class="dim">(hidden)</span>'), 'Order ' + t.sort, isSuper ? '<button class="am-btn sm" data-ct="edit" data-id="' + t.id + '">Edit</button> <button class="am-btn sm" data-ct="tog" data-id="' + t.id + '">' + (t.active ? 'Remove' : 'Restore') + '</button>' : '');
+      }).join('') : '<div class="empty-note">No cash tables — players only see Create Cash Room.</div>';
+      document.querySelectorAll('[data-ct]').forEach(function (b) { b.addEventListener('click', function () { AD.run(async function () {
+        const t = tables.find(function (x) { return x.id === b.dataset.id; });
+        if (b.dataset.ct === 'tog') {
+          if (t.active && !(await ludoConfirm({ tone: 'warn', icon: '💵', title: 'Remove ' + AD.inr(t.stake) + ' table?', message: 'It disappears from the lobby. You can restore it later. Games already in play are not affected.', confirmText: 'Remove', cancelText: 'Cancel' }))) return;
+          await AD.rpc('admin_save_cash_table', { p_id: t.id, p_stake: t.stake, p_icon: t.icon, p_sort: t.sort, p_active: !t.active });
+        } else await editTable(t);
+        await loadTables();
+      }); }); });
+    }
+    async function editTable(t) {
+      const f = await ludoForm({ tone: 'accent', icon: '💵', title: t ? 'Edit cash table' : 'Add cash table', message: 'Recorded in the audit log.', fields: [
+        { name: 'stake', label: 'Stake per player ($0.25 – $50)', type: 'number', step: '0.01', value: t ? t.stake : '', required: true },
+        { name: 'icon', label: 'Icon (one emoji)', type: 'text', value: t ? t.icon : '🪙', required: false },
+        { name: 'sort', label: 'Order (small numbers first)', type: 'number', step: '1', value: t ? t.sort : tables.length + 1, required: true }], confirmText: 'Save' });
+      if (!f) return;
+      await AD.rpc('admin_save_cash_table', { p_id: t ? t.id : null, p_stake: Number(f.stake), p_icon: f.icon, p_sort: Number(f.sort), p_active: t ? t.active : true });
+    }
+    document.getElementById('ct-add').addEventListener('click', function () { AD.run(async function () { await editTable(null); await loadTables(); }); });
+    loadTables();
 
     // ----- switches -----
     const FLAGS = [['maintenance', '🛠️', 'Maintenance mode', 'Blocks everyone from joining any table. Players already in a game finish it.', true], ['cash_tables', '💵', 'Cash tables', 'Turn off to allow only free tables.', false], ['transfers', '🔁', 'Player transfers', 'Send-to-player in the wallet.', false], ['withdrawals', '⬆️', 'Withdrawals', 'Players can request payouts.', false], ['deposits', '⬇️', 'Deposits', 'Players can fetch a deposit address.', false], ['referrals', '🎁', 'Referral commissions', 'Pay level commissions on Pro purchases.', false]];

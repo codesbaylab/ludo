@@ -97,32 +97,7 @@
       <a href="wallet.html#pro"><button class="btn btn-primary">Go Pro</button></a>
     </div>
     <div class="action-grid">
-      <a class="tile tile-cash server-gated" href="stake-confirm.html?stake=0.25">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-          <div class="tile-icon">🪙</div>
-          <div style="display:flex; gap:3px;">
-            <div class="token token-red" style="width:10px; height:10px;"></div>
-            <div class="token token-green" style="width:10px; height:10px;"></div>
-            <div class="token token-yellow" style="width:10px; height:10px;"></div>
-            <div class="token token-blue" style="width:10px; height:10px;"></div>
-          </div>
-        </div>
-        <div class="tile-title">$0.25 Table</div>
-        <div class="tile-sub">Win up to $0.90 · 4 players</div>
-      </a>
-      <a class="tile tile-cash server-gated" href="stake-confirm.html?stake=1">
-        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-          <div class="tile-icon">💎</div>
-          <div style="display:flex; gap:3px;">
-            <div class="token token-red" style="width:10px; height:10px;"></div>
-            <div class="token token-green" style="width:10px; height:10px;"></div>
-            <div class="token token-yellow" style="width:10px; height:10px;"></div>
-            <div class="token token-blue" style="width:10px; height:10px;"></div>
-          </div>
-        </div>
-        <div class="tile-title">$1 Table</div>
-        <div class="tile-sub">Win up to $3.60 · 4 players</div>
-      </a>
+      <span id="cash-tables" style="display:contents"></span>
       <a class="tile tile-cash tile-wide server-gated" href="stake-confirm.html?stake=1&room=create&custom=1">
         <div>
           <div class="tile-title">➕ Create Cash Room</div>
@@ -161,11 +136,12 @@
   const SERVER_URL = new URLSearchParams(location.search).get('server') || window.LUDO_CONFIG.SERVER_URL;
   const HEALTH_URL = SERVER_URL.replace(/^wss:/, 'https:').replace(/^ws:/, 'http:') + '/health';
 
-  const gatedTiles = document.querySelectorAll('.server-gated');
+  let gatedDisabled = true;
   const statusBadge = document.getElementById('server-status-badge');
 
   function setGated(disabled) {
-    gatedTiles.forEach(el => el.classList.toggle('disabled', disabled));
+    gatedDisabled = disabled;
+    document.querySelectorAll('.server-gated').forEach(el => el.classList.toggle('disabled', disabled));
   }
 
   async function pingServer() {
@@ -233,6 +209,23 @@
     const name = profile?.display_name || session.user.email || 'Player';
     document.getElementById('welcome-name').textContent = `${name} 👋`;
     document.getElementById('wallet-chip').textContent = `💰 ${ludoMoney(wallet?.balance)}`;
+
+    // Cash tables come from the admin-managed cash_tables list.
+    try {
+      const { data: tables } = await ludoSupabase.from('cash_tables').select('stake,icon').eq('active', true).order('sort').order('stake');
+      const box = document.getElementById('cash-tables');
+      (tables || []).forEach(t => {
+        const win = ludoMoney(Number(t.stake) * 3.6);
+        const a = document.createElement('a');
+        a.className = 'tile tile-cash server-gated' + (gatedDisabled ? ' disabled' : '');
+        a.href = 'stake-confirm.html?stake=' + Number(t.stake);
+        a.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:flex-start;"><div class="tile-icon"></div><div style="display:flex; gap:3px;"><div class="token token-red" style="width:10px; height:10px;"></div><div class="token token-green" style="width:10px; height:10px;"></div><div class="token token-yellow" style="width:10px; height:10px;"></div><div class="token token-blue" style="width:10px; height:10px;"></div></div></div><div class="tile-title"></div><div class="tile-sub"></div>';
+        a.querySelector('.tile-icon').textContent = t.icon || '🪙';
+        a.querySelector('.tile-title').textContent = ludoMoney(Number(t.stake)) + ' Table';
+        a.querySelector('.tile-sub').textContent = 'Win up to ' + win + ' · 4 players';
+        box.appendChild(a);
+      });
+    } catch (e) { console.error('cash tables', e); }
 
     // Cash tables are Pro-only (enforced server-side in the room's join check
     // too — this is just the UI). Free users get the tiles locked and
