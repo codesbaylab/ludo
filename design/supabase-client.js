@@ -124,6 +124,26 @@ function ludoMoney(n) {
   return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
 }
 
+// Visible countdown for a reconnect attempt: writes "<label> m:ss" into el every half second and calls onExpire() at 0.
+// reset() restarts the full window (used when the page comes back to the foreground - timers are throttled while hidden,
+// so the time spent in the background must not eat the player's chance to reconnect).
+function ludoCountdown(el, label, seconds, onExpire) {
+  let end = Date.now() + seconds * 1000, done = false;
+  const fmt = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+  const tick = () => {
+    if (done) return;
+    const left = end - Date.now();
+    el.textContent = `${label} ${fmt(left)}`;
+    if (left <= 0) { done = true; clearInterval(timer); onExpire(); }
+  };
+  const timer = setInterval(tick, 500);
+  tick();
+  return {
+    stop() { done = true; clearInterval(timer); },
+    reset() { if (!done) { end = Date.now() + seconds * 1000; tick(); } },
+  };
+}
+
 // Remember the seat in a live room so a page the phone OS discarded (backgrounded PWA) can resume it on reopen.
 // Key is per game ('ludoSeat' / 'rummySeat'); stale after 15 min; cleared on leave, game end, or any lobby tap.
 function ludoSaveSeat(key, room) {

@@ -844,35 +844,42 @@
       if (code === CONSENTED_CLOSE_CODE || reconnecting) return;
       reconnecting = true;
       document.getElementById('connecting-overlay').classList.add('open');
-      document.getElementById('connecting-status').textContent = 'Connection lost — reconnecting…';
+      const statusEl = document.getElementById('connecting-status');
       const token = room.reconnectionToken;
+      let expired = false;
+      window.__rcCd = ludoCountdown(statusEl, 'Connection lost — reconnecting…', 60, () => { expired = true; if (window.__rcWake) window.__rcWake(); });
       (async () => {
-        for (let attempt = 1; attempt <= 20 && reconnecting; attempt++) {
+        while (reconnecting && !expired) {
           try {
             const newRoom = await client.reconnect(token);
+            window.__rcCd.stop();
             reconnecting = false;
             attachRoomHandlers(newRoom);
             return;
           } catch (err) {
-            // "disposed" / "not found" never recovers (match over, or the server restarted).
-            if (/disposed|not found/i.test((err && err.message) || '')) {
+            // The table/seat is gone for good (match over, server restarted, or the seat's grace ran out).
+            if (/disposed|not found|expired|invalid/i.test((err && err.message) || '')) {
+              window.__rcCd.stop();
               reconnecting = false;
+              ludoClearSeat('rummySeat');
               document.getElementById('connecting-overlay').classList.remove('open');
-              await ludoAlert({ tone: 'warn', icon: '🔌', title: 'Match ended', message: 'The match has ended, or the game server restarted. If it didn\'t finish, your stake was not charged.', confirmText: 'Back to Rummy lobby' });
+              await ludoAlert({ tone: 'warn', icon: '🔌', title: 'Match ended', message: 'The match has ended, the server restarted, or your seat was released while you were away. If it didn\'t finish, your stake was not charged.', confirmText: 'Back to Rummy lobby' });
               location.href = 'rummy-lobby.html';
               return;
             }
-            if (attempt === 20) {
-              document.getElementById('connecting-status').textContent = 'Could not reconnect to the game server.';
-            }
-            await new Promise((resolve) => { window.__rcWake = resolve; setTimeout(resolve, 3000); });
           }
+          if (expired) break;
+          await new Promise((resolve) => { window.__rcWake = resolve; setTimeout(resolve, 3000); });
         }
+        reconnecting = false;
+        ludoClearSeat('rummySeat');
+        statusEl.textContent = 'Couldn\'t reconnect — taking you back to the lobby…';
+        setTimeout(() => { location.href = 'rummy-lobby.html'; }, 2500);
       })();
     });
   }
   // Back in the foreground after the phone killed the socket: retry the reconnect right now.
-  const rcNudge = () => { if (document.visibilityState === 'visible' && window.__rcWake) window.__rcWake(); };
+  const rcNudge = () => { if (document.visibilityState === 'visible') { if (window.__rcCd) window.__rcCd.reset(); if (window.__rcWake) window.__rcWake(); } };
   document.addEventListener('visibilitychange', rcNudge);
   window.addEventListener('pageshow', rcNudge);
   window.addEventListener('online', rcNudge);

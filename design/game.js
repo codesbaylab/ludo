@@ -742,42 +742,52 @@
     });
   }
 
+  const RECONNECT_LIMIT_S = 60; // how long the board shows "Reconnecting…" before giving up and going to the lobby
+  let reconnectCountdown = null;
+
   async function attemptReconnect() {
     reconnecting = true;
     connectingOverlay.classList.add('open');
-    connectingStatus.textContent = 'Reconnecting…';
     const token = room.reconnectionToken;
+    let expired = false;
+    reconnectCountdown = ludoCountdown(connectingStatus, 'Reconnecting…', RECONNECT_LIMIT_S, () => { expired = true; if (reconnectWake) reconnectWake(); });
 
-    for (let attempt = 1; attempt <= RECONNECT_ATTEMPTS; attempt++) {
+    while (!expired) {
       try {
         const newRoom = await client.reconnect(token);
+        reconnectCountdown.stop();
         reconnecting = false;
         attachRoomHandlers(newRoom);
         return;
       } catch (err) {
-        console.error(`[ludo] reconnect attempt ${attempt} failed:`, err);
-        // "disposed" / "not found" never recovers (match over, or the server restarted
-        // and lost the room) — say so now instead of retrying for a minute.
-        if (/disposed|not found/i.test(err && err.message || '')) {
+        console.error('[ludo] reconnect attempt failed:', err);
+        // The room/seat is gone for good (match over, server restarted, or the seat's grace ran out):
+        // say so now instead of counting down.
+        if (/disposed|not found|expired|invalid/i.test(err && err.message || '')) {
+          reconnectCountdown.stop();
           reconnecting = false;
+          ludoClearSeat('ludoSeat');
           connectingOverlay.classList.remove('open');
-          await ludoAlert({ tone: 'warn', icon: '🔌', title: 'Match ended', message: 'The match has ended, or the game server restarted. If it didn\'t finish, your stake was not charged.', confirmText: 'Back to lobby' });
+          await ludoAlert({ tone: 'warn', icon: '🔌', title: 'Match ended', message: 'The match has ended, the server restarted, or your seat was released while you were away. If it didn\'t finish, your stake was not charged.', confirmText: 'Back to lobby' });
           location.href = 'lobby.html';
           return;
         }
-        await new Promise(resolve => { reconnectWake = resolve; setTimeout(resolve, RECONNECT_DELAY_MS); });
       }
+      if (expired) break;
+      await new Promise(resolve => { reconnectWake = resolve; setTimeout(resolve, RECONNECT_DELAY_MS); });
     }
 
     reconnecting = false;
-    connectingStatus.textContent = 'Could not reconnect to the game server.';
+    ludoClearSeat('ludoSeat');
+    connectingStatus.textContent = 'Couldn\'t reconnect — taking you back to the lobby…';
+    setTimeout(() => { location.href = 'lobby.html'; }, 2500);
   }
 
   // A backgrounded phone page loses its socket: the moment the page is visible again, retry right away.
   let reconnectWake = null;
   function nudgeReconnect() {
     if (document.visibilityState !== 'visible' || !client || !room) return;
-    if (reconnecting) { if (reconnectWake) reconnectWake(); return; }
+    if (reconnecting) { if (reconnectCountdown) reconnectCountdown.reset(); if (reconnectWake) reconnectWake(); return; }
     if (room.connection && room.connection.isOpen === false) attemptReconnect();
   }
   document.addEventListener('visibilitychange', nudgeReconnect);

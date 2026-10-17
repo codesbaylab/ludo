@@ -226,29 +226,39 @@
       room.leave(true); // consented — frees the seat immediately.
     });
 
+    const RECONNECT_LIMIT_S = 60; // show "reconnecting" this long, then give up and go back to the lobby
+    let cd = null;
+    function giveUp(msg) {
+      ludoClearSeat('rummySeat');
+      document.getElementById('start-hint').innerHTML = msg;
+      setTimeout(() => { location.href = 'rummy-lobby.html'; }, 3000);
+    }
     async function resume() {
       if (reconnecting || navigated || leaving) return;
       reconnecting = true;
-      setHint('Connection lost — reconnecting…');
       const token = room.reconnectionToken;
-      for (let i = 0; i < 120 && !navigated && !leaving; i++) {
+      let expired = false;
+      cd = ludoCountdown(document.getElementById('start-hint'), 'Connection lost — reconnecting…', RECONNECT_LIMIT_S, () => { expired = true; if (wake) wake(); });
+      while (!expired && !navigated && !leaving) {
         try {
           const r = await client.reconnect(token);
+          cd.stop();
           reconnecting = false;
           attach(r);
           setHint(baseHint);
           return;
         } catch (err) {
-          if (err && /expired|invalid|not found|disposed/i.test(err.message || '')) break;
+          if (err && /expired|invalid|not found|disposed/i.test(err.message || '')) { cd.stop(); reconnecting = false; giveUp('This table closed while you were away. Taking you back…'); return; }
         }
+        if (expired) break;
         await new Promise((res) => { wake = res; setTimeout(res, 2000); });
       }
       reconnecting = false;
-      document.getElementById('start-hint').innerHTML = 'This table is no longer available (it closed while you were away). <a href="rummy-lobby.html">Back to Rummy</a>';
+      if (!navigated && !leaving) giveUp('Couldn\'t reconnect — taking you back…');
     }
     const nudge = () => {
       if (document.visibilityState !== 'visible' || navigated || leaving) return;
-      if (reconnecting) { if (wake) wake(); return; }
+      if (reconnecting) { if (cd) cd.reset(); if (wake) wake(); return; }
       if (!live || (room && room.connection && room.connection.isOpen === false)) { live = false; resume(); }
     };
     document.addEventListener('visibilitychange', nudge);
