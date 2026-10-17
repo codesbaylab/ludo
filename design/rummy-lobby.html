@@ -594,6 +594,8 @@
     }
   })();
 
+  // Starting or creating a table is a fresh start: forget the seat of an earlier (possibly abandoned) table.
+  document.addEventListener('click', (e) => { if (e.target.closest('#start-link, #create-private-link')) ludoClearSeat('rummySeat'); });
 </script>
 </body>
 </html>

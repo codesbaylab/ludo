@@ -147,6 +147,14 @@
     // outright during that window instead of just being slow. Retry for up
     // to two minutes before giving up for real, and tell the player what's
     // actually happening.
+    // The OS may have discarded this page while it was in the background (host went to WhatsApp):
+    // resume the seat we last held instead of creating/joining a second room.
+    const savedSeat = ludoReadSeat('ludoSeat');
+    if (savedSeat && (!joinCode || String(savedSeat.token).split(':')[0] === joinCode)) {
+      document.getElementById('start-hint').textContent = 'Resuming your seat…';
+      try { room = await client.reconnect(savedSeat.token); }
+      catch (err) { ludoClearSeat('ludoSeat'); }
+    }
     for (let attempt = 1; attempt <= 30 && !room; attempt++) {
       try {
         const joinOptions = {
@@ -209,6 +217,7 @@
     document.getElementById('copy-code-btn').addEventListener('click', (e) => ludoCopy(e.currentTarget, room.roomId));
     document.getElementById('leave-link').addEventListener('click', () => {
       leaving = true;
+      ludoClearSeat('ludoSeat');
       room.leave(true); // consented — frees the seat immediately instead of
                          // holding it open for the reconnection grace period.
     });
@@ -244,6 +253,7 @@
 
     function attach(r) {
       room = r; live = true;
+      ludoSaveSeat('ludoSeat', r);
       document.getElementById('room-code').textContent = room.roomId;
       room.onStateChange(state => {
         const snapshot = state.toJSON();

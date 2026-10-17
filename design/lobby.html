@@ -307,6 +307,8 @@
     await ludoSupabase.auth.signOut();
     location.href = 'login.html';
   });
+  // Tapping any play tile starts something new: forget the seat of an earlier (possibly abandoned) room.
+  document.addEventListener('click', (e) => { if (e.target.closest('a.tile, .tile')) { ludoClearSeat('ludoSeat'); ludoClearSeat('rummySeat'); } });
 </script>
 </body>
 </html>

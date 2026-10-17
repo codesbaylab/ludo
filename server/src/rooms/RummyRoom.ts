@@ -50,7 +50,7 @@ export class RummyRoom extends Room<RummyState> {
   private drawTimeoutMs = 20000;
   private discardTimeoutMs = 20000;
   private handEndDelayMs = 3000;
-  private reconnectGraceSeconds = 60;
+  private reconnectGraceSeconds = 120;
   // Waiting-room drops (e.g. app backgrounded to share the code) keep the seat + stake hold this long.
   private preStartGraceSeconds = 600;
   private heldSeats = new Set<string>();
@@ -91,7 +91,7 @@ export class RummyRoom extends Room<RummyState> {
     this.drawTimeoutMs = options.drawTimeoutMs ?? 20000;
     this.discardTimeoutMs = options.discardTimeoutMs ?? 20000;
     this.handEndDelayMs = options.handEndDelayMs ?? 3000;
-    this.reconnectGraceSeconds = options.reconnectGraceSeconds ?? 60;
+    this.reconnectGraceSeconds = options.reconnectGraceSeconds ?? 120;
     this.preStartGraceSeconds = options.preStartGraceSeconds ?? 600;
 
     const state = new RummyState();

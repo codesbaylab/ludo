@@ -124,6 +124,20 @@ function ludoMoney(n) {
   return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: 2 });
 }
 
+// Remember the seat in a live room so a page the phone OS discarded (backgrounded PWA) can resume it on reopen.
+// Key is per game ('ludoSeat' / 'rummySeat'); stale after 15 min; cleared on leave, game end, or any lobby tap.
+function ludoSaveSeat(key, room) {
+  try { if (room && room.reconnectionToken) localStorage.setItem(key, JSON.stringify({ token: room.reconnectionToken, ts: Date.now() })); } catch (e) { /* storage blocked */ }
+}
+function ludoReadSeat(key) {
+  try {
+    const s = JSON.parse(localStorage.getItem(key) || 'null');
+    if (s && s.token && Date.now() - s.ts < 15 * 60 * 1000) return s;
+  } catch (e) { /* ignore */ }
+  return null;
+}
+function ludoClearSeat(key) { try { localStorage.removeItem(key); } catch (e) { /* ignore */ } }
+
 // Markup for an icon-only copy button; wire it up with ludoCopy().
 const LUDO_COPY_BTN_INNER =
   '<svg class="ic-copy" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>' +

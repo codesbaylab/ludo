@@ -638,6 +638,7 @@
       : (winnerIdx === mySeatIdx ? '🏆 You declare — you win this hand!' : `🏆 ${snapshot.players[winnerIdx]?.name ?? 'Your opponent'} declares and wins this hand.`);
 
     if (snapshot.matchOver) {
+      ludoClearSeat('rummySeat');
       if (MODE === 'points') {
         const rows = snapshot.players.map((p, i) => {
           const isWinnerRow = invalidBy === -1 && i === winnerIdx;
@@ -812,6 +813,7 @@
 
   function attachRoomHandlers(joinedRoom) {
     room = joinedRoom;
+    ludoSaveSeat('rummySeat', joinedRoom);
     hideConnectingOverlay();
 
     room.onMessage('hand', (msg) => {
@@ -827,6 +829,7 @@
       const stakeNote = FREE ? 'The other player will see that you left and may win by forfeit.'
         : "Leaving forfeits this table — you'll lose your stake and the other player wins.";
       if (!(await ludoConfirm({ tone: 'danger', icon: '🚪', title: 'Leave this table?', message: stakeNote, confirmText: 'Leave table', cancelText: 'Keep playing' }))) return;
+      ludoClearSeat('rummySeat');
       document.getElementById('connecting-status').textContent = 'Leaving table…';
       document.getElementById('connecting-overlay').classList.add('open');
       // Capped wait: room.leave() resolves only when the server's close frame comes back,
@@ -898,6 +901,22 @@
         } catch (err) {
           if (attempt === 20) console.error('[rummy] handoff reconnect failed, falling back to a fresh join:', err);
           else await new Promise((resolve) => setTimeout(resolve, 700));
+        }
+      }
+    }
+
+    // The OS may have discarded this page in the background: resume the seat we last held.
+    if (!joined) {
+      const seat = ludoReadSeat('rummySeat');
+      const wantCode = (qp.get('code') || '').toUpperCase();
+      if (seat && (!wantCode || String(seat.token).split(':')[0] === wantCode)) {
+        document.getElementById('connecting-status').textContent = 'Resuming your seat…';
+        for (let attempt = 1; attempt <= 4 && !joined; attempt++) {
+          try { joined = await client.reconnect(seat.token); }
+          catch (err) {
+            if (/expired|invalid|not found|disposed/i.test((err && err.message) || '')) { ludoClearSeat('rummySeat'); break; }
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
         }
       }
     }

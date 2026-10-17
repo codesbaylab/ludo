@@ -58,7 +58,7 @@ export class LudoRoom extends Room<LudoState> {
 
   private rollTimeoutMs = 15000;
   private selectTimeoutMs = 15000;
-  private reconnectGraceSeconds = 60;
+  private reconnectGraceSeconds = 180;
   // Pre-game (waiting room) drops keep the seat much longer: a host who switches to WhatsApp to share the room code
   // gets their socket killed by the phone OS and must find the same seat when they come back.
   private preStartGraceSeconds = 600;
@@ -99,7 +99,7 @@ export class LudoRoom extends Room<LudoState> {
   onCreate(options: CreateOptions) {
     this.rollTimeoutMs = options.rollTimeoutMs ?? 15000;
     this.selectTimeoutMs = options.selectTimeoutMs ?? 15000;
-    this.reconnectGraceSeconds = options.reconnectGraceSeconds ?? 60;
+    this.reconnectGraceSeconds = options.reconnectGraceSeconds ?? 180;
     this.preStartGraceSeconds = options.preStartGraceSeconds ?? 600;
     this.turnPassDelayMs = options.turnPassDelayMs ?? 1200;
 

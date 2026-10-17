@@ -377,6 +377,7 @@
     diceFace.classList.toggle('disabled', !canRollNow);
 
     if (snapshot.gameOver) {
+      ludoClearSeat('ludoSeat');
       const winner = snapshot.players.find(p => p.color === snapshot.winnerColor);
       diceStatus.textContent = `🏆 ${winner ? winner.name : 'Someone'} wins!`;
       diceBadge.textContent = '🏆 Game over';
@@ -733,6 +734,7 @@
 
   function attachRoomHandlers(r) {
     room = r;
+    ludoSaveSeat('ludoSeat', r);
     room.onStateChange(state => handleStateChange(state.toJSON()));
     room.onLeave(code => {
       if (code === CONSENTED_CLOSE_CODE || reconnecting) return;
@@ -819,6 +821,21 @@
         } catch (err) {
           if (attempt === HANDOFF_ATTEMPTS) console.error('[ludo] handoff reconnect failed, falling back to a fresh join:', err);
           else await new Promise(resolve => setTimeout(resolve, 700));
+        }
+      }
+    }
+
+    // The OS may have discarded this page while it was in the background: resume the seat we last held.
+    if (!joined) {
+      const seat = ludoReadSeat('ludoSeat');
+      if (seat && (!privateRoomCode || String(seat.token).split(':')[0] === privateRoomCode)) {
+        connectingStatus.textContent = 'Resuming your seat…';
+        for (let attempt = 1; attempt <= 4 && !joined; attempt++) {
+          try { joined = await client.reconnect(seat.token); }
+          catch (err) {
+            if (/expired|invalid|not found|disposed/i.test((err && err.message) || '')) { ludoClearSeat('ludoSeat'); break; }
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
         }
       }
     }
@@ -1020,6 +1037,7 @@
     if (!room) return; // not connected yet — plain navigation is fine
     e.preventDefault();
     if (!(await ludoConfirm({ tone: 'danger', icon: '🚪', title: 'Leave this match?', message: 'The other player will see that you left and may win by forfeit.', confirmText: 'Leave match', cancelText: 'Keep playing' }))) return;
+    ludoClearSeat('ludoSeat');
     // Consented leave (Colyseus close code 4000) — LudoRoom's onLeave shows
     // "<name> left the game." to everyone else instead of holding the seat
     // open for the reconnection grace period like an accidental drop would.

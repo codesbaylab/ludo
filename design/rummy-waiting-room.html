@@ -147,6 +147,13 @@
     // Same cold-start reasoning as waiting-room.html — see that file's own
     // comment for the full story (a real trace showed a 60s window wasn't
     // always enough after a multi-day idle period).
+    // The OS may have discarded this page in the background: resume the seat we last held rather than making a second table.
+    const savedSeat = ludoReadSeat('rummySeat');
+    if (savedSeat && (!joinCode || String(savedSeat.token).split(':')[0] === joinCode)) {
+      document.getElementById('start-hint').textContent = 'Resuming your seat…';
+      try { room = await client.reconnect(savedSeat.token); }
+      catch (err) { ludoClearSeat('rummySeat'); }
+    }
     for (let attempt = 1; attempt <= 30 && !room; attempt++) {
       try {
         const joinOptions = {
@@ -215,6 +222,7 @@
     const setHint = (t) => { document.getElementById('start-hint').textContent = t; };
     document.getElementById('leave-link').addEventListener('click', () => {
       leaving = true;
+      ludoClearSeat('rummySeat');
       room.leave(true); // consented — frees the seat immediately.
     });
 
@@ -249,6 +257,7 @@
 
     function attach(r) {
       room = r; live = true;
+      ludoSaveSeat('rummySeat', r);
       room.onStateChange(state => {
         const snapshot = state.toJSON();
         renderPlayers(snapshot, room.sessionId);
