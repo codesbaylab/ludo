@@ -85,9 +85,9 @@
   const playersParam = Number(qp.get('players'));
   let playerCount = [2, 4].includes(playersParam) ? playersParam : 4;
   // Free tables use play coins (1/2/5 per point, 50/100/200 entry); cash tables use dollars ($0.02/0.05/0.10 per point, $1/2/5 entry).
-  let pointValue = (FREE ? [1, 2, 5] : [0.02, 0.05, 0.1]).includes(Number(qp.get('value'))) ? Number(qp.get('value')) : (FREE ? 1 : 0.02);
+  let pointValue = (FREE ? [1, 2, 5].includes(Number(qp.get('value'))) : (Number(qp.get('value')) >= 0.01 && Number(qp.get('value')) <= 5)) ? Number(qp.get('value')) : (FREE ? 1 : 0.02);
   let poolLimit = [51, 101, 201].includes(Number(qp.get('pool'))) ? Number(qp.get('pool')) : 101;
-  let entryFee = (FREE ? [50, 100, 200] : [1, 2, 5]).includes(Number(qp.get('entry'))) ? Number(qp.get('entry')) : (FREE ? 100 : 2);
+  let entryFee = (FREE ? [50, 100, 200].includes(Number(qp.get('entry'))) : (Number(qp.get('entry')) >= 0.5 && Number(qp.get('entry')) <= 100)) ? Number(qp.get('entry')) : (FREE ? 100 : 2);
   // Same default/override pattern as design/game.js and waiting-room.html.
   const SERVER_URL = qp.get('server') || window.LUDO_CONFIG.SERVER_URL;
 

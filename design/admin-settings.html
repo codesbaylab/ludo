@@ -39,6 +39,7 @@
       <div class="am-card"><div class="head"><div><h3>USDT → $ rate</h3><div class="sub">Informational only — deposits are credited 1:1</div></div></div><div id="rate-rows"></div></div>
     </div>
     <div class="am-card"><div class="head"><div><h3>💵 Cash tables</h3><div class="sub">Public Ludo tables shown in the player lobby (stake $0.25 – $50)</div></div><button class="am-btn sm primary" id="ct-add">Add table</button></div><div id="ct-rows"></div></div>
+    <div class="am-card"><div class="head"><div><h3>🃏 Rummy cash amounts</h3><div class="sub">Per-point values (Points Rummy) and entry fees (Pool Rummy) players can pick</div></div><button class="am-btn sm primary" id="ro-add">Add amount</button></div><div id="ro-rows"></div></div>
     <div class="am-card"><div class="head"><div><h3>🎁 Referral levels</h3><div class="sub">Each level is paid as a share of the Pro fee when someone in your network goes Pro</div></div><button class="am-btn sm primary" id="lvl-edit">Edit levels</button></div><div id="lvls"></div></div>
   </div>
 
@@ -129,6 +130,35 @@ AD.boot({
     }
     document.getElementById('ct-add').addEventListener('click', function () { AD.run(async function () { await editTable(null); await loadTables(); }); });
     loadTables();
+
+    // ----- rummy cash amounts -----
+    let ropts = [];
+    async function loadRopts() {
+      const { data } = await AD.sb.from('rummy_cash_options').select('*').order('kind').order('sort').order('amount'); ropts = data || [];
+      document.getElementById('ro-add').style.display = isSuper ? '' : 'none';
+      document.getElementById('ro-rows').innerHTML = ropts.length ? ropts.map(function (o) {
+        return row((o.kind === 'point' ? '🎯 ' + AD.inr(o.amount) + ' per point' : '🎟️ ' + AD.inr(o.amount) + ' pool entry') + (o.active ? '' : ' <span class="dim">(hidden)</span>'), 'Order ' + o.sort, isSuper ? '<button class="am-btn sm" data-ro="edit" data-id="' + o.id + '">Edit</button> <button class="am-btn sm" data-ro="tog" data-id="' + o.id + '">' + (o.active ? 'Remove' : 'Restore') + '</button>' : '');
+      }).join('') : '<div class="empty-note">No amounts — the lobby falls back to the defaults.</div>';
+      document.querySelectorAll('[data-ro]').forEach(function (b) { b.addEventListener('click', function () { AD.run(async function () {
+        const o = ropts.find(function (x) { return x.id === b.dataset.id; });
+        if (b.dataset.ro === 'tog') {
+          if (o.active && !(await ludoConfirm({ tone: 'warn', icon: '🃏', title: 'Remove ' + AD.inr(o.amount) + '?', message: 'It disappears from the Rummy lobby. You can restore it later. Games already in play are not affected.', confirmText: 'Remove', cancelText: 'Cancel' }))) return;
+          await AD.rpc('admin_save_rummy_option', { p_id: o.id, p_kind: o.kind, p_amount: o.amount, p_sort: o.sort, p_active: !o.active });
+        } else await editRopt(o);
+        await loadRopts();
+      }); }); });
+    }
+    async function editRopt(o) {
+      const fields = [];
+      if (!o) fields.push({ name: 'kind', label: 'Type', type: 'select', options: [['point', 'Per-point value (Points Rummy, $0.01 – $5)'], ['entry', 'Pool entry fee (Pool Rummy, $0.50 – $100)']], value: 'point' });
+      fields.push({ name: 'amount', label: 'Amount ($)', type: 'number', step: '0.01', value: o ? o.amount : '', required: true });
+      fields.push({ name: 'sort', label: 'Order (small numbers first)', type: 'number', step: '1', value: o ? o.sort : ropts.length + 1, required: true });
+      const f = await ludoForm({ tone: 'accent', icon: '🃏', title: o ? 'Edit amount' : 'Add amount', message: 'Recorded in the audit log.', fields: fields, confirmText: 'Save' });
+      if (!f) return;
+      await AD.rpc('admin_save_rummy_option', { p_id: o ? o.id : null, p_kind: o ? o.kind : f.kind, p_amount: Number(f.amount), p_sort: Number(f.sort), p_active: o ? o.active : true });
+    }
+    document.getElementById('ro-add').addEventListener('click', function () { AD.run(async function () { await editRopt(null); await loadRopts(); }); });
+    loadRopts();
 
     // ----- switches -----
     const FLAGS = [['maintenance', '🛠️', 'Maintenance mode', 'Blocks everyone from joining any table. Players already in a game finish it.', true], ['cash_tables', '💵', 'Cash tables', 'Turn off to allow only free tables.', false], ['transfers', '🔁', 'Player transfers', 'Send-to-player in the wallet.', false], ['withdrawals', '⬆️', 'Withdrawals', 'Players can request payouts.', false], ['deposits', '⬇️', 'Deposits', 'Players can fetch a deposit address.', false], ['referrals', '🎁', 'Referral commissions', 'Pay level commissions on Pro purchases.', false]];

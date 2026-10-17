@@ -105,9 +105,12 @@ export class RummyRoom extends Room<RummyState> {
     // filterBy(['mode','playerCount','pointValue','poolLimit','entryFee'])
     // in index.ts would otherwise never match two Points tables against
     // each other just because one had a stray non-zero poolLimit/entryFee.
-    state.pointValue = this.mode === 'points' ? options.pointValue ?? 1 : 0;
+    // Cash tables: dollar amounts come from the admin-managed list (rummy_cash_options); keep client values inside sane bounds.
+    const clampCash = (v: number | undefined, dflt: number, lo: number, hi: number) =>
+      this.isFree ? v ?? dflt : Math.min(hi, Math.max(lo, r2(Number.isFinite(Number(v)) ? Number(v) : dflt)));
+    state.pointValue = this.mode === 'points' ? clampCash(options.pointValue, 1, 0.01, 5) : 0;
     state.poolLimit = this.mode === 'pool' ? options.poolLimit ?? 101 : 0;
-    state.entryFee = this.mode === 'pool' ? options.entryFee ?? 100 : 0;
+    state.entryFee = this.mode === 'pool' ? clampCash(options.entryFee, 100, 0.5, 100) : 0;
 
     for (let i = 0; i < playerCount; i++) {
       state.players.push(new RummyPlayerState());

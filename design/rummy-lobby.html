@@ -267,7 +267,9 @@
   </div>
 </div>
 <script>
-  const state = { mode: 'points', value: 1, players: 4, pool: 101, entry: 100, tableType: 'practice' };
+  const state = { mode: 'points', value: 1, players: 4, pool: 101, entry: 100, tableType: 'practice', cvalue: 0.02, centry: 2 };
+  // Cash amounts come from the admin-managed rummy_cash_options table (these are only the fallback).
+  let cashPoints = [0.02, 0.05, 0.1], cashEntries = [1, 2, 5];
   // Tile keys (1/2/5 and 50/100/200) are play-coin amounts for practice/free tables; cash tables map them to real dollars.
   const CASH_VALUE = { 1: 0.02, 2: 0.05, 5: 0.1 };   // $ per point
   const CASH_ENTRY = { 50: 1, 100: 2, 200: 5 };      // $ pool entry
@@ -335,6 +337,39 @@
       list.appendChild(row);
     });
   })();
+
+  // Cash view: tiles/buttons built from the admin list (static ones are for practice/free).
+  let cashSig = '';
+  function buildCashOptions() {
+    const sig = cashPoints.join() + '|' + cashEntries.join();
+    if (sig === cashSig) return; cashSig = sig;
+    document.querySelectorAll('.cash-opt').forEach((e) => e.remove());
+    const joinTile = document.querySelector('#points-grid a[href="#join-box"]');
+    const icons = ['🪙', '💠', '💎'];
+    cashPoints.forEach((v, i) => {
+      const a = document.createElement('a');
+      a.className = 'tile tile-cash points-tile cash-opt'; a.href = '#'; a.dataset.cvalue = v;
+      a.innerHTML = '<div class="tile-icon"></div><div class="tile-title"></div><div class="tile-sub">Real money</div>';
+      a.querySelector('.tile-icon').textContent = icons[i % 3];
+      a.querySelector('.tile-title').textContent = `${ludoMoney(v)} / point`;
+      a.addEventListener('click', (e) => { e.preventDefault(); state.cvalue = v; render(); });
+      joinTile.parentNode.insertBefore(a, joinTile);
+    });
+    const picker = document.getElementById('entry-picker');
+    cashEntries.forEach((v) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn btn-secondary btn-sm cash-opt'; b.dataset.centry = v; b.textContent = ludoMoney(v);
+      b.addEventListener('click', () => { state.centry = v; render(); });
+      picker.appendChild(b);
+    });
+  }
+  function paintCashSelection() {
+    document.querySelectorAll('.cash-opt[data-cvalue]').forEach((t) => t.classList.toggle('selected', Number(t.dataset.cvalue) === state.cvalue));
+    document.querySelectorAll('.cash-opt[data-centry]').forEach((b) => {
+      const sel = Number(b.dataset.centry) === state.centry;
+      b.classList.toggle('btn-primary', sel); b.classList.toggle('btn-secondary', !sel);
+    });
+  }
 
   function render() {
     const isPool = state.mode === 'pool';
@@ -406,29 +441,36 @@
     // Practice is play-money: coins (🪙), never dollars, and no wallet chip. Only the
     // real Cash Table view talks in dollars / shows the real balance.
     const money = (key, map) => isCash ? ludoMoney(map[key]) : `🪙 ${key}`;
-    const realValue = isCash ? CASH_VALUE[state.value] : state.value;
-    const realEntry = isCash ? CASH_ENTRY[state.entry] : state.entry;
+    if (isCash) {
+      if (!cashPoints.includes(state.cvalue)) state.cvalue = cashPoints[0];
+      if (!cashEntries.includes(state.centry)) state.centry = cashEntries[0];
+    }
+    const realValue = isCash ? state.cvalue : state.value;
+    const realEntry = isCash ? state.centry : state.entry;
+    buildCashOptions();
+    document.querySelectorAll('.points-tile[data-value]').forEach((t) => { t.style.display = isCash ? 'none' : ''; });
+    document.querySelectorAll('.entry-btn').forEach((b) => { b.style.display = isCash ? 'none' : ''; });
     const SUBS = isCash
       ? { 1: 'Casual · low risk', 2: 'Standard stakes', 5: 'High stakes' }
       : { 1: 'Small swings', 2: 'Medium swings', 5: 'Big swings' };
     document.querySelectorAll('.points-tile[data-value]').forEach((tile) => {
       const v = Number(tile.dataset.value);
-      tile.querySelector('.tile-title').textContent = `${money(v, CASH_VALUE)} / point`;
+      tile.querySelector('.tile-title').textContent = isCash ? `${ludoMoney(CASH_VALUE[v])} / point` : `🪙 ${v} / point`;
       tile.querySelector('.tile-sub').textContent = SUBS[v];
     });
-    document.querySelectorAll('.entry-btn').forEach((b) => { b.textContent = money(b.dataset.entry, CASH_ENTRY); });
+    document.querySelectorAll('.entry-btn').forEach((b) => { b.textContent = isCash ? ludoMoney(CASH_ENTRY[b.dataset.entry]) : `🪙 ${b.dataset.entry}`; });
     document.getElementById('wallet-chip').style.display = isCash ? '' : 'none';
     // Codes / private tables only exist for real-player tables (cash or free); practice is vs. bots.
     document.getElementById('join-box').style.display = isLive ? '' : 'none';
     document.querySelectorAll('a[href="#join-box"]').forEach((a) => { a.style.display = isLive ? '' : 'none'; });
     document.getElementById('create-private-link').style.display = isLive ? '' : 'none';
-    document.getElementById('sum-value').textContent = `${money(state.value, CASH_VALUE)} / point`;
+    document.getElementById('sum-value').textContent = isCash ? `${ludoMoney(realValue)} / point` : `🪙 ${state.value} / point`;
     document.getElementById('sum-players').textContent = `${state.players} Players`;
     document.getElementById('sum-maxloss').textContent = isCash ? ludoMoney(r2(realValue * POINTS_CAP)) : `🪙 ${state.value * POINTS_CAP}`;
 
     document.getElementById('sum-pool').textContent = `${state.pool} Pool`;
     document.getElementById('sum-pool-players').textContent = `${state.players} Players`;
-    document.getElementById('sum-entry').textContent = money(state.entry, CASH_ENTRY);
+    document.getElementById('sum-entry').textContent = isCash ? ludoMoney(realEntry) : `🪙 ${state.entry}`;
     document.getElementById('sum-pot').textContent = isCash ? ludoMoney(r2(realEntry * state.players)) : `🪙 ${state.entry * state.players}`;
 
     document.getElementById('start-btn').textContent = isCash ? 'Start Table (real players, real money)' : isFree ? 'Start Free Table (real players, no money)' : 'Start Table (vs. computer players)';
@@ -441,6 +483,7 @@
         : `rummy-board.html?mode=points&players=${state.players}&value=${state.value}`;
 
     document.getElementById('create-private-link').href = document.getElementById('start-link').href + '&room=create';
+    paintCashSelection();
     updateCashGating();
   }
 
@@ -547,6 +590,16 @@
   });
 
   render();
+  (async () => {
+    try {
+      const { data } = await ludoSupabase.from('rummy_cash_options').select('kind,amount').eq('active', true).order('sort').order('amount');
+      const p = (data || []).filter((o) => o.kind === 'point').map((o) => Number(o.amount));
+      const e = (data || []).filter((o) => o.kind === 'entry').map((o) => Number(o.amount));
+      if (p.length) cashPoints = p;
+      if (e.length) cashEntries = e;
+      render();
+    } catch (err) { console.error('rummy options', err); }
+  })();
 
   // Same gating pattern as design/lobby.html's server-gated tiles — only
   // relevant for real-player tables (practice vs. computer needs no server at all). Polls
