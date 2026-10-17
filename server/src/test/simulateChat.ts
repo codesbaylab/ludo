@@ -26,7 +26,7 @@ async function main() {
   await sleep(1300);
   a.send('chat', { id: 'nice' });
   await sleep(300);
-  if (got.length !== 2 || got[1].id !== 'nice') throw new Error('second msg missing: ' + JSON.stringify(got));
+  if ((got as any[]).length !== 2 || got[1].id !== 'nice') throw new Error('second msg missing: ' + JSON.stringify(got));
   console.log('PASS chat whitelist + rate limit');
   process.exit(0);
 }
