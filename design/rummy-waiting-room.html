@@ -209,43 +209,80 @@
       if (createPrivate) document.getElementById('start-hint').textContent = 'Share this table code with your friends — the hand starts as soon as everyone has joined.';
     }
 
+    // Phones kill a backgrounded page's socket (e.g. while sharing the table code); the server holds the seat,
+    // so resume the same seat on a drop and whenever the page returns to the foreground.
+    let navigated = false, leaving = false, reconnecting = false, live = true, wake = null, baseHint = document.getElementById('start-hint').textContent;
+    const setHint = (t) => { document.getElementById('start-hint').textContent = t; };
     document.getElementById('leave-link').addEventListener('click', () => {
+      leaving = true;
       room.leave(true); // consented — frees the seat immediately.
     });
 
-    let navigated = false;
-    room.onStateChange(state => {
-      const snapshot = state.toJSON();
-      renderPlayers(snapshot, room.sessionId);
-      if (joinCode && snapshot.mode && (FREE !== !!snapshot.free || mode !== snapshot.mode || playerCount !== snapshot.playerCount || pointValue !== snapshot.pointValue || poolLimit !== snapshot.poolLimit || entryFee !== snapshot.entryFee)) {
-        // Guest: adopt the host's table settings and show them.
-        FREE = !!snapshot.free; mode = snapshot.mode; playerCount = snapshot.playerCount;
-        pointValue = snapshot.pointValue || pointValue; poolLimit = snapshot.poolLimit || poolLimit; entryFee = snapshot.entryFee || entryFee;
-        renderSettings();
+    async function resume() {
+      if (reconnecting || navigated || leaving) return;
+      reconnecting = true;
+      setHint('Connection lost — reconnecting…');
+      const token = room.reconnectionToken;
+      for (let i = 0; i < 120 && !navigated && !leaving; i++) {
+        try {
+          const r = await client.reconnect(token);
+          reconnecting = false;
+          attach(r);
+          setHint(baseHint);
+          return;
+        } catch (err) {
+          if (err && /expired|invalid|not found|disposed/i.test(err.message || '')) break;
+        }
+        await new Promise((res) => { wake = res; setTimeout(res, 2000); });
       }
+      reconnecting = false;
+      document.getElementById('start-hint').innerHTML = 'This table is no longer available (it closed while you were away). <a href="rummy-lobby.html">Back to Rummy</a>';
+    }
+    const nudge = () => {
+      if (document.visibilityState !== 'visible' || navigated || leaving) return;
+      if (reconnecting) { if (wake) wake(); return; }
+      if (!live || (room && room.connection && room.connection.isOpen === false)) { live = false; resume(); }
+    };
+    document.addEventListener('visibilitychange', nudge);
+    window.addEventListener('pageshow', nudge);
+    window.addEventListener('online', nudge);
 
-      if (!navigated && snapshot.started) {
-        navigated = true;
-        document.getElementById('start-hint').textContent = 'All players ready! Starting…';
-        // Same handoff pattern as waiting-room.html -> board.html, under a
-        // separate sessionStorage key so a Ludo and Rummy handoff in flight
-        // at once (unlikely, but cheap to avoid) can never collide.
-        sessionStorage.setItem('rummyReconnectToken', room.reconnectionToken);
-        const dest = mode === 'pool'
-          ? `rummy-cash-board.html?mode=pool&players=${playerCount}&pool=${poolLimit}&entry=${entryFee}`
-          : `rummy-cash-board.html?mode=points&players=${playerCount}&value=${pointValue}`;
-        const destUrl = dest + (FREE ? '&free=1' : '') + (isPrivate ? '&code=' + room.roomId : '');
-        setTimeout(() => {
-          room.send('handoff'); // see RummyRoom's 'handoff' handler
-          setTimeout(() => { location.href = destUrl; }, 250);
-        }, 700);
-      }
-    });
+    function attach(r) {
+      room = r; live = true;
+      room.onStateChange(state => {
+        const snapshot = state.toJSON();
+        renderPlayers(snapshot, room.sessionId);
+        if (joinCode && snapshot.mode && (FREE !== !!snapshot.free || mode !== snapshot.mode || playerCount !== snapshot.playerCount || pointValue !== snapshot.pointValue || poolLimit !== snapshot.poolLimit || entryFee !== snapshot.entryFee)) {
+          // Guest: adopt the host's table settings and show them.
+          FREE = !!snapshot.free; mode = snapshot.mode; playerCount = snapshot.playerCount;
+          pointValue = snapshot.pointValue || pointValue; poolLimit = snapshot.poolLimit || poolLimit; entryFee = snapshot.entryFee || entryFee;
+          renderSettings();
+        }
 
-    room.onLeave(() => {
-      if (navigated) return;
-      document.getElementById('start-hint').textContent = 'Disconnected from the game server.';
-    });
+        if (!navigated && snapshot.started) {
+          navigated = true;
+          setHint('All players ready! Starting…');
+          // Same handoff pattern as waiting-room.html -> board.html, under a
+          // separate sessionStorage key so a Ludo and Rummy handoff in flight
+          // at once (unlikely, but cheap to avoid) can never collide.
+          sessionStorage.setItem('rummyReconnectToken', room.reconnectionToken);
+          const dest = mode === 'pool'
+            ? `rummy-cash-board.html?mode=pool&players=${playerCount}&pool=${poolLimit}&entry=${entryFee}`
+            : `rummy-cash-board.html?mode=points&players=${playerCount}&value=${pointValue}`;
+          const destUrl = dest + (FREE ? '&free=1' : '') + (isPrivate ? '&code=' + room.roomId : '');
+          setTimeout(() => {
+            room.send('handoff'); // see RummyRoom's 'handoff' handler
+            setTimeout(() => { location.href = destUrl; }, 250);
+          }, 700);
+        }
+      });
+      room.onLeave(() => {
+        live = false;
+        if (navigated || leaving) return;
+        resume();
+      });
+    }
+    attach(room);
   })();
 </script>
 </body>

@@ -200,50 +200,91 @@
       }
     }
 
-    document.getElementById('room-code').textContent = room.roomId;
-    if (vsBots) document.querySelector('.room-code-box').style.display = 'none';
-    if (createPrivate && !vsBots) document.getElementById('start-hint').textContent = stake > 0 ? 'Share this room code — each player locks ' + ludoMoney(stake) + ' when they join, and the game starts as soon as everyone has joined.' : 'Share this room code with your friend — the game starts as soon as everyone has joined.';
+    // The phone OS kills a backgrounded page's socket (e.g. while you share the room code on WhatsApp).
+    // The server holds the seat for a while, so on a drop (and whenever the page comes back to the
+    // foreground) we resume the same seat with the reconnection token instead of staying "Disconnected".
+    let navigated = false, leaving = false, reconnecting = false, live = true, wake = null, baseHint = '';
+    const setHint = (t) => { document.getElementById('start-hint').textContent = t; };
+
     document.getElementById('copy-code-btn').addEventListener('click', (e) => ludoCopy(e.currentTarget, room.roomId));
     document.getElementById('leave-link').addEventListener('click', () => {
+      leaving = true;
       room.leave(true); // consented — frees the seat immediately instead of
                          // holding it open for the reconnection grace period.
     });
 
-    let navigated = false;
-    room.onStateChange(state => {
-      const snapshot = state.toJSON();
-      renderPlayers(snapshot, room.sessionId);
-      if (snapshot.players.length && snapshot.players.length !== playerCount) {
-        // Joining by code: the host chose the table size, not this URL.
-        playerCount = snapshot.players.length;
-        document.getElementById('max-players-value').textContent = String(playerCount);
-        renderStakeUI();
+    async function resume() {
+      if (reconnecting || navigated || leaving) return;
+      reconnecting = true;
+      setHint('Connection lost — reconnecting…');
+      const token = room.reconnectionToken;
+      for (let i = 0; i < 120 && !navigated && !leaving; i++) {
+        try {
+          const r = await client.reconnect(token);
+          reconnecting = false;
+          attach(r);
+          setHint(baseHint);
+          return;
+        } catch (err) {
+          if (err && /expired|invalid|not found|disposed/i.test(err.message || '')) break; // the seat is gone for good
+        }
+        await new Promise((res) => { wake = res; setTimeout(res, 2000); });
       }
-      if (typeof snapshot.stake === 'number' && snapshot.stake !== stake) {
-        stake = snapshot.stake;
-        renderStakeUI();
-      }
+      reconnecting = false;
+      document.getElementById('start-hint').innerHTML = 'This room is no longer available (it closed while you were away). <a href="lobby.html">Back to lobby</a>';
+    }
+    const nudge = () => {
+      if (document.visibilityState !== 'visible' || navigated || leaving) return;
+      if (reconnecting) { if (wake) wake(); return; }                       // retry right now instead of waiting
+      if (!live || (room && room.connection && room.connection.isOpen === false)) { live = false; resume(); }
+    };
+    document.addEventListener('visibilitychange', nudge);
+    window.addEventListener('pageshow', nudge);
+    window.addEventListener('online', nudge);
 
-      if (!navigated && snapshot.players.every(p => p.connected)) {
-        navigated = true;
-        document.getElementById('start-hint').textContent = 'All players ready! Starting…';
-        // Hands this exact seat off to board.html: the navigation closes this
-        // WebSocket, which LudoRoom's onLeave treats as an unexpected drop
-        // and holds the seat open (see server-side reconnection handling) —
-        // board.html then resumes it with client.reconnect() instead of
-        // taking a fresh joinOrCreate seat, which would otherwise double up.
-        sessionStorage.setItem('ludoReconnectToken', room.reconnectionToken);
-        setTimeout(() => {
-          room.send('handoff'); // see LudoRoom's 'handoff' handler
-          setTimeout(() => { location.href = `board.html?stake=${stake}&players=${playerCount}${isPrivate ? '&code=' + room.roomId : ''}`; }, 250);
-        }, 700);
-      }
-    });
+    function attach(r) {
+      room = r; live = true;
+      document.getElementById('room-code').textContent = room.roomId;
+      room.onStateChange(state => {
+        const snapshot = state.toJSON();
+        renderPlayers(snapshot, room.sessionId);
+        if (snapshot.players.length && snapshot.players.length !== playerCount) {
+          // Joining by code: the host chose the table size, not this URL.
+          playerCount = snapshot.players.length;
+          document.getElementById('max-players-value').textContent = String(playerCount);
+          renderStakeUI();
+        }
+        if (typeof snapshot.stake === 'number' && snapshot.stake !== stake) {
+          stake = snapshot.stake;
+          renderStakeUI();
+        }
 
-    room.onLeave(() => {
-      if (navigated) return; // expected — we're the one navigating away
-      document.getElementById('start-hint').textContent = 'Disconnected from the game server.';
-    });
+        if (!navigated && snapshot.players.every(p => p.connected)) {
+          navigated = true;
+          setHint('All players ready! Starting…');
+          // Hands this exact seat off to board.html: the navigation closes this
+          // WebSocket, which LudoRoom's onLeave treats as an unexpected drop
+          // and holds the seat open (see server-side reconnection handling) —
+          // board.html then resumes it with client.reconnect() instead of
+          // taking a fresh joinOrCreate seat, which would otherwise double up.
+          sessionStorage.setItem('ludoReconnectToken', room.reconnectionToken);
+          setTimeout(() => {
+            room.send('handoff'); // see LudoRoom's 'handoff' handler
+            setTimeout(() => { location.href = `board.html?stake=${stake}&players=${playerCount}${isPrivate ? '&code=' + room.roomId : ''}`; }, 250);
+          }, 700);
+        }
+      });
+      room.onLeave(() => {
+        live = false;
+        if (navigated || leaving) return; // expected — we're the one navigating away
+        resume();
+      });
+    }
+
+    attach(room);
+    if (createPrivate && !vsBots) setHint(stake > 0 ? 'Share this room code — each player locks ' + ludoMoney(stake) + ' when they join, and the game starts as soon as everyone has joined.' : 'Share this room code with your friend — the game starts as soon as everyone has joined.');
+    if (vsBots) document.querySelector('.room-code-box').style.display = 'none';
+    baseHint = document.getElementById('start-hint').textContent;
   })();
 </script>
 </body>

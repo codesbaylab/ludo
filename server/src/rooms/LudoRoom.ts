@@ -36,6 +36,7 @@ interface CreateOptions {
   // How long a disconnected player's seat stays reserved for a reconnect,
   // in seconds. Overridable so tests don't have to wait a full minute.
   reconnectGraceSeconds?: number;
+  preStartGraceSeconds?: number;
   // Overridable so tests don't have to wait through the pause below.
   turnPassDelayMs?: number;
 }
@@ -58,6 +59,10 @@ export class LudoRoom extends Room<LudoState> {
   private rollTimeoutMs = 15000;
   private selectTimeoutMs = 15000;
   private reconnectGraceSeconds = 60;
+  // Pre-game (waiting room) drops keep the seat much longer: a host who switches to WhatsApp to share the room code
+  // gets their socket killed by the phone OS and must find the same seat when they come back.
+  private preStartGraceSeconds = 600;
+  private heldSeats = new Set<string>(); // seats held for a dropped waiting-room player; a newcomer must not take them
   // Colyseus batches every schema mutation made within one JS tick into a
   // single patch — so a resolveRoll() that sets diceValue/statusMessage and
   // then calls passTurn() synchronously (same tick) never actually shows
@@ -95,6 +100,7 @@ export class LudoRoom extends Room<LudoState> {
     this.rollTimeoutMs = options.rollTimeoutMs ?? 15000;
     this.selectTimeoutMs = options.selectTimeoutMs ?? 15000;
     this.reconnectGraceSeconds = options.reconnectGraceSeconds ?? 60;
+    this.preStartGraceSeconds = options.preStartGraceSeconds ?? 600;
     this.turnPassDelayMs = options.turnPassDelayMs ?? 1200;
 
     const playerCount = COLORS_BY_PLAYER_COUNT[options.playerCount!] ? options.playerCount! : 4;
@@ -185,7 +191,7 @@ export class LudoRoom extends Room<LudoState> {
       reservedHere = true;
     }
 
-    const slot = this.state.players.find((p) => !p.connected);
+    const slot = this.state.players.find((p) => !p.connected && !this.heldSeats.has(p.sessionId));
     if (!slot) {
       if (reservedHere) await this.releaseHold(client.sessionId);
       client.leave();
@@ -196,15 +202,20 @@ export class LudoRoom extends Room<LudoState> {
     slot.connected = true;
     if (verifiedUserId) this.sessionUserIds[client.sessionId] = verifiedUserId;
 
-    if (this.state.players.every((p) => p.connected)) {
-      this.state.started = true;
-      this.startedAt = Date.now();
-      this.state.statusMessage = `${this.state.players[0]!.name}'s turn.`;
-      this.armRollTimer(0);
-    } else {
+    if (!this.startIfReady()) {
       const connected = this.state.players.filter((p) => p.connected).length;
       this.state.statusMessage = `Waiting for players… (${connected}/${this.state.players.length})`;
     }
+  }
+
+  /** Starts the game once every seat is connected (a join, or a waiting-room player coming back). */
+  private startIfReady(): boolean {
+    if (this.state.started || !this.state.players.every((p) => p.connected)) return false;
+    this.state.started = true;
+    this.startedAt = Date.now();
+    this.state.statusMessage = `${this.state.players[0]!.name}'s turn.`;
+    this.armRollTimer(0);
+    return true;
   }
 
   async onLeave(client: Client, consented: boolean) {
@@ -219,6 +230,21 @@ export class LudoRoom extends Room<LudoState> {
       // yet, so there's nothing to skip and no forfeit-win to apply.
       const connected = this.state.players.filter((p) => p.connected).length;
       this.state.statusMessage = `Waiting for players… (${connected}/${this.state.players.length})`;
+      if (!consented) {
+        // Dropped socket (backgrounded app, flaky network): keep the seat and the stake hold for a while.
+        this.heldSeats.add(client.sessionId);
+        try {
+          await this.allowReconnection(client, this.preStartGraceSeconds);
+          this.heldSeats.delete(client.sessionId);
+          player.connected = true;
+          if (!this.startIfReady()) {
+            const now = this.state.players.filter((p) => p.connected).length;
+            this.state.statusMessage = `Waiting for players… (${now}/${this.state.players.length})`;
+          }
+          return;
+        } catch { /* never came back */ }
+        this.heldSeats.delete(client.sessionId);
+      }
       // Seat is empty again, so its reserved stake goes back to the player.
       await this.releaseHold(client.sessionId);
       return;

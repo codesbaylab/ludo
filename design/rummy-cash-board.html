@@ -862,12 +862,17 @@
             if (attempt === 20) {
               document.getElementById('connecting-status').textContent = 'Could not reconnect to the game server.';
             }
-            await new Promise((resolve) => setTimeout(resolve, 3000));
+            await new Promise((resolve) => { window.__rcWake = resolve; setTimeout(resolve, 3000); });
           }
         }
       })();
     });
   }
+  // Back in the foreground after the phone killed the socket: retry the reconnect right now.
+  const rcNudge = () => { if (document.visibilityState === 'visible' && window.__rcWake) window.__rcWake(); };
+  document.addEventListener('visibilitychange', rcNudge);
+  window.addEventListener('pageshow', rcNudge);
+  window.addEventListener('online', rcNudge);
 
   let client;
   async function connect() {

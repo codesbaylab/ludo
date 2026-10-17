@@ -763,13 +763,24 @@
           location.href = 'lobby.html';
           return;
         }
-        await new Promise(resolve => setTimeout(resolve, RECONNECT_DELAY_MS));
+        await new Promise(resolve => { reconnectWake = resolve; setTimeout(resolve, RECONNECT_DELAY_MS); });
       }
     }
 
     reconnecting = false;
     connectingStatus.textContent = 'Could not reconnect to the game server.';
   }
+
+  // A backgrounded phone page loses its socket: the moment the page is visible again, retry right away.
+  let reconnectWake = null;
+  function nudgeReconnect() {
+    if (document.visibilityState !== 'visible' || !client || !room) return;
+    if (reconnecting) { if (reconnectWake) reconnectWake(); return; }
+    if (room.connection && room.connection.isOpen === false) attemptReconnect();
+  }
+  document.addEventListener('visibilitychange', nudgeReconnect);
+  window.addEventListener('pageshow', nudgeReconnect);
+  window.addEventListener('online', nudgeReconnect);
 
   async function connect() {
     const { data: { session } } = await ludoSupabase.auth.getSession();

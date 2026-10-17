@@ -27,6 +27,7 @@ interface CreateOptions {
   discardTimeoutMs?: number;
   handEndDelayMs?: number;
   reconnectGraceSeconds?: number;
+  preStartGraceSeconds?: number;
 }
 
 // 10% platform fee on money actually changing hands, matching Ludo's cash
@@ -50,6 +51,9 @@ export class RummyRoom extends Room<RummyState> {
   private discardTimeoutMs = 20000;
   private handEndDelayMs = 3000;
   private reconnectGraceSeconds = 60;
+  // Waiting-room drops (e.g. app backgrounded to share the code) keep the seat + stake hold this long.
+  private preStartGraceSeconds = 600;
+  private heldSeats = new Set<string>();
 
   private drawTimer: any = null;
   private discardTimer: any = null;
@@ -88,6 +92,7 @@ export class RummyRoom extends Room<RummyState> {
     this.discardTimeoutMs = options.discardTimeoutMs ?? 20000;
     this.handEndDelayMs = options.handEndDelayMs ?? 3000;
     this.reconnectGraceSeconds = options.reconnectGraceSeconds ?? 60;
+    this.preStartGraceSeconds = options.preStartGraceSeconds ?? 600;
 
     const state = new RummyState();
     state.mode = this.mode;
@@ -163,7 +168,7 @@ export class RummyRoom extends Room<RummyState> {
       }
     }
 
-    const slot = this.state.players.find((p) => !p.connected);
+    const slot = this.state.players.find((p) => !p.connected && !this.heldSeats.has(p.sessionId));
     if (!slot) {
       if (reservedHere) await this.releaseHold(client.sessionId);
       client.leave();
@@ -175,14 +180,19 @@ export class RummyRoom extends Room<RummyState> {
     slot.connected = true;
     if (verifiedUserId) this.sessionUserIds[client.sessionId] = verifiedUserId;
 
-    if (this.state.players.every((p) => p.connected)) {
-      this.state.started = true;
-      this.startedAt = Date.now();
-      this.startNewHand();
-    } else {
+    if (!this.startIfReady()) {
       const connected = this.state.players.filter((p) => p.connected).length;
       this.state.statusMessage = `Waiting for players… (${connected}/${this.state.players.length})`;
     }
+  }
+
+  /** Starts the match once every seat is connected (a join, or a waiting-room player coming back). */
+  private startIfReady(): boolean {
+    if (this.state.started || !this.state.players.every((p) => p.connected)) return false;
+    this.state.started = true;
+    this.startedAt = Date.now();
+    this.startNewHand();
+    return true;
   }
 
   async onLeave(client: Client, consented: boolean) {
@@ -196,6 +206,20 @@ export class RummyRoom extends Room<RummyState> {
     if (!this.state.started) {
       const connected = this.state.players.filter((p) => p.connected).length;
       this.state.statusMessage = `Waiting for players… (${connected}/${this.state.players.length})`;
+      if (!consented) {
+        this.heldSeats.add(client.sessionId);
+        try {
+          await this.allowReconnection(client, this.preStartGraceSeconds);
+          this.heldSeats.delete(client.sessionId);
+          player.connected = true;
+          if (!this.startIfReady()) {
+            const now = this.state.players.filter((p) => p.connected).length;
+            this.state.statusMessage = `Waiting for players… (${now}/${this.state.players.length})`;
+          }
+          return;
+        } catch { /* never came back */ }
+        this.heldSeats.delete(client.sessionId);
+      }
       // Seat is empty again, so its reserved stake goes back to the player.
       await this.releaseHold(client.sessionId);
       return;
