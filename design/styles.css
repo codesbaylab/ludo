@@ -87,7 +87,20 @@ a:has(> .btn) { display: block; }
   font-family:inherit; font-size:16px; font-weight:800; cursor:pointer;
   transition: transform .15s ease, filter .15s ease;
 }
-.btn:active { transform: scale(.97); }
+.btn { position: relative; overflow: hidden; -webkit-tap-highlight-color: transparent; }
+.btn:active:not(:disabled) { transform: scale(.95); filter: brightness(.94); }
+.btn:disabled { opacity: .6; cursor: default; }
+/* Tap ripple (spawned by ui-dialog.js) so every press visibly registers. */
+.btn .ripple, .am-btn .ripple { position: absolute; border-radius: 50%; background: rgba(255,255,255,.55); transform: scale(0); animation: btn-ripple .55s ease-out forwards; pointer-events: none; }
+.btn-secondary .ripple, .btn-ghost .ripple, .am-btn .ripple { background: rgba(255,120,80,.28); }
+@keyframes btn-ripple { to { transform: scale(1); opacity: 0; } }
+/* Busy state: label hidden, spinner in the middle, taps ignored. */
+.btn.is-loading, .am-btn.is-loading { color: transparent !important; pointer-events: none; }
+.btn.is-loading::after, .am-btn.is-loading::after { content: ""; position: absolute; width: 20px; height: 20px; left: calc(50% - 10px); top: calc(50% - 10px); border-radius: 50%; border: 3px solid rgba(255,255,255,.4); border-top-color: #fff; animation: btn-spin .7s linear infinite; }
+.btn-secondary.is-loading::after, .btn-ghost.is-loading::after, .am-btn.is-loading::after { border-color: rgba(0,0,0,.12); border-top-color: var(--accent); }
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+.ref-banner { display: flex; align-items: center; gap: 10px; background: var(--green-soft); border: 2px solid var(--green); color: #178a4c; border-radius: 16px; padding: 10px 14px; margin-bottom: 14px; font-weight: 700; font-size: 14px; animation: ref-in .35s ease; }
+@keyframes ref-in { from { opacity: 0; transform: translateY(-6px) scale(.98); } to { opacity: 1; transform: none; } }
 .btn-primary {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   color:#fff;

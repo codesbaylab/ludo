@@ -153,3 +153,16 @@
 // Lock zoom: iOS ignores the viewport meta's user-scalable=no, so block pinch/double-tap zoom here too.
 ['gesturestart', 'gesturechange', 'gestureend'].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
 document.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+
+// Press feedback: a ripple from the tap point on every button, and ludoBusy(btn, true/false) for a spinner while a request runs.
+document.addEventListener('pointerdown', (e) => {
+  const b = e.target && e.target.closest && e.target.closest('.btn, .am-btn');
+  if (!b || b.disabled) return;
+  const r = b.getBoundingClientRect(), d = Math.max(r.width, r.height) * 2;
+  const s = document.createElement('span');
+  s.className = 'ripple';
+  s.style.cssText = `width:${d}px;height:${d}px;left:${e.clientX - r.left - d / 2}px;top:${e.clientY - r.top - d / 2}px`;
+  b.appendChild(s);
+  setTimeout(() => s.remove(), 650);
+}, { passive: true });
+window.ludoBusy = (btn, on) => { if (!btn) return; btn.classList.toggle('is-loading', !!on); btn.disabled = !!on; };

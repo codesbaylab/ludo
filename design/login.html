@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="ui-dialog.js"></script>
 <script src="supabase-client.js"></script>
 <script src="app-update.js"></script>
 <link rel="manifest" href="manifest.json">
@@ -48,6 +49,7 @@
       </form>
 
       <form id="form-signup" style="display:none;">
+        <div class="ref-banner" id="ref-banner" style="display:none;"><span style="font-size:22px;">👑</span><span id="ref-banner-text"></span></div>
         <div class="field">
           <label>Display name</label>
           <input class="input" type="text" id="signup-name" placeholder="e.g. Ragnar" required />
@@ -93,7 +95,10 @@
   }
 
   function setBusy(form, busy) {
-    form.querySelectorAll('button').forEach(b => b.disabled = busy);
+    form.querySelectorAll('button').forEach(b => {
+      b.disabled = busy;
+      if (b.type === 'submit') b.classList.toggle('is-loading', busy); // spinner on the main button
+    });
   }
 
   async function redirectAfterLogin(userId) {
@@ -135,22 +140,47 @@
     const displayName = document.getElementById('signup-name').value.trim();
     const email = document.getElementById('signup-email').value.trim();
     const password = document.getElementById('signup-password').value;
-    const { error } = await ludoSupabase.auth.signUp({
+    const { data, error } = await ludoSupabase.auth.signUp({
       email, password,
       options: { data: { display_name: displayName, ref_code: refCode || undefined } },
     });
     setBusy(formSignup, false);
     if (error) { showMessage(error.message, true); return; }
-    showMessage('Account created — check your email to confirm, then log in.', false);
+    authMessage.style.display = 'none';
+    try { localStorage.removeItem('ludoRef'); } catch {}
+    const via = referrerName ? ` You joined through ${referrerName}.` : '';
+    if (data && data.session) { // email confirmation is off: the account is already signed in
+      await ludoAlert({ tone: 'success', icon: '🎉', title: 'Account created!', message: `Welcome to Table Kings, ${displayName}!${via}`, confirmText: "Let's play" });
+      redirectAfterLogin(data.session.user.id);
+      return;
+    }
+    await ludoAlert({ tone: 'success', icon: '🎉', title: 'Account created!', message: `Welcome, ${displayName}!${via} We sent a confirmation link to ${email}. Open it, then log in.`, confirmText: 'Go to log in' });
+    formSignup.reset();
+    tabLogin.click();
+    document.getElementById('login-email').value = email;
+    document.getElementById('login-password').focus();
   });
+
+  // Show who invited this visitor (name only), so a shared link feels personal.
+  let referrerName = '';
+  if (refCode) {
+    ludoSupabase.rpc('referrer_name', { p_code: refCode }).then(({ data }) => {
+      if (!data) { try { localStorage.removeItem('ludoRef'); } catch {} return; } // not a real Pro code: ignored by signup too
+      referrerName = String(data);
+      document.getElementById('ref-banner-text').textContent = `${referrerName} invited you to Table Kings`;
+      document.getElementById('ref-banner').style.display = 'flex';
+    }).catch(() => {});
+  }
 
   document.getElementById('forgot-password-btn').addEventListener('click', async (e) => {
     e.preventDefault();
     const email = document.getElementById('login-email').value.trim();
     if (!email) { showMessage('Enter your email above first, then tap "Forgot password?" again.', true); return; }
+    ludoBusy(e.currentTarget, true);
     const { error } = await ludoSupabase.auth.resetPasswordForEmail(email, {
       redirectTo: new URL('reset-password.html', location.href).href,
     });
+    ludoBusy(document.getElementById('forgot-password-btn'), false);
     if (error) { showMessage(error.message, true); return; }
     showMessage(`Password reset link sent to ${email} — check your inbox.`, false);
   });

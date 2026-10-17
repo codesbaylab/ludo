@@ -41,7 +41,9 @@ body.am .am-banner {
 .am-search { display: flex; align-items: center; gap: 8px; background: var(--paper); border: 2px solid var(--border); border-radius: 14px; padding: 7px 12px; min-width: 220px; }
 .am-search input { border: 0; outline: 0; font: inherit; font-weight: 700; background: transparent; width: 100%; color: var(--text); }
 .am-btn { border: 2px solid var(--border); background: var(--paper); color: var(--text); font: inherit; font-weight: 800; font-size: 13px; padding: 8px 14px; border-radius: 14px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+.am-btn { position: relative; overflow: hidden; }
 .am-btn:hover { border-color: var(--accent); }
+.am-btn:active:not(:disabled) { transform: scale(.95); }
 .am-btn.primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; border-color: transparent; box-shadow: 0 6px 14px rgba(255, 110, 80, .25); }
 .am-btn.danger { color: var(--red); }
 .am-btn.sm { padding: 5px 10px; font-size: 12px; border-radius: 11px; }
