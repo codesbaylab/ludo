@@ -7,7 +7,7 @@ import { LudoRoom } from './rooms/LudoRoom';
 import { RummyRoom } from './rooms/RummyRoom';
 import { getSupabase, releaseAllHolds } from './supabase';
 import { getOrCreateDepositAddress } from './crypto/depositAddress';
-import { cryptoDepositsEnabled } from './crypto/solana';
+import { cryptoDepositsEnabled } from './crypto/bsc';
 import { getWatcherStatus } from './crypto/depositWatcher';
 import { startDepositWatcher } from './crypto/depositWatcher';
 
@@ -92,7 +92,7 @@ app.post('/api/crypto/deposit-address', async (req, res) => {
   if (!userId) return;
   try {
     const address = await getOrCreateDepositAddress(userId);
-    res.json({ address, chain: 'solana', asset: 'USDT (Solana)' });
+    res.json({ address, chain: 'bsc', asset: 'USDT (BSC)' });
   } catch (err) {
     console.error('[crypto] failed to get/create deposit address:', err);
     res.status(500).json({ error: 'failed to get deposit address' });
@@ -122,7 +122,7 @@ gameServer.listen(port).then(async () => {
   console.log(`Ludo server listening on ws://localhost:${port}`);
 });
 
-// No-ops with a warning if SOLANA_MASTER_SEED/Supabase aren't configured —
+// No-ops with a warning if BSC_MASTER_SEED/Supabase aren't configured —
 // same pattern as getSupabase() — so local dev without crypto env vars set
 // still runs the game normally.
 startDepositWatcher();

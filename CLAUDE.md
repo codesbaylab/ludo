@@ -1179,33 +1179,31 @@ deliberately trimmed).
 - **Tooling gotcha**: the Supabase MCP here declines SQL containing DROP FUNCTION / DELETE FROM, so
   migrations use stubs/forwarders and an `active` flag (referral levels) instead of deletes.
 
-## Crypto deposits (USDT on Solana)
+## Crypto deposits (USDT on BNB Smart Chain)
 
-**Tron/TRC-20 was removed; Solana USDT (SPL) is the only network for deposits AND withdrawals** (Tron gas of
-$1-3 per deposit was too costly for small users). Custodial, self-hosted, no payment gateway.
+**BSC (BEP20) USDT is the ONLY network and coin, for deposits AND withdrawals** (Tron and Solana were removed; old `chain='tron'|'solana'`
+rows stay in the tables as history but are no longer served or watched). Custodial, self-hosted, no payment gateway. USDT on BSC has
+18 decimals. Cost for players: ~$0.01 network fee.
 
-- **Addresses**: `server/src/crypto/solana.ts` derives one address per user from `SOLANA_MASTER_SEED`
-  (`TRON_MASTER_SEED` still accepted as a fallback) at `m/44'/501'/{index}'/0'` (SLIP-0010 ed25519). No key is
-  stored. Index 0 = gas wallet. `next_crypto_deposit_index()` allocates indexes. `crypto_deposit_addresses` PK is
-  now `(user_id, chain)`; the old Tron row(s) stay in the table (chain='tron') but are no longer served or watched.
-  `crypto_deposits`/`crypto_withdrawals` have a `chain` column (old rows 'tron', new 'solana').
-- **Watcher** (`depositWatcher.ts`): every 30s, `getSignaturesForAddress` on each address's USDT token account
-  (finalized only), skips signatures already in `crypto_deposits`, parses the rest and credits the net USDT
-  received by the owner for the exact USDT mint (`usdtReceived`; look-alike mints ignored) via the idempotent
-  `credit_crypto_deposit` (tx_hash = signature). Dust under `MIN_DEPOSIT_USDT` (default 1) ignored.
-  Env: `SOLANA_RPC_URL` (use a provider URL in prod), `USDT_MINT_OVERRIDE` (devnet rehearsal).
-- **Sender pays the recipient's token-account rent** (~0.002 SOL); exchanges do this automatically.
-- **Sweep** (`npm run sweep -- --to <solana addr> [--execute]`, run by hand on your own PC): fee payer is the gas
-  wallet (index 0), so deposit addresses need no SOL; it also creates the destination token account if missing.
-  Dry run default. **Not yet run on devnet/mainnet - rehearse first.**
-- **Withdrawals**: `request_withdrawal` now validates a Solana base58 address (32-44 chars); payout is still manual.
-- **USDT and USDC both accepted** (`ASSETS` in `solana.ts`; `USDT_MINT_OVERRIDE` / `USDC_MINT_OVERRIDE` for devnet only - never set on prod).
-  `crypto_deposits.asset`; tx_hash is the bare signature for USDT, `<sig>:USDC` for USDC; `credit_crypto_deposit` has a 7-arg overload with `p_asset`.
-- **Verified on devnet** (`npm run test:devnet`, needs `DEVNET_PAYER_FILE` funded from faucet.solana.com): test USDT+USDC credited once
-  each, look-alike coin ignored, 2nd poll idempotent, real sweep `--execute` moved both coins. Watcher ran against a fake Supabase, so the
-  real DB credit path and mainnet are still unverified. Watcher polls every address every 30s (costly on Helius free: ~5 addresses) - planned: on-demand + slow safety net.
-- **Render**: set `SOLANA_MASTER_SEED` (or keep `TRON_MASTER_SEED`) and `SOLANA_RPC_URL`; remove
-  `TRONGRID_*` / `USDT_CONTRACT_ADDRESS_OVERRIDE`. The old Nile testnet credits are fake money.
+- **Addresses**: `server/src/crypto/bsc.ts` derives one EVM address per user from `BSC_MASTER_SEED` (`SOLANA_MASTER_SEED` / `TRON_MASTER_SEED`
+  still accepted as fallbacks so the existing phrase keeps working) at `m/44'/60'/0'/0/{index}` via ethers v6. No key is stored. Index 0 =
+  the gas wallet. `next_crypto_deposit_index()` allocates indexes (old Solana indexes are just gaps). `crypto_deposit_addresses` PK is
+  `(user_id, chain)`, new rows chain='bsc'.
+- **Watcher** (`depositWatcher.ts`): every 20s reads the USDT contract's `Transfer` logs whose recipient is any deposit address (one
+  `eth_getLogs` per 50 addresses, 1000-block chunks), only blocks >= 15 confirmations deep. The scan position lives in `chain_cursors`
+  (chain 'bsc'), re-reading 20 blocks behind it; first run starts ~1 h back. Credits via the idempotent `credit_crypto_deposit`
+  (7-arg, now writes chain='bsc'; tx_hash = `<txhash>:<logIndex>`). Only the exact USDT contract counts (`BSC_USDT_OVERRIDE` for testnet);
+  dust under `MIN_DEPOSIT_USDT` (default 1) ignored. `BSC_RPC_URL` defaults to the free public node (rate-limited) - use a provider
+  URL in prod. Credited 1:1 in dollars.
+- **Sweep** (`npm run sweep -- --to <0x address> [--execute]`, run by hand on your own PC): a BSC address needs its own BNB to send, so for
+  each address holding USDT the gas wallet (index 0) first tops it up, then the address sends its USDT to the destination. Dry run default.
+  **Not yet run on testnet/mainnet - rehearse first.** Keep a little BNB (~$0.03 per swept address) on the gas wallet.
+- **Withdrawals**: `request_withdrawal` validates `^0x[0-9a-fA-F]{40}$` and records chain='bsc'; payout is still manual (you need USDT + a
+  little BNB in a BSC wallet). The wallet page validates the same format client-side.
+- **Same `0x` address exists on every EVM chain**: USDT sent on Polygon/Ethereum/etc. to a deposit address is NOT credited (only the BSC
+  contract is watched) - hence the red "BSC (BEP20) only" warning on the deposit page. USDC is no longer accepted.
+- **Verified**: `npm run test:bsc` (offline: derivation, event scan with a fake provider/DB). **Not run against a live BSC RPC / testnet.**
+- **Render**: set `BSC_MASTER_SEED` (or keep the old seed var) and `BSC_RPC_URL`; the old `SOLANA_RPC_URL` / `TRONGRID_*` are unused.
 - **Legal note**: custodying crypto for users can plausibly make this a VASP under Indian law (FIU-IND/PMLA, TDS
   194S) - separate from the real-money Ludo question; unresolved, flagged for anything beyond internal testing.
 
@@ -1222,9 +1220,7 @@ moved out of the per-user deposit addresses.
   caller's wallet (`select ... for update`), checks sufficient balance, deducts it immediately, and
   inserts a `crypto_withdrawals` row (`status = 'pending'`). Deducting at request time (not at
   approval time) is what makes a double-request impossible — the second request simply sees the
-  already-reduced balance. Destination address gets a base58/length/prefix sanity check
-  (`^T[1-9A-HJ-NP-Za-km-z]{33}$`) — enough to catch an Ethereum address or a bad paste, not a full
-  checksum validator.
+  already-reduced balance. Destination address gets a `0x` + 40 hex format check (BSC) — enough to catch a bad paste, not a checksum validator.
 - **`admin_mark_withdrawal_paid(p_withdrawal_id, p_tx_hash)`** / **`admin_reject_withdrawal(p_withdrawal_id,
   p_note)`** — same `is_admin(auth.uid())`-guarded pattern as every other `admin_*` RPC in this
   project. Marking paid just records the tx hash the admin pasted in after sending the funds

@@ -89,28 +89,27 @@ guarantee that the server's processed that handoff leave before the resume
 attempt lands, so `board.html` retries the reconnect a few times rather than
 treating a single failure as final.
 
-## Crypto deposits (USDT on Solana)
+## Crypto deposits (USDT on BNB Smart Chain)
 
-Custodial USDT (SPL) deposits, no third-party payment gateway - see `CLAUDE.md`'s
-"Crypto deposits" section. Tron/TRC-20 was removed (gas cost too high for small deposits).
+Custodial USDT (BEP20) deposits, no third-party payment gateway - see `CLAUDE.md`'s
+"Crypto deposits" section. BSC is the only network (Tron and Solana were removed).
 
-- One permanent Solana address per user, derived from a single server-side BIP39 master seed
-  (`SOLANA_MASTER_SEED`; `TRON_MASTER_SEED` is still accepted so an existing phrase keeps working) at
-  `m/44'/501'/{index}'/0'` - `src/crypto/solana.ts`. No private key is stored; index 0 is the gas wallet.
+- One permanent `0x` address per user, derived from a single server-side BIP39 master seed
+  (`BSC_MASTER_SEED`; `SOLANA_MASTER_SEED`/`TRON_MASTER_SEED` still accepted so an existing phrase keeps working) at
+  `m/44'/60'/0'/0/{index}` - `src/crypto/bsc.ts`. No private key is stored; index 0 is the gas wallet.
 - `src/crypto/depositAddress.ts` + `POST /api/crypto/deposit-address` hand out a user's address.
-- `src/crypto/depositWatcher.ts` polls the RPC every 30s: finalized transactions on each address's USDT token
-  account, credited via the idempotent `credit_crypto_deposit` RPC (keyed on the tx signature).
-- Env: `SOLANA_MASTER_SEED` (required), `SOLANA_RPC_URL` (set a Helius/QuickNode-style URL in production; the
-  public RPC is rate-limited), `USDT_MINT_OVERRIDE` (devnet rehearsal), `MIN_DEPOSIT_USDT` (default 1).
-- Whoever sends USDT creates the recipient's token account (~0.002 SOL rent); exchanges normally do this.
+- `src/crypto/depositWatcher.ts` polls every 20s: USDT `Transfer` logs to our addresses, 15 confirmations deep, credited via the
+  idempotent `credit_crypto_deposit` RPC (keyed on `<txhash>:<logIndex>`). Scan position kept in `chain_cursors`.
+- Env: `BSC_MASTER_SEED` (required), `BSC_RPC_URL` (set a provider URL in production; the public node is rate-limited),
+  `BSC_USDT_OVERRIDE` (testnet rehearsal), `MIN_DEPOSIT_USDT` (default 1).
 
 **Generate a seed** once, keep it safe, set it in Render's dashboard only:
 ```
-node -e "console.log(require('bip39').generateMnemonic())"
+node -e "console.log(require('ethers').Wallet.createRandom().mnemonic.phrase)"
 ```
 
-**Not yet exercised against a live Solana RPC** from the dev sandbox - the derivation and the transfer parsing
-are unit-checked; rehearse on devnet (`SOLANA_RPC_URL` + `USDT_MINT_OVERRIDE`) before real funds.
+**Not yet exercised against a live BSC RPC** from the dev sandbox - `npm run test:bsc` checks derivation and the event
+scan offline; rehearse on testnet (`BSC_RPC_URL` + `BSC_USDT_OVERRIDE`) before real funds.
 
 **Not built yet, on purpose (see CLAUDE.md):** withdrawals, automated
 sweeping to cold storage (do this manually/periodically for now — funds sit

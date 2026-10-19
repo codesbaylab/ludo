@@ -78,7 +78,7 @@
   window.ludoFetchCryptoDeposits = async function (userId, limit) {
     const { data, error } = await window.ludoSupabase
       .from('crypto_deposits')
-      .select('tx_hash, amount_usdt, inr_credited, detected_at, asset')
+      .select('tx_hash, amount_usdt, inr_credited, detected_at, asset, chain')
       .eq('user_id', userId)
       .order('detected_at', { ascending: false })
       .limit(limit || 20);
@@ -222,7 +222,7 @@ async function ludoFetchTransactions(userId, limit) {
     if (!(Number(d.inr_credited) > 0)) return; // dust that credited nothing
     entries.push({
       type: 'deposit', time: d.detected_at, icon: '💵', iconBg: 'linear-gradient(135deg, #26a17b, #178a4c)',
-      title: (d.asset || 'USDT') + ' Deposit', detail: `${Number(d.amount_usdt).toFixed(2)} ${d.asset || 'USDT'} (Solana)`,
+      title: (d.asset || 'USDT') + ' Deposit', detail: `${Number(d.amount_usdt).toFixed(2)} ${d.asset || 'USDT'} (${d.chain === 'solana' ? 'Solana' : 'BSC'})`,
       delta: Number(d.inr_credited),
     });
   });
