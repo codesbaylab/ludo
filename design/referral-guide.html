@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
+<title>Table Kings — Referral Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+  .g-card { margin-bottom: 14px; }
+  .g-card h2 { margin: 0 0 8px; font-size: 18px; }
+  .g-card p, .g-card li { font-size: 14px; line-height: 1.55; }
+  .g-card ol, .g-card ul { margin: 6px 0 0; padding-left: 20px; }
+  table.g { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+  table.g th, table.g td { padding: 7px 6px; text-align: right; border-bottom: 1px solid rgba(128,128,128,.25); }
+  table.g th:first-child, table.g td:first-child { text-align: left; }
+  table.g tr.tot td { font-weight: 800; }
+  .note { font-size: 12px; opacity: .75; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar"><h1 style="margin:0;font-size:20px;">🎁 Referral Guide</h1></div>
+
+  <div class="card g-card">
+    <h2>How it works</h2>
+    <ol>
+      <li><b>Go Pro</b> (one-time fee, today <b>$20</b>). Only Pro members get a referral link — find it in Profile → Refer &amp; Earn.</li>
+      <li><b>Share your link</b> (<code>login.html?ref=YOURCODE</code>). Friends who sign up through it are tied to you for good.</li>
+      <li><b>They go Pro</b> — the moment a friend pays the Pro fee, commissions are paid <b>instantly into the wallets</b> of the people above them in the chain.</li>
+      <li><b>Money you can use</b> — commissions land in your wallet balance: play, transfer or withdraw.</li>
+    </ol>
+    <p class="note">Commission is paid on the Pro fee only — one time per person. It is not a share of anyone's game winnings or losses.</p>
+  </div>
+
+  <div class="card g-card">
+    <h2>5 levels deep</h2>
+    <p>You earn not just from friends you invite (Level 1) but also from the people <i>they</i> invite, and so on, down 5 levels. Today's rates (editable by the admin at any time):</p>
+    <table class="g">
+      <tr><th>Level</th><th>Who</th><th>Rate</th><th>You earn per Pro ($20)</th></tr>
+      <tr><td>1</td><td>Your direct invites</td><td>20%</td><td>$4.00</td></tr>
+      <tr><td>2</td><td>Their invites</td><td>10%</td><td>$2.00</td></tr>
+      <tr><td>3</td><td>Level 3</td><td>5%</td><td>$1.00</td></tr>
+      <tr><td>4</td><td>Level 4</td><td>4%</td><td>$0.80</td></tr>
+      <tr><td>5</td><td>Level 5</td><td>3%</td><td>$0.60</td></tr>
+      <tr class="tot"><td colspan="2">Paid out in total</td><td>42%</td><td>$8.40</td></tr>
+    </table>
+    <p class="note">The remaining 58% ($11.60) of each Pro fee is platform revenue.</p>
+  </div>
+
+  <div class="card g-card">
+    <h2>Rules to know</h2>
+    <ul>
+      <li>An upline must be <b>Pro and not banned</b> to receive a level's commission. A non-Pro person in the chain earns nothing for their level, and the chain continues past them.</li>
+      <li>Each Pro purchase pays each level <b>once</b> (no double payouts).</li>
+      <li>Granting Pro manually (by admin) pays <b>no</b> commissions.</li>
+      <li>Fake or self-referral accounts can be frozen or banned by the risk engine; keep it genuine.</li>
+    </ul>
+  </div>
+
+  <div class="card g-card">
+    <h2>Earnings estimate — direct friends only</h2>
+    <p>The simple case: you only count the friends who sign up through you and go Pro ($4 each).</p>
+    <table class="g">
+      <tr><th>Friends who go Pro</th><th>You earn</th></tr>
+      <tr><td>5</td><td>$20 (your Pro fee back)</td></tr>
+      <tr><td>10</td><td>$40</td></tr>
+      <tr><td>25</td><td>$100</td></tr>
+      <tr><td>50</td><td>$200</td></tr>
+      <tr><td>100</td><td>$400</td></tr>
+    </table>
+  </div>
+
+  <div class="card g-card">
+    <h2>Earnings estimate — with a network</h2>
+    <p>If everyone in your network also gets <b>r</b> friends to go Pro, your five levels fill up like this:</p>
+    <table class="g">
+      <tr><th>Level</th><th>r = 2</th><th>r = 3</th><th>r = 5</th></tr>
+      <tr><td>1 ($4)</td><td>2 → $8</td><td>3 → $12</td><td>5 → $20</td></tr>
+      <tr><td>2 ($2)</td><td>4 → $8</td><td>9 → $18</td><td>25 → $50</td></tr>
+      <tr><td>3 ($1)</td><td>8 → $8</td><td>27 → $27</td><td>125 → $125</td></tr>
+      <tr><td>4 ($0.80)</td><td>16 → $12.80</td><td>81 → $64.80</td><td>625 → $500</td></tr>
+      <tr><td>5 ($0.60)</td><td>32 → $19.20</td><td>243 → $145.80</td><td>3,125 → $1,875</td></tr>
+      <tr class="tot"><td>Total</td><td>$56</td><td>$267.60</td><td>$2,570</td></tr>
+    </table>
+    <p class="note">These are best-case maths, not promises. Most members will bring 0–2 Pro friends, so a realistic outcome is the "direct friends only" table plus a small bonus from Level 2. Treat r = 5 as a stretch scenario for dedicated promoters.</p>
+  </div>
+
+  <div class="card g-card">
+    <h2>Tips to earn more</h2>
+    <ul>
+      <li>Share in WhatsApp / Telegram groups of friends who already play Ludo or Rummy.</li>
+      <li>Tell them the free tables cost nothing — Pro is only for real-money tables.</li>
+      <li>Help your invites get their first deposit (BSC USDT) — Pro purchase needs balance.</li>
+      <li>The more active your Level 1 friends, the deeper your network grows.</li>
+    </ul>
+    <p class="note">Figures use today's settings (Pro fee $20, rates 20/10/5/4/3%). If the admin changes them in Admin → Settings, the amounts change accordingly.</p>
+  </div>
+
+  <p style="text-align:center;"><a href="profile.html">← Back to profile</a></p>
+</div>
+</body>
+</html>
