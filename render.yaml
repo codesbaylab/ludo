@@ -14,3 +14,8 @@ services:
       # Production only: comma-separated site origins allowed to call the HTTP API (see server/src/index.ts).
       - key: ALLOWED_ORIGINS
         sync: false
+  - type: web
+    name: ludo-client
+    runtime: static
+    buildCommand: ""
+    staticPublishPath: ./design
