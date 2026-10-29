@@ -1,8 +1,8 @@
-# ludoPWA
+# Table Kings
 
-A Ludo (board game) PWA with a real multiplayer backend. `design/` is the client (static
-HTML/CSS/JS, deployed to GitHub Pages); `server/` is an authoritative Colyseus match server backed
-by a Supabase project for auth/wallet-ledger/match-history.
+A Ludo + Rummy PWA with a real multiplayer backend. `design/` is the client (static
+HTML/CSS/JS, deployed to Render as a static site); `server/` is an authoritative Colyseus match
+server backed by a Supabase project for auth/wallet-ledger/match-history, also on Render.
 
 ## Working conventions
 
@@ -13,8 +13,9 @@ by a Supabase project for auth/wallet-ledger/match-history.
   entry below) and shipped by pushing straight to `main` like everything else (see below), so it's
   reachable by a real URL the user can open on their own phone, not a claude.ai artifact link.
 - **Always push directly to `main`, not a feature branch/PR.** Explicit user preference — commit
-  and push straight to `main` (which auto-deploys via `.github/workflows/pages.yml`) rather than
-  opening a branch/PR and waiting for a merge, unless the user asks for a PR for a specific change.
+  and push straight to `main` (both Render services, `ludo-server` and `ludo-client`, auto-deploy
+  on push per `render.yaml`) rather than opening a branch/PR and waiting for a merge, unless the
+  user asks for a PR for a specific change.
 - **Always answer short.** Explicit user preference — keep chat replies brief/direct, not long
   explanations, unless the user asks for more detail.
 
@@ -103,17 +104,20 @@ by a Supabase project for auth/wallet-ledger/match-history.
   (one line on a phone). Rupee amounts shown to players go through `ludoMoney(n)` in `supabase-client.js` (Indian grouping,
   decimals only when there are paise); used for the wallet chips, Wallet balance/locked and stake-confirm "after stake".
   Transaction rows and the USDT rate still use plain `toFixed`.
-- **Deployment config / hosting move**: every deployment-specific address lives in `design/config.js` (`window.LUDO_CONFIG.SERVER_URL`,
-  currently the Render URL) — loaded before `supabase-client.js`/`game.js`/`admin-core.js` on every page that talks to the
-  server (`?server=` still overrides). Changing the game-server domain = edit that one line. **GitHub Pages is only a stopgap**
-  (its terms disallow commercial/real-money sites): `.github/workflows/cloudflare-pages.yml` is ready but manual-only
-  (needs secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, variable `CF_PAGES_PROJECT`); switch `on:` to push-to-main and
-  delete `pages.yml` + `keep-server-warm.yml` at cutover. `design/_headers` (Cloudflare only) sets security + no-cache headers.
-  Both deploys stamp `?v=<commit>` on assets AND write `design/version.txt`; `app-update.js` now compares the stamped version
-  with `version.txt` (works without a Last-Modified header) and falls back to the old Last-Modified check locally. Server CORS is
+- **Deployment config / hosting**: every deployment-specific address lives in `design/config.js` (`window.LUDO_CONFIG.SERVER_URL`,
+  the Render `ludo-server` URL) — loaded before `supabase-client.js`/`game.js`/`admin-core.js` on every page that talks to the
+  server (`?server=` still overrides). Changing the game-server domain = edit that one line. **The client is hosted on Render**
+  (`render.yaml`'s `ludo-client` static-site service, publishing `./design`, no build step) — GitHub Pages was the original
+  host but was retired (its terms disallow commercial/real-money sites) in favor of putting both client and server on the same
+  platform; a Cloudflare Pages path was also evaluated and explicitly **not** used (decision: Render instead). Server CORS is
   restricted by the `ALLOWED_ORIGINS` env var (comma-separated origins) — **set it on Render at launch**; unset = open.
-  Launch-day checklist (not yet done): domain + DNS on Cloudflare, Supabase Auth Site URL/redirect allowlist, custom SMTP,
-  paid always-on game server (single process), paid Solana RPC, Supabase Pro, ALLOWED_ORIGINS, legal pages/age gate.
+  **Known gap from the GitHub Pages era, not yet re-verified on Render**: `pages.yml`/the abandoned `cloudflare-pages.yml`
+  used to stamp `?v=<commit>` on asset links and write `design/version.txt` on every deploy, which `app-update.js` reads to
+  force-reload stale installed-PWA copies (falls back to a `Last-Modified` HEAD check if `version.txt` 404s, so this isn't
+  broken, just less precise). Render's plain static-site deploy does neither — relying on Render's CDN to invalidate cache on
+  its own per deploy. Not confirmed working; revisit if stale-asset reports come in.
+  Launch-day checklist (not yet done): domain + DNS, Supabase Auth Site URL/redirect allowlist, custom SMTP,
+  paid always-on game server (single process), paid BSC RPC, Supabase Pro, ALLOWED_ORIGINS, legal pages/age gate.
 - **Currency = US dollars (global launch; supersedes every ₹ figure in the notes below)**: the wallet unit is $ (1 USDT/USDC = $1, deposits credited 1:1; the watcher ignores `crypto_settings.usdt_inr_rate` and uses 1, the admin "rate" is informational only; DB column names like `amount_inr`/`usdt_inr_rate`/`in_play_inr` kept as-is). Display goes through `ludoMoney`/`ludoMoneyShort` (`$`, en-US, K/M/B) and `AD.inr` (name kept, prints `$`). Amounts rescaled ~/80-100: Ludo tables $0.25 / $1 (lobby tiles `stake=0.25|1`), custom rooms $0.25-$50 with cents (`MIN_STAKE`/`MAX_STAKE` in `LudoRoom.ts` AND `stake-confirm.html`), Rummy cash points $0.02/$0.05/$0.10 and pool entry $1/$2/$5, Pro fee target $5, transfer limits target $1-$500 / $2000 a day. Practice/free Rummy still use play coins with the old keys (1/2/5 per point, 50/100/200 entry); `rummy-lobby.html` maps the tile keys to dollars only for the cash view (`CASH_VALUE`/`CASH_ENTRY`) and `rummy-waiting-room`/`rummy-cash-board` whitelist dollar values when not `free=1`. Server money math rounds to cents via `server/src/money.ts` (`r2`, `floor2`). Existing test balances were deliberately left alone (so the old big test balances now read as dollars). **Pending DB step**: `app_settings` (pro_fee 999, transfer_min/max/daily 10/50000/200000) could NOT be updated from here (the Supabase MCP write hung on confirmation) - set them in Admin > Settings (Pro fee, Transfer limits). `crypto_settings.usdt_inr_rate` was set to 1 and risk_rules `big_new_transfer`/`transfer_loop` min_amount to 60/25. Admin "Whales" segment still uses the SQL threshold 50000 (now dollars). Admin dates still show IST. Rummy rules accordion text has no currency; legal pages/age gate still TODO.
 - **Rummy practice table redesign (supersedes parts of the long `rummy-board.html` notes below)**: modelled on the other Indian
   apps' tables (`design/rummy-table-mockup.html` is the approved static idea). **The Game Log was removed** (nobody else has one and
@@ -139,17 +143,16 @@ by a Supabase project for auth/wallet-ledger/match-history.
 - **Leave warnings**: Rummy cash/free board Exit asks "Leave this table?" (cash wording mentions losing the
   stake), the practice board asks "Leave this game?"; both via `ludoConfirm`.
 - **Installed-app staleness**: an iOS home-screen app resumes the last page frozen in memory and a cold start can
-  reuse a cached copy (GitHub Pages sends `max-age=600`), so after a deploy the PWA could keep showing the OLD UI.
+  reuse a cached copy (true of any host's static-asset caching, GitHub Pages' old `max-age=600` included), so after
+  a deploy the PWA could keep showing the OLD UI.
   `design/app-update.js` (loaded on every non-game page) compares `document.lastModified` with a fresh no-store
   HEAD's `Last-Modified` on open / return-to-foreground / bfcache restore and reloads once (max once per minute, no
   loops). Deliberately NOT on boards/waiting rooms (a reload would drop a player mid-match). New non-game pages
   should include it after `supabase-client.js`. Also: never link to `#anchors` for in-page jumps (the hash persists
   in the installed app's URL and re-scrolls on reopen) — scroll in JS instead (see lobby "Join with code").
-- **Cache-busting at deploy**: `.github/workflows/pages.yml` rewrites every `styles.css` / `game.js` /
-  `supabase-client.js` / `ui-dialog.js` / `app-update.js` / `rummy-rules.js` reference in `design/*.html` to
-  `…?v=<commit>` before upload (GitHub Pages sends `max-age=600`; without this a browser could pair NEW html with the
-  OLD stylesheet right after a deploy — unstyled buttons). Local files stay unstamped. **A new shared asset must be
-  added to that sed list** or it will be cached for 10 minutes.
+- **Cache-busting at deploy**: no longer done — see "Deployment config / hosting" above (the `pages.yml`/
+  `cloudflare-pages.yml` sed-stamping step was GitHub Pages/Cloudflare-specific and doesn't exist on Render's
+  plain static-site deploy).
 - **Admin analytics mockup (not built)**: `design/admin-mock-*.html` (dashboard, users, user, finance, games,
   referrals, risk, reports, audit, settings) share `admin-mock.css` + `admin-mock.js` (hand-rolled SVG charts,
   deterministic fake data, sidebar shell). Standalone and unlinked from the app; for review only. Planned data
@@ -692,14 +695,15 @@ by a Supabase project for auth/wallet-ledger/match-history.
       e2e regression suite (portrait-only test viewport, unaffected by this landscape-only change)
       re-ran clean.
 - `design/index.html` — no longer the design-mockup index (removed); a silent redirect stub to
-  `login.html`, since GitHub Pages serves `index.html` for the bare site root regardless of what
-  `manifest.json` says.
+  `login.html`, since static hosts (Render included) serve `index.html` for the bare site root
+  regardless of what `manifest.json` says.
 - `design/manifest.json` + `design/icons/` — PWA manifest and app icons (installable to a phone
   home screen). `start_url` is `login.html`, not `index.html`.
 - `server/` — the Colyseus + Supabase-persistence backend (see `server/README.md`).
-- `.github/workflows/pages.yml` — deploys `design/` to GitHub Pages on every push to `main`.
-  Live at https://codesbaylab.github.io/ludo/ (client only — see "Running the backend" below for
-  why multiplayer won't actually work there without a running server).
+- `render.yaml` — Render Blueprint defining both production services: `ludo-server` (the Colyseus
+  backend, Docker) and `ludo-client` (a static site publishing `design/`, no build step). Both
+  auto-deploy on push to `main`. Live at https://table-kings.onrender.com/ (GitHub Pages retired —
+  see "Deployment config / hosting" above).
 
 ## Client (`design/game.js`)
 
@@ -1285,13 +1289,14 @@ tables (Ludo stake > 0 and every Rummy cash table) and the referral link. Migrat
 ## Running it
 
 Frontend alone (no live multiplayer): serve `design/` statically, e.g. `python -m http.server`
-from `design/`, or use the deployed GitHub Pages site — but the board will sit on "Connecting…"
-forever without a running Colyseus server.
+from `design/`, or use the deployed Render static site (https://table-kings.onrender.com/) — but
+the board will sit on "Connecting…" forever without a running Colyseus server.
 
 Full stack locally:
 ```
 cd server && npm install && npm run dev     # ws://localhost:2567
 # separately, serve design/ (e.g. `python -m http.server` from design/) and open board.html
 ```
-`design/game.js` defaults to the live Render deployment (`wss://ludo-x96u.onrender.com`); pass
-`?server=ws://localhost:2567` (or any other host) to override it for local dev.
+`design/config.js` (`window.LUDO_CONFIG.SERVER_URL`) defaults to the live Render game server
+(`wss://ludo-x96u.onrender.com`); pass `?server=ws://localhost:2567` (or any other host) to
+override it for local dev.
