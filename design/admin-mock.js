@@ -180,7 +180,7 @@
     const wrap = document.createElement('div');
     wrap.innerHTML = `<div class="am-banner">Design mockup only — fake data, not connected to the app. Click around to review the layout.</div>
       <div class="am-shell"><aside class="am-side">
-        <div class="am-brand"><div class="dice">🛠️</div><div><b>Ludo Admin</b><span>Analytics & control</span></div></div>
+        <div class="am-brand"><div class="dice">🛠️</div><div><b>Table Kings Admin</b><span>Analytics & control</span></div></div>
         <nav class="am-nav">${nav}</nav>
         <div class="am-side-foot"><span class="av" style="background:#ff8a3d">A</span><div class="who">aghilraj11<small>Super admin</small></div>
           <a class="icon-btn" href="admin-mock-dashboard.html" title="Log out" aria-label="Log out"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></a></div>

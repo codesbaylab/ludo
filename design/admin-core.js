@@ -209,7 +209,7 @@
     const rangeHtml = cfg.range === false ? '' : `<div class="am-pills" data-range><button data-n="7">7D</button><button data-n="30" class="on">30D</button><button data-n="90">90D</button><button data-n="180">6M</button></div>`;
     const wrap = document.createElement('div');
     wrap.innerHTML = `<header class="am-bar"><button type="button" class="am-burger" id="ad-burger" aria-label="Menu" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><b class="am-bar-title">${esc(title)}</b><span class="av" style="background:#ff8a3d">${esc((me.display_name || 'A')[0].toUpperCase())}</span></header><div class="am-scrim" id="ad-scrim"></div><div class="am-shell"><aside class="am-side" id="ad-side">
-        <div class="am-brand"><div class="dice">🛠️</div><div><b>Ludo Admin</b><span>Analytics &amp; control</span></div></div>
+        <div class="am-brand"><div class="dice">🛠️</div><div><b>Table Kings Admin</b><span>Analytics &amp; control</span></div></div>
         <nav class="am-nav">${nav}</nav>
         <div class="am-side-foot"><span class="av" style="background:#ff8a3d">${esc((me.display_name || 'A')[0].toUpperCase())}</span><div class="who">${esc(me.display_name)}<small>${esc(ROLE_LABEL[AD.role] || AD.role)}</small></div>
           <a class="icon-btn" id="ad-logout" href="#" title="Log out" aria-label="Log out"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></a></div>
